@@ -7,6 +7,7 @@ const store = require("./core.cjs");
 const bible = require("./bible.cjs");
 const policy = require("./projection-policy.cjs");
 const scriptureStyle=require("./bible-style.cjs");
+const settingsPolicy=require("./settings-policy.cjs");
 
 let mainWindow=null;
 let root="";
@@ -84,7 +85,11 @@ function displays() {
 }
 function currentDisplays() {
     const settings=store.loadSettings(root);
-    return {displays:displays(),operatorDisplayId:settings.operatorDisplayId || String(screen.getPrimaryDisplay().id),mainDisplayId:settings.mainDisplayId};
+    const monitorIds=new Set(displays().map(d=>d.id));
+    const effectiveOperator=monitorIds.has(settings.operatorDisplayId)?settings.operatorDisplayId:String(screen.getPrimaryDisplay().id);
+    return {displays:displays(),operatorDisplayId:effectiveOperator,
+        storedOperatorDisplayId:settings.operatorDisplayId,operatorNeedsReview:!!settings.operatorDisplayId&&!monitorIds.has(settings.operatorDisplayId),
+        mainDisplayId:settings.mainDisplayId};
 }
 function createWindow() {
     Menu.setApplicationMenu(null); // the approved UI has no default File/Edit/View toolbar
@@ -192,6 +197,32 @@ function registerIpc() {
         if(command==="clear"){output.state="empty";output.kind="empty";output.title="";}
         if(command==="pause")output.state="paused";
         notifyProjection();return projectionState();
+    });
+    ipcMain.handle("ja:config:get",()=>{
+        const settings=store.loadSettings(root);
+        return {settings,health:store.settingsHealth(root),screens:currentDisplays(),
+            root,version:app.getVersion(),sessions:projectionState(),
+            categories:store.FOLDERS.filter(store.validCategory)};
+    });
+    ipcMain.handle("ja:config:screens:save",(_event,input)=>{
+        const current=store.loadSettings(root);
+        const validated=settingsPolicy.validateScreens(input,displays(),current,sessions.size);
+        const updated=store.saveSettings(root,{...current,
+            operatorDisplayId:validated.operatorDisplayId,mainDisplayId:validated.mainDisplayId});
+        if(validated.changed){
+            const snapshot=currentDisplays();
+            if(mainWindow&&!mainWindow.isDestroyed())mainWindow.webContents.send("ja:displays-changed",snapshot);
+        }
+        return {screens:currentDisplays(),revision:updated.revision};
+    });
+    ipcMain.handle("ja:config:folder:unlink",(_event,category,folder)=>{
+        return store.unlinkFolder(root,category,folder);
+    });
+    ipcMain.handle("ja:config:recover",()=>{
+        if(sessions.size)throw Error("Detén las salidas antes de restaurar ajustes");
+        const result=store.recoverSettings(root);
+        if(mainWindow&&!mainWindow.isDestroyed())mainWindow.webContents.send("ja:displays-changed",currentDisplays());
+        return result;
     });
     ipcMain.handle("ja:displays",()=>currentDisplays());
     ipcMain.handle("ja:set-operator",(_event,id)=>{
