@@ -1,5 +1,5 @@
 "use strict";
-const {app,BrowserWindow,dialog,ipcMain,screen,shell} = require("electron");
+const {app,BrowserWindow,Menu,dialog,ipcMain,screen,shell} = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 const {pathToFileURL} = require("node:url");
@@ -86,6 +86,7 @@ function currentDisplays() {
     return {displays:displays(),operatorDisplayId:settings.operatorDisplayId || String(screen.getPrimaryDisplay().id),mainDisplayId:settings.mainDisplayId};
 }
 function createWindow() {
+    Menu.setApplicationMenu(null); // the approved UI has no default File/Edit/View toolbar
     const file=path.join(__dirname,"..","build","index.html");
     if(!fs.existsSync(file)){
         dialog.showErrorBox("Falta compilar interfaz", "Ejecuta npm run build:ui antes de iniciar el escritorio");
