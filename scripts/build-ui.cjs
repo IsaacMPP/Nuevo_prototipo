@@ -12,7 +12,7 @@ const cli = require.resolve("tailwindcss/lib/cli.js");
 const result = spawnSync(process.execPath, [cli,
     "-i", path.join(root, "desktop", "tailwind-input.css"),
     "-o", path.join(out, "tailwind.css"),
-    "--content", source,
+    "--content", path.join(root, "{prototype,desktop}", "*.{html,js}"),
     "--minify"
 ], { cwd: root, stdio: "inherit" });
 if (result.error) throw result.error;
