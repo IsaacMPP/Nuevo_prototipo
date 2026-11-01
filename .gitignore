@@ -1,0 +1,16 @@
+node_modules/
+dist/
+build/
+coverage/
+*.log
+.env
+.env.*
+!.env.example
+.DS_Store
+Thumbs.db
+vendor/
+# El motor FreeShow se incorpora como una copia con licencia y origen registrado bajo engine/.
+# Nunca copiar node_modules, instaladores ni archivos personales al repositorio.
+engine/node_modules/
+engine/dist/
+engine/build/

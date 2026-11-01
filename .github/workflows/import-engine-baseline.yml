@@ -1,0 +1,60 @@
+name: Incorporar motor JA base (sin tocar repo original)
+on:
+  push:
+    branches:
+      - feature/escritorio-prototipo-ja
+    paths:
+      - .github/workflows/import-engine-baseline.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  copy-baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/escritorio-prototipo-ja
+          persist-credentials: true
+      - name: Clonar lectura de la base JA verificada
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch feature/base-freeshow-diseno-ja \
+            https://github.com/IsaacMPP/JA_Proyecciones2.git "$RUNNER_TEMP/ja-base"
+          HEAD_SOURCE="$(git -C "$RUNNER_TEMP/ja-base" rev-parse HEAD)"
+          PINNED="76b6cb371e68f8ce36bcaea0223e4041a1dfd638"
+          echo "Fuente consultada: $HEAD_SOURCE"
+          if [ "$HEAD_SOURCE" != "$PINNED" ]; then
+            echo "::error::La fuente JA cambió; actualizar el pin solo tras auditoría."
+            exit 1
+          fi
+      - name: Incorporar fuente del motor bajo engine sin borrar prototipo
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p engine
+          rsync -a --delete --exclude='.git' --exclude='node_modules' --exclude='dist' --exclude='build' \
+            "$RUNNER_TEMP/ja-base/" engine/
+          cat > engine/ORIGEN_JA_NUEVO_PROTOTIPO.md <<'EOF'
+          # Fuente original del motor JA
+          Repositorio: https://github.com/IsaacMPP/JA_Proyecciones2
+          Rama: feature/base-freeshow-diseno-ja
+          Commit fijado: 76b6cb371e68f8ce36bcaea0223e4041a1dfd638
+
+          Copia de código fuente en Nuevo_prototipo, independiente y sin cambios sobre el repositorio de origen.
+          Conserva las licencias, encabezados, avisos y atribuciones de FreeShow.
+          Esta importación NO significa que la nueva interfaz HTML ya esté conectada a los módulos del motor.
+          EOF
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add engine/
+          if git diff --cached --quiet; then
+            echo "La base ya está incorporada; sin cambios"
+          else
+            git commit -m "chore(engine): incorporar base FreeShow/JA fijada sin alterar origen"
+            git push origin HEAD:feature/escritorio-prototipo-ja
+          fi
