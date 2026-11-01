@@ -19,6 +19,10 @@ contextBridge.exposeInMainWorld("jaDesktop", Object.freeze({
     importBible: () => invoke("ja:bible:import"),
     bibleStructure: file => invoke("ja:bible:structure",file),
     bibleChapter: (file,book,chapter) => invoke("ja:bible:chapter",file,book,chapter),
+    bibleStyle: () => invoke("ja:bible:style:get"),
+    saveBibleStyle: style => invoke("ja:bible:style:save",style),
+    setOutputTransport: (display,command,value) => invoke("ja:projection:transport",display,command,value),
+
     projectionState: () => invoke("ja:projection:state"),
     sendMedia: (file,display) => invoke("ja:projection:media",file,display),
     sendVerse: (file,book,chapter,verse,display) => invoke("ja:projection:verse",file,book,chapter,verse,display),
