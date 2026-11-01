@@ -489,6 +489,13 @@ function setup(){
  for(const id of ["btnProjectDropdown","btnProgramFullscreen","btnPreviewFullscreen"]){
   if(id==="btnProjectDropdown")disable(id,"Gestión de proyectos en integración. La proyección manual está disponible.");
  }
+ const nativeTransport=$("btnProgramPause")?.parentElement;
+ if(nativeTransport){
+  const compact="px-1.5 py-0.5 text-xs border border-[#2b4b7b] rounded text-white hover:bg-[#1a3763]";
+  const restart=button("↺",compact,()=>command("restart"));restart.title="Iniciar video o música desde el principio";
+  const clear=button("✕",compact,()=>command("clear"));clear.title="Limpiar completamente la salida seleccionada";
+  nativeTransport.append(restart,clear);
+ }
  $("btnBridgeFade")?.classList.add("opacity-50");
  $("programVolumeSlider").disabled=false;
  $("programVolumeSlider").addEventListener("input",()=>run(async()=>{
