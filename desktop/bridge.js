@@ -1,259 +1,366 @@
 "use strict";
-// Desktop adapter: the source HTML is a visual prototype. Never translate its
-// simulated transport commands into "successful" projection operations.
+// Native adapter for the approved Gemini layout. The original sample JS is
+// deliberately absent from the compiled page: no fictional live status or media.
 (() => {
-    const api = window.jaDesktop;
-    if (!api) return;
-
-    const stateNative = { displays:[], operatorId:"", mainId:"", selected:new Set(), category:"Videos", projects:[], activeProject:null, files:[] };
-    const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-    const CATEGORIES = ["Videos","Imagenes","Audio","Himnario Adventista","Cantos Juveniles","Biblias","Presentaciones","Fondos Personalizados","Importaciones"];
-    function toast(message) {
-        const el=document.getElementById("jaToast");
-        const msg=document.getElementById("jaToastText");
-        if(!el||!msg){window.alert(message);return;}
-        msg.textContent=message;el.classList.remove("hidden");setTimeout(()=>el.classList.add("hidden"),3800);
-    }
-    function newButton(title,cb) {
-        const btn=document.createElement("button");btn.type="button";btn.textContent=title;
-        btn.style.cssText="padding:6px 11px;color:white;font-size:12px;border:1px solid #315389;border-radius:8px;background:#102652;cursor:pointer;";
-        btn.addEventListener("click",cb);return btn;
-    }
-    function createModal() {
-        const back=document.createElement("div");back.id="jaNativeModal";
-        back.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:1000;display:none;align-items:center;justify-content:center;padding:20px;";
-        back.innerHTML='<section style="width:min(950px,98vw);max-height:87vh;display:flex;flex-direction:column;background:#071731;border:1px solid #315389;border-radius:14px;color:#eaf2ff;box-shadow:0 20px 90px #0009;"><div style="padding:14px 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #25467a;"><strong id="jaNativeTitle">Herramientas de escritorio</strong><button type="button" id="jaNativeClose" style="padding:6px 12px;background:#173560;color:white;border-radius:6px;">Cerrar ✕</button></div><div id="jaNativeBody" style="padding:18px;overflow-y:auto;user-select:text;font-size:13px;"></div></section>';
-        document.body.append(back);
-        back.querySelector("#jaNativeClose").onclick=()=>back.style.display="none";
-        back.addEventListener("click",event=>{if(event.target===back)back.style.display="none";});
-        return back;
-    }
-    const modal=createModal();
-    const content=()=>document.getElementById("jaNativeBody");
-    function showModal(title) {document.getElementById("jaNativeTitle").textContent=title;modal.style.display="flex";}
-    function blockDemoActions() {
-        const blocked = new Set(["btnBridgeQuickPlay","btnBridgeCut","btnBridgeFade","btnBridgeBlack","btnBridgeLogo",
-            "btnBridgeClearText","btnProgramToAll","btnPreviewToAll","btnProjectSelectedVerse","fsPillPlayBtn",
-            "btnProgramPause","btnPreviewPlay","btnProgramFullscreen"]);
-        document.addEventListener("click",event=>{
-            const target=event.target.closest("button");
-            if(!target)return;
-            if(blocked.has(target.id)){
-                event.preventDefault();event.stopImmediatePropagation();
-                toast("Proyección real pendiente de conectar al motor FreeShow/JA; no se ha enviado contenido.");
-                return;
-            }
-            const views={"btnAddMultimedia":"library","btnOpenSettingsModal":"screens","btnMultiScreenMenu":"screens","btnProjectDropdown":"projects"};
-            if(views[target.id]){
-                event.preventDefault();event.stopImmediatePropagation();
-                if(views[target.id]==="library")void openLibrary();
-                if(views[target.id]==="screens")void openScreens();
-                if(views[target.id]==="projects")void openProjects();
-            }
-            if(target.id==="btnResetTargets"){
-                event.preventDefault();event.stopImmediatePropagation();
-                stateNative.selected=new Set(stateNative.mainId?[stateNative.mainId]:[]);
-                renderDisplayViews();
-                toast("Se restableció la selección de destinos. No se modificó ninguna salida.");
-            }
-        },true);
-    }
-    function renderDisplayViews() {
-        const targets=document.getElementById("quickTargetButtons");
-        const cards=document.getElementById("multiscreenCardsList");
-        if(!targets||!cards)return;
-        if(!stateNative.displays.length){
-            targets.innerHTML='<span style="color:#cbd5e1;font-size:12px;">Sin monitores disponibles</span>';
-            cards.innerHTML='<p style="color:#cbd5e1;font-size:12px;">Sin monitores detectados</p>';
-            return;
-        }
-        const external=stateNative.displays.filter(d=>d.id!==stateNative.operatorId);
-        targets.innerHTML="";
-        if(!external.length) {
-            const note=document.createElement("span");note.textContent="Conecta un monitor para crear una salida de proyección";note.style.cssText="color:#cbd5e1;font-size:11px;";
-            targets.append(note);
-        }
-        external.forEach(d=>{
-            const selected=stateNative.selected.has(d.id);
-            const item=newButton((d.id===stateNative.mainId?"🖥 Principal":"🖥 "+d.name) + (selected?" ✓":""),()=>{
-                if(stateNative.selected.has(d.id))stateNative.selected.delete(d.id);else stateNative.selected.add(d.id);
-                renderDisplayViews();
-            });
-            item.style.background=selected?"#5a4018":"#102652";
-            item.style.borderColor=selected?"#e6a620":"#315389";
-            item.title="Destino preparado; la proyección real se conectará al motor FreeShow";
-            targets.append(item);
-        });
-        targets.append(newButton("+ Configurar",()=>void openScreens()));
-        cards.innerHTML="";
-        stateNative.displays.forEach(d=>{
-            const role=d.id===stateNative.operatorId?"OPERADOR":d.id===stateNative.mainId?"PRINCIPAL JA":"SIN ASIGNAR";
-            const card=document.createElement("div");
-            card.style.cssText="border:1px solid #315389;background:#0a1938;border-radius:9px;padding:8px;display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;";
-            const label=document.createElement("div");
-            label.style.cssText="overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:11px;";
-            label.textContent="🖥 "+d.name+" · "+d.size.width+"×"+d.size.height;
-            const status=document.createElement("small");
-            status.textContent=role;status.style.cssText="white-space:nowrap;color:#b8d5ff;font-size:10px;";
-            card.append(label,status);card.onclick=()=>void openScreens();cards.append(card);
-        });
-        const headings=[...document.querySelectorAll("header strong")];
-        for(const item of headings){if(item.textContent.trim()==="4/4")item.textContent=String(external.length)+"/"+String(stateNative.displays.length);}
-        const badge=document.getElementById("programBadgeText");
-        if(badge)badge.textContent="Programa · Demo visual";
-        const programState=document.getElementById("programStateLabel");
-        if(programState)programState.textContent="Sin motor de proyección";
-    }
-    async function refreshDisplays() {
-        try {
-            const data=await api.displays();
-            stateNative.displays=data.displays;
-            stateNative.operatorId=data.operatorDisplayId;
-            stateNative.mainId=data.mainDisplayId;
-            stateNative.selected=new Set([...stateNative.selected].filter(id=>data.displays.some(d=>d.id===id)));
-            if(data.mainDisplayId && !stateNative.selected.size)stateNative.selected.add(data.mainDisplayId);
-            renderDisplayViews();
-        } catch(err){toast("Error al detectar pantallas: "+err.message);}
-    }
-    async function openScreens(){
-        await refreshDisplays();
-        showModal("Pantallas y salidas de escritorio");
-        const holder=content();
-        holder.innerHTML='<p style="color:#cbd5e1;margin-bottom:13px;">Estas son las pantallas que Windows/Electron detecta de verdad. Primero selecciona el monitor del operador, luego el principal JA. Las salidas NDI se integrarán a través del motor FreeShow; todavía no se emiten desde este prototipo.</p>';
-        const select=(id,label,selected,filter)=>{
-            const row=document.createElement("label");row.style.cssText="display:block;margin:12px 0;";
-            const cap=document.createElement("div");cap.textContent=label;cap.style.marginBottom="6px";row.append(cap);
-            const input=document.createElement("select");input.id=id;input.style.cssText="background:#06122c;border:1px solid #315389;border-radius:7px;color:white;padding:8px;width:100%;";
-            const blank=document.createElement("option");blank.value="";blank.textContent="— Sin asignar —";input.append(blank);
-            stateNative.displays.filter(filter).forEach(d=>{const option=document.createElement("option");option.value=d.id;option.textContent=d.name+" — "+d.size.width+"×"+d.size.height+(d.primary?" (principal de Windows)":"");input.append(option);});
-            input.value=selected;row.append(input);return row;
-        };
-        holder.append(select("jaNativeOperator","Monitor del operador",stateNative.operatorId,()=>true));
-        holder.append(select("jaNativeMain","Proyector principal JA",stateNative.mainId,d=>d.id!==stateNative.operatorId));
-        const save=newButton("Guardar asignaciones",async()=>{
-            try {
-                const operator=document.getElementById("jaNativeOperator").value;
-                const main=document.getElementById("jaNativeMain").value;
-                // Clear an old main assignment before changing operator if it would conflict.
-                if(operator && operator===main)throw Error("Operador y principal deben ser distintos");
-                if(main && main===stateNative.operatorId && operator!==stateNative.operatorId)await api.setMain("");
-                if(operator)await api.setOperator(operator);
-                await api.setMain(main);
-                await refreshDisplays();toast("Asignaciones guardadas (sin iniciar proyección).");void openScreens();
-            }catch(error){toast(error.message);}
-        });
-        holder.append(save);
-        const footer=document.createElement("p");footer.style.cssText="color:#f7c46e;margin-top:18px;";
-        footer.textContent="Estado: detección real funcionando; creación de ventanas de salida, NDI y sincronización audiovisuales pendientes de integrar.";holder.append(footer);
-    }
-    async function openLibrary() {
-        showModal("Bibliotecas y carpetas vinculadas");
-        const holder=content();
-        holder.innerHTML="";
-        const info=await api.folderInfo();
-        const title=document.createElement("p");
-        title.style.cssText="color:#bdd4fc;margin-bottom:12px;";
-        title.textContent="Carpeta independiente: "+info.root+" — las carpetas externas no se modifican.";
-        holder.append(title);
-        const bar=document.createElement("div");bar.style.cssText="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;";
-        CATEGORIES.forEach(category=>{
-            const btn=newButton(category,()=>{stateNative.category=category;void openLibrary();});
-            btn.style.background=stateNative.category===category?"#145f84":"#102652";bar.append(btn);
-        });
-        holder.append(bar);
-        const buttons=document.createElement("div");buttons.style.cssText="display:flex;gap:9px;flex-wrap:wrap;margin-bottom:14px;";
-        buttons.append(newButton("+ Vincular carpeta externa",async()=>{
-            try {const res=await api.selectFolder(stateNative.category);if(!res.cancelled){toast("Carpeta vinculada sin copiar archivos");void openLibrary();}}catch(err){toast(err.message);}
-        }));
-        buttons.append(newButton("Actualizar catálogo",()=>void openLibrary()));holder.append(buttons);
-        let library;
-        try { library=await api.library(stateNative.category); }catch(err){holder.append(document.createTextNode(err.message));return;}
-        const inf=document.createElement("p");inf.style.cssText="color:#afc9ed;margin-bottom:11px;";
-        inf.textContent=library.items.length+" archivo(s). "+(library.truncated?"Listado limitado por seguridad. ":"")+(library.missing.length?"Carpetas no disponibles: "+library.missing.join(", "):"");
-        holder.append(inf);
-        stateNative.files=library.items;
-        const list=document.createElement("div");list.style.cssText="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:8px;";
-        if(!library.items.length){list.textContent="No hay archivos en esta categoría. Puedes copiarlos a la carpeta JA o vincular una carpeta existente.";}
-        library.items.slice(0,180).forEach((item,index)=>{
-            const box=document.createElement("div");box.style.cssText="display:flex;flex-direction:column;gap:5px;padding:9px;border:1px solid #284876;border-radius:8px;background:#091c3c;";
-            const filename=document.createElement("div");filename.textContent=item.name;filename.style.cssText="overflow-wrap:anywhere;font-weight:600;";
-            const sub=document.createElement("small");sub.textContent=item.extension+" · "+Math.round(item.size/1024)+" KB";sub.style.color="#b9c9e9";
-            const actions=document.createElement("div");actions.style.cssText="display:flex;gap:8px;";
-            actions.append(newButton("Vista previa",()=>void previewFile(index)));
-            actions.append(newButton("Abrir",async()=>{const msg=await api.openMedia(item.path);if(msg)toast(msg);}));
-            box.append(filename,sub,actions);list.append(box);
-        });
-        holder.append(list);
-    }
-    async function previewFile(index) {
-        const item=stateNative.files[index];if(!item)return;
-        try{
-            const url=await api.mediaUrl(item.path);
-            const box=document.getElementById("previewCanvasContent");box.replaceChildren();
-            const ext=item.extension;
-            let node;
-            if([".jpg",".jpeg",".png",".gif",".webp",".svg"].includes(ext)){
-                node=document.createElement("img");node.src=url;node.alt=item.name;
-            } else if([".mp4",".webm",".mov",".mkv",".avi"].includes(ext)){
-                node=document.createElement("video");node.src=url;node.controls=true;node.muted=true;node.playsInline=true;
-            } else if([".mp3",".wav",".m4a",".ogg",".flac"].includes(ext)){
-                node=document.createElement("audio");node.src=url;node.controls=true;node.muted=true;
-            } else {await api.openMedia(item.path);toast("Abierto con aplicación externa (sin proyección).");return;}
-            node.style.cssText="width:100%;height:100%;object-fit:contain;background:black;";
-            box.append(node);
-            modal.style.display="none";toast("Vista previa local cargada: "+item.name+" (no proyectada)");
-        }catch(error){toast(error.message);}
-    }
-    async function openProjects(){
-        showModal("Proyectos y escenarios preparados");
-        const holder=content();holder.innerHTML="";
-        const info=document.createElement("p");info.style.cssText="color:#bdcef1;margin-bottom:14px;";
-        info.textContent="Los proyectos se guardan en disco con escritura atómica. Abrir o editar un escenario no inicia ninguna proyección.";holder.append(info);
-        const create=newButton("+ Nuevo proyecto",async()=>{
-            const name=window.prompt("Nombre del proyecto (ej. Culto sábado, Campaña especial):");
-            if(!name)return;
-            try{stateNative.activeProject=await api.createProject(name);await openProjects();toast("Proyecto creado y guardado.");}
-            catch(error){toast(error.message);}
-        });holder.append(create);
-        const all=await api.projects();stateNative.projects=all;
-        const list=document.createElement("div");list.style.cssText="display:flex;flex-direction:column;gap:9px;margin-top:14px;";
-        for(const project of all){
-            const row=document.createElement("div");row.style.cssText="padding:12px;background:#091e42;border:1px solid #284876;border-radius:9px;";
-            const title=document.createElement("strong");title.textContent=project.name+" · "+project.scenarios.length+" escenarios";row.append(title);
-            const actions=document.createElement("div");actions.style.cssText="display:flex;gap:7px;margin-top:9px;flex-wrap:wrap;";
-            actions.append(newButton("Preparar proyecto",()=>{stateNative.activeProject=project;const label=document.getElementById("activeProjectLabel");if(label)label.textContent="Proyecto: "+project.name;toast("Proyecto preparado sin modificar salidas.");}));
-            actions.append(newButton("+ Escenario",async()=>{
-                const name=window.prompt("Nombre del escenario");if(!name)return;
-                try {const updated=await api.saveProject({...project,scenarios:[...project.scenarios,{id:String(Date.now())+"-"+Math.random().toString(16).slice(2),name,items:[]}]});stateNative.activeProject=updated;void openProjects();toast("Escenario guardado.");}
-                catch(error){toast(error.message);}
-            }));
-            row.append(actions);
-            project.scenarios.forEach(sc=>{const item=document.createElement("p");item.style.cssText="color:#b4d1ee;padding:5px 0 0 7px;";item.textContent="Escenario: "+sc.name;row.append(item);});
-            list.append(row);
-        }
-        if(!all.length)list.textContent="Todavía no hay proyectos. Crea uno para preparar escenarios.";
-        holder.append(list);
-    }
-    function addAccess() {
-        const header=document.querySelector("header");
-        if(!header)return;
-        const container=document.createElement("div");
-        container.style.cssText="display:flex;gap:6px;align-items:center;";
-        container.append(newButton("📂 Biblioteca real",()=>void openLibrary()));
-        container.append(newButton("🗂 Proyectos",()=>void openProjects()));
-        container.append(newButton("🖥 Pantallas",()=>void openScreens()));
-        const badge=document.createElement("span");badge.textContent="BETA · salida audiovisual pendiente";
-        badge.style.cssText="font-size:10px;color:#fac67c;white-space:nowrap;";container.append(badge);
-        header.append(container);
-    }
-    // Replace renderers that would otherwise always paint four imaginary monitors.
-    if(typeof window.renderQuickTargetBar==="function")window.renderQuickTargetBar=()=>renderDisplayViews();
-    if(typeof window.renderMultiscreenCards==="function")window.renderMultiscreenCards=()=>renderDisplayViews();
-    blockDemoActions();
-    window.addEventListener("DOMContentLoaded",async()=>{
-        addAccess();await refreshDisplays();
-        api.onDisplaysChanged(()=>void refreshDisplays());
-        try{const info=await api.info();if(info.projectionEngineReady)toast("Motor de proyección disponible");}
-        catch(error){toast(error.message);}
-    });
+const api=window.jaDesktop;
+if(!api)return;
+const $=id=>document.getElementById(id);
+const state={displays:[],operator:"",main:"",targets:new Set(),sessions:[],module:"biblia",type:"Videos",
+ files:[],selected:null,prepared:null,live:new Map(),bibles:[],bible:null,structure:null,chapter:null,book:0,chapterIndex:0,verse:0,view:"grid"};
+const safe=s=>String(s??"");
+const node=(tag,classes="",text)=>{const n=document.createElement(tag);n.className=classes;n.textContent=text===undefined?"":safe(text);return n;};
+const button=(label,classes,click)=>{const b=node("button",classes,label);b.type="button";b.addEventListener("click",()=>run(click));return b;};
+const announce=(message)=>{const el=$("jaToast"),span=$("jaToastText");if(!el||!span)return;span.textContent=safe(message);el.classList.remove("hidden");clearTimeout(announce.timeout);announce.timeout=setTimeout(()=>el.classList.add("hidden"),3600);};
+const run=async fn=>{try{return await fn();}catch(err){announce("Error: "+safe(err?.message||err));return null;}};
+function placeholder(container,label){container.replaceChildren(node("div","w-full h-full min-h-28 flex flex-col items-center justify-center text-center text-xs text-slate-400 p-6",label));}
+function drawVerse(container,text,reference){
+ const base=node("div","w-full h-full flex flex-col items-center justify-center gap-3 p-5 text-center bg-[#071a4c]");
+ const verse=node("div","text-white font-bold text-glow-shadow whitespace-pre-line font-serif-verse leading-snug",text);
+ verse.style.fontSize="clamp(15px,2.1vw,38px)";
+ base.append(node("div","text-amber-200 font-semibold font-serif-verse text-xs sm:text-sm",reference),verse);
+ container.replaceChildren(base);
+}
+function formatTitle(display){return safe(display.name||"Pantalla "+display.id)+" · "+display.size.width+"×"+display.size.height;}
+function targets(){const external=state.displays.filter(d=>d.id!==state.operator);return external.filter(d=>state.targets.has(d.id)).map(d=>d.id);}
+function setTop(){
+ const strong=[...document.querySelectorAll("header strong")].find(el=>el.parentElement?.textContent?.includes("Pantallas conectadas:"));
+ if(strong)strong.textContent=state.displays.length+" detectadas";
+ const header= [...document.querySelectorAll("header strong")].find(el=>el.parentElement?.textContent?.includes("Estado:"));
+ if(header)header.textContent=state.sessions.length?"Salida activa":"Sin proyección";
+ const project=$("activeProjectLabel");if(project)project.textContent="Modo: Operación manual";
+ const save=$("autosaveStatusText");if(save)save.textContent="Proyectos sin abrir";
+ const dot=$("autosaveDot");if(dot)dot.className="w-2 h-2 rounded-full bg-slate-500";
+ const meter=$("audioMeterBars");
+ if(meter){meter.replaceChildren();for(let i=0;i<11;i++)meter.append(node("span","flex-1 h-full bg-[#1e3a5f] rounded-[1px]"));}
+}
+function renderTargets(){
+ const el=$("quickTargetButtons");if(!el)return;el.replaceChildren();
+ const external=state.displays.filter(d=>d.id!==state.operator);
+ if(!external.length)el.append(node("span","text-amber-200 text-xs","Conecta una pantalla externa (Windows → Extender)"));
+ for(const d of external){
+   const on=state.targets.has(d.id),title=d.id===state.main?"Principal":d.name;
+   el.append(button("🖥 "+title+(on?" ✓":""),"px-3.5 py-1.5 rounded-lg border text-xs "+(on?"pill-amber-target":"bg-[#0d2046] border-[#23437a] text-slate-200"),()=>{
+    if(on)state.targets.delete(d.id);else state.targets.add(d.id);
+    renderTargets();renderDisplays();
+   }));
+ }
+}
+function renderDisplays(){
+ const el=$("multiscreenCardsList");if(!el)return;
+ el.replaceChildren();
+ const external=state.displays.filter(d=>d.id!==state.operator);
+ if(!external.length){el.append(node("p","text-center text-xs text-slate-300 p-4","Sin proyectores conectados. Abre ⚙ Configuración."));return;}
+ for(const d of external){
+  const session=state.sessions.find(s=>s.displayId===d.id);
+  const title=d.id===state.main?"Pantalla principal":d.name;
+  const active=state.targets.has(d.id);
+  const card=node("div","rounded-xl border p-1.5 flex items-center gap-2 cursor-pointer "+(active?"border-emerald-500 bg-[#0b2239]":"border-[#1c3a6e] bg-[#0a1938]"));
+  card.append(node("div","w-20 aspect-video rounded-lg bg-black border border-[#27476f] flex items-center justify-center text-slate-400","🖥"));
+  const details=node("div","min-w-0 flex-1");details.append(node("div","font-bold text-xs truncate",title));
+  details.append(node("div","text-[10px] text-slate-300 mt-1 truncate",session?session.title+" · "+session.state:formatTitle(d)));
+  card.append(details,node("span","text-[10px] rounded-full px-2 py-0.5 border "+(session?"text-emerald-200 border-emerald-600":"text-slate-300 border-slate-600"),session?"Salida":"Lista"));
+  card.addEventListener("click",()=>{state.targets=new Set([d.id]);renderTargets();renderDisplays();renderProgram();});
+  el.append(card);
+ }
+}
+function renderPreview(){
+ const target=$("previewCanvasContent");if(!target)return;
+ const c=state.prepared;
+ if(!c){placeholder(target,"Vista previa · Selecciona un himno, archivo o versículo");$("previewTimeCounter").textContent="Sin archivo";return;}
+ if(c.kind==="verse"){drawVerse(target,c.text,c.reference);$("previewTimeCounter").textContent=c.reference;return;}
+ if(c.kind==="image"){const img=node("img","w-full h-full object-contain");img.src=c.url;img.alt=c.title;target.replaceChildren(img);}
+ else {const elem=node(c.kind==="video"?"video":"audio","w-full h-full object-contain");elem.src=c.url;elem.controls=true;elem.muted=true;elem.preload="metadata";target.replaceChildren(elem);}
+ $("previewTimeCounter").textContent=c.title;
+}
+function renderProgram(){
+ const el=$("programCanvasContent");if(!el)return;
+ const t=targets()[0]||state.main,s=state.sessions.find(x=>x.displayId===t),known=state.live.get(t);
+ const badge=$("programBadgeText"),label=$("programStateLabel");
+ if(badge)badge.textContent=s?"Programa · "+s.state:"Programa · Sin emisión";
+ if(label)label.textContent=s? s.state+" · "+s.title:"Sin proyección";
+ $("programTimeCounter").textContent="—";
+ if(!s){placeholder(el,"Programa sin señal · No hay contenido proyectándose");return;}
+ if(s.state==="black"){placeholder(el,"Salida en negro");return;}
+ if(known?.kind==="verse"){drawVerse(el,known.text,known.reference);return;}
+ if(known?.kind==="image"&&known.url){const img=node("img","w-full h-full object-contain");img.src=known.url;el.replaceChildren(img);return;}
+ // A display state is not a decoded video frame: label accordingly.
+ placeholder(el,s.title+" · "+s.state+" (estado de la salida, no monitorización del fotograma)");
+}
+async function refreshScreens(){
+ const data=await api.displays(),external=data.displays.filter(d=>d.id!==data.operatorDisplayId);
+ state.displays=data.displays;state.operator=data.operatorDisplayId;state.main=data.mainDisplayId;
+ state.targets=new Set([...state.targets].filter(id=>external.some(d=>d.id===id)));
+ if(!state.targets.size&&external.some(d=>d.id===state.main))state.targets.add(state.main);
+ state.sessions=await api.projectionState();
+ setTop();renderTargets();renderDisplays();renderProgram();
+}
+function chooseDestination(){const chosen=targets();if(!chosen.length)throw Error("Selecciona un proyector real en la barra de destinos");return chosen;}
+async function project(ids){
+ if(!state.prepared)throw Error("Selecciona un himno, archivo o versículo para Vista previa");
+ for(const id of ids){
+  const c=state.prepared;
+  if(c.kind==="verse")await api.sendVerse(c.bible,c.book,c.chapter,c.verse,id);
+  else await api.sendMedia(c.file,id);
+  state.live.set(id,{...c});
+ }
+ await refreshScreens();announce("Enviado a "+ids.length+" pantalla(s) real(es).");
+}
+async function command(action){
+ for(const id of chooseDestination())await api.projectionCommand(id,action);
+ await refreshScreens();
+}
+async function prepareFile(file){
+ if(![".mp4",".webm",".mp3",".wav",".ogg",".m4a",".jpg",".jpeg",".png",".webp",".gif"].includes(file.extension)){announce("Formato no reproducible todavía. Convierte a MP4 H.264 o WebM.");return;}
+ const url=await api.mediaUrl(file.path);
+ const kind=[".mp4",".webm"].includes(file.extension)?"video":[".jpg",".jpeg",".png",".webp",".gif"].includes(file.extension)?"image":"audio";
+ state.prepared={kind,file:file.path,url,title:file.name};
+ renderPreview();announce(file.name+" preparado (sin proyectar).");
+}
+function fileCard(file){
+ const item=button("","bg-[#0a1938] border border-[#1a3768] hover:border-cyan-400 rounded-xl p-2 text-left flex flex-col gap-1 min-w-0",()=>prepareFile(file));
+ item.append(node("div","rounded-lg bg-[#06132a] border border-[#203a69] aspect-video flex justify-center items-center text-xl text-sky-400",file.extension===".mp4"||file.extension===".webm"?"▶":file.extension===".mp3"?"♫":"▣"));
+ item.append(node("div","font-semibold text-xs truncate",file.name));
+ item.append(node("div","text-[10px] text-slate-400",file.extension+" · "+Math.round(file.size/1024)+" KB"));
+ return item;
+}
+function renderFiles(){
+ const q=state.module==="himnario"||state.module==="juveniles"?$("hymnModuleSearch")?.value||"":$("multimediaSearchInput")?.value||"";
+ const list=state.files.filter(f=>f.name.toLocaleLowerCase("es").includes(q.trim().toLocaleLowerCase("es")));
+ const el=state.module==="himnario"||state.module==="juveniles"?$("hymnModuleGrid"):$("multimediaCardsGrid");
+ if(!el)return;el.replaceChildren();
+ if(!list.length)el.append(node("div","col-span-full rounded-xl border border-[#284674] p-6 text-slate-300 text-xs","No hay archivos aquí. Pulsa «Vincular carpeta» para utilizar tu biblioteca real."));
+ for(const f of list.slice(0,220))el.append(fileCard(f));
+}
+function category(){return state.module==="himnario"?"Himnario Adventista":state.module==="juveniles"?"Cantos Juveniles":state.type;}
+async function loadFiles(){
+ const group=category(),data=await api.library(group);
+ state.files=data.items;renderFiles();
+ const info=$("librarySourceInfo");if(info)info.textContent=group+" · "+data.items.length+" archivo(s)"+(data.missing.length?" · "+data.missing.length+" carpeta(s) sin conectar":"");
+}
+function disable(id,message){const x=$(id);if(!x)return;x.setAttribute("title",message);x.setAttribute("aria-disabled","true");x.classList.add("opacity-50");x.addEventListener("click",e=>{e.preventDefault();e.stopImmediatePropagation();announce(message);},true);}
+function switchModule(id){
+ state.module=id;
+ const mapping={biblia:"moduleView_biblia",himnario:"moduleView_himnario",juveniles:"moduleView_himnario",multimedia:"moduleView_multimedia"};
+ const visible=mapping[id]||"moduleView_other";
+ for(const key of ["moduleView_biblia","moduleView_himnario","moduleView_multimedia","moduleView_other"]){
+  const el=$(key);if(el){el.classList.toggle("hidden",key!==visible);el.classList.toggle("flex",key===visible);}
+ }
+ for(const b of document.querySelectorAll("#leftModuleSidebar button"))b.classList.toggle("sidebar-active",b.dataset.moduleId===id);
+ if(id==="himnario"||id==="juveniles"){
+  const h=$("moduleView_himnario")?.querySelector("h2");if(h)h.textContent=id==="juveniles"?"♪ Cantos juveniles":"♫ Himnario Adventista";
+  void run(loadFiles);
+ }else if(id==="multimedia")void run(loadFiles);
+ else if(id==="biblia")void run(loadBibles);
+ else {
+  const holder=$("otherModuleContainer");
+  if(holder)holder.replaceChildren(node("p","text-slate-300 text-sm","El módulo "+id+" está previsto, pero todavía no dispone de motor funcional en esta versión."));
+ }
+}
+function sidebar(){
+ const nav=$("leftModuleSidebar");nav.replaceChildren();
+ const defs=[["biblia","📖","Biblia"],["himnario","🎵","Himnario"],["juveniles","♪","Cantos juveniles"],["multimedia","▶","Multimedia"],["youtube","▶","YouTube"],["presentaciones","▣","Presentaciones"],["fondos","▧","Fondos"],["listas","☰","Listas"]];
+ for(const [id,icon,label] of defs){
+  const b=button(icon+"   "+label,"ui-label w-full px-3 py-2 rounded-lg text-xs text-left text-slate-300 hover:bg-[#0d2046] transition",()=>switchModule(id));
+  b.dataset.moduleId=id;nav.append(b);
+ }
+}
+function setBibleView(view){
+ state.view=view;
+ $("fsBibleSubViewGrid")?.classList.toggle("hidden",view!=="grid");
+ $("fsBibleSubViewList")?.classList.toggle("hidden",view!=="list");
+ $("btnFsViewGrid")?.classList.toggle("bg-amber-500",view==="grid");
+ $("btnFsViewList")?.classList.toggle("bg-amber-500",view==="list");
+}
+function bookColor(index){return index<5?"#8d3445":index<17?"#6a452f":index<22?"#456348":index<39?"#394a78":index<43?"#346d42":index<53?"#544875":"#65522f";}
+function bookAbbr(name,index){
+ const aliases=["GEN","EXO","LEV","NUM","DEU","JOS","JDG","RUT","1SA","2SA","1KI","2KI","1CH","2CH","EZR","NEH","EST","JOB","PSA","PRO","ECC","SNG","ISA","JER","LAM","EZK","DAN","HOS","JOL","AMO","OBA","JON","MIC","NAM","HAB","ZEP","HAG","ZEC","MAL","MAT","MRK","LUK","JHN","ACT","ROM","1CO","2CO","GAL","EPH","PHP","COL","1TH","2TH","1TI","2TI","TIT","PHM","HEB","JAS","1PE","2PE","1JN","2JN","3JN","JUD","REV"];
+ return state.structure?.books.length===66?aliases[index]||name.slice(0,3).toUpperCase():name.slice(0,3).toUpperCase();
+}
+function fillSelector(id,items){
+ const select=$(id);if(!select)return;select.replaceChildren();
+ for(const [value,label] of items){const o=node("option","",label);o.value=safe(value);select.append(o);}
+}
+function currentBibleRef(){const b=state.structure?.books[state.book],v=state.chapter?.verses[state.verse];return b&&v?b.name+" "+(state.chapterIndex+1)+":"+v.number:""; }
+function prepareVerse(){
+ const v=state.chapter?.verses[state.verse];
+ if(!v||!state.bible)return;
+ const reference=currentBibleRef();
+ state.prepared={kind:"verse",bible:state.bible.path,book:state.book,chapter:state.chapterIndex,verse:state.verse,reference,text:v.text,title:reference};
+ renderPreview();
+ const pill=$("fsFloatingRefPill");if(pill)pill.textContent=state.bible.name+": "+reference;
+}
+async function loadBibles(){
+ state.bibles=await api.bibles();
+ const select=$("jaBibleTranslation"),prior=state.bible?.path;
+ if(!select)return;
+ select.replaceChildren();
+ for(const b of state.bibles){const o=node("option","",b.name);o.value=b.path;select.append(o);}
+ if(prior&&state.bibles.some(b=>b.path===prior))select.value=prior;
+ if(!state.bibles.length){
+  state.bible=null;state.structure=null;state.chapter=null;
+  for(const id of ["fsBooksRow1","fsBooksRow2","fsBooksRow3","fsGridChapters","fsGridVerses","fsListBooksCol","fsListChaptersCol","fsListVersesCol"]){$(id)?.replaceChildren();}
+  $("fsGridChapters").append(node("p","col-span-full text-amber-300 p-3 text-xs","No hay una Biblia cargada. Importa un archivo FSB/JSON."));
+  return;
+ }
+ await selectBible();
+}
+async function selectBible(){
+ state.bible=state.bibles.find(b=>b.path===$("jaBibleTranslation")?.value)||null;
+ if(!state.bible)return;
+ state.structure=await api.bibleStructure(state.bible.path);
+ state.book=0;state.chapterIndex=0;state.verse=0;
+ await loadChapter();
+}
+async function loadChapter(){
+ if(!state.bible)return;
+ state.chapter=await api.bibleChapter(state.bible.path,state.book,state.chapterIndex);
+ state.verse=Math.max(0,Math.min(state.verse,(state.chapter.verses.length||1)-1));
+ renderBible();prepareVerse();
+}
+function renderBible(){
+ if(!state.structure||!state.chapter)return;
+ const books=state.structure.books;
+ const groups=[books.slice(0,25),books.slice(25,50),books.slice(50)];
+ ["fsBooksRow1","fsBooksRow2","fsBooksRow3"].forEach((id,gi)=>{
+  const el=$(id);el.replaceChildren();
+  for(const book of groups[gi]){
+   const b=button(bookAbbr(book.name,book.index),"h-8 border border-[#061126] text-[10px] font-bold "+(book.index===state.book?"ring-2 ring-amber-400":""),async()=>{state.book=book.index;state.chapterIndex=0;state.verse=0;await loadChapter();});
+   b.title=book.name;b.style.background=bookColor(book.index);el.append(b);
+  }
+ });
+ const ch=$("fsGridChapters"),vs=$("fsGridVerses");ch.replaceChildren();vs.replaceChildren();
+ const chapters=books[state.book]?.chapters||0;
+ for(let i=0;i<chapters;i++)ch.append(button(String(i+1),"h-7 text-[11px] font-semibold "+(i===state.chapterIndex?"bg-[#364962] ring-1 ring-amber-400":"text-slate-100 hover:bg-[#203254]"),async()=>{state.chapterIndex=i;state.verse=0;await loadChapter();}));
+ for(let i=0;i<state.chapter.verses.length;i++)vs.append(button(String(state.chapter.verses[i].number),"h-7 text-[11px] font-semibold "+(i===state.verse?"ring-1 ring-amber-400 bg-[#393528]":"text-amber-400 hover:bg-[#203254]"),()=>{state.verse=i;renderBible();prepareVerse();}));
+ const bookList=$("fsListBooksCol"),chapterList=$("fsListChaptersCol"),verseList=$("fsListVersesCol");
+ bookList.replaceChildren();chapterList.replaceChildren();verseList.replaceChildren();
+ for(const book of books)bookList.append(button(book.name,"w-full px-2 py-2 border-b border-[#1b2945] text-xs text-left "+(book.index===state.book?"bg-[#24436b]":"hover:bg-[#203154]"),async()=>{state.book=book.index;state.chapterIndex=0;state.verse=0;await loadChapter();}));
+ for(let i=0;i<chapters;i++)chapterList.append(button(String(i+1),"w-full py-2 text-xs "+(i===state.chapterIndex?"text-amber-400 bg-[#243751]":""),async()=>{state.chapterIndex=i;state.verse=0;await loadChapter();}));
+ for(let i=0;i<state.chapter.verses.length;i++){
+  const verse=state.chapter.verses[i],b=button("","w-full text-left py-2 px-3 text-xs border-b border-[#1b2945] "+(state.verse===i?"bg-[#24436b]":""),()=>{state.verse=i;renderBible();prepareVerse();});
+  b.append(node("strong","text-amber-400 mr-2",verse.number),node("span","text-slate-100",verse.text));verseList.append(b);
+ }
+ const pill=$("fsFloatingRefPill");if(pill)pill.textContent=state.bible.name+": "+currentBibleRef();
+}
+async function stepVerse(step){
+ if(!state.chapter)return;
+ const next=state.verse+step;
+ if(next<0||next>=state.chapter.verses.length)return;
+ state.verse=next;renderBible();prepareVerse();
+}
+function openModal(title,content){
+ $("modalTitle").textContent=title;
+ const body=$("modalBody");body.replaceChildren();body.append(content);
+ $("modalOverlay").classList.remove("hidden");$("modalOverlay").classList.add("flex");
+}
+function closeModal(){$("modalOverlay").classList.add("hidden");$("modalOverlay").classList.remove("flex");}
+function screensModal(){
+ const wrap=node("div","flex flex-col gap-3");
+ wrap.append(node("p","text-slate-300","Pantallas detectadas por Windows: "+state.displays.length+". Configura el operador y la pantalla principal. No se proyecta automáticamente."));
+ const selection=(label,options,id)=>{
+  wrap.append(node("label","font-semibold text-slate-200",label));
+  const sel=node("select","w-full bg-[#050e24] p-2 border border-[#264b80] rounded-lg text-white");
+  sel.id=id;
+  for(const [value,title] of options){const opt=node("option","",title);opt.value=value;sel.append(opt);}
+  wrap.append(sel);return sel;
+ };
+ const optionList=state.displays.map(d=>[d.id,formatTitle(d)]);
+ const op=selection("Monitor del operador",optionList,"realOperator");
+ op.value=state.operator;
+ const makeMain=()=>{
+  const existing=$("realMain"),old=existing?.value||state.main;
+  if(existing)existing.remove();
+  const sel=node("select","w-full bg-[#050e24] p-2 border border-[#264b80] rounded-lg text-white");sel.id="realMain";
+  for(const [value,label] of [["","— Sin asignar —"],...optionList.filter(x=>x[0]!==op.value)]){
+   const o=node("option","",label);o.value=value;sel.append(o);
+  }
+  sel.value=old===op.value?"":old;wrap.insertBefore(sel,footer);
+ };
+ wrap.append(node("label","font-semibold text-slate-200","Pantalla principal HDMI/DisplayPort"));
+ const footer=node("div","flex justify-end gap-2 mt-2");
+ footer.append(button("Cancelar","px-3 py-2 rounded-lg border border-[#345b88]",closeModal));
+ footer.append(button("Guardar asignación","px-3 py-2 rounded-lg pill-cyan-active",async()=>{
+  const chosenOperator=op.value,main=$("realMain").value;
+  if(chosenOperator===main&&main)throw Error("Operador y salida principal no pueden coincidir");
+  if(main===state.operator&&chosenOperator!==state.operator)await api.setMain("");
+  if(chosenOperator!==state.operator)await api.setOperator(chosenOperator);
+  await api.setMain(main);closeModal();await refreshScreens();announce("Configuración de pantallas guardada.");
+ }));
+ wrap.append(footer);op.addEventListener("change",makeMain);makeMain();
+ openModal("Pantallas y salidas de proyección JA",wrap);
+}
+async function linkFolder(){
+ const group=category(),response=await api.selectFolder(group);
+ if(!response.cancelled){await loadFiles();announce("Carpeta vinculada: "+group);}
+}
+function setup(){
+ sidebar();
+ // Hide all mock-only controls until their real service exists.
+ for(const [id,msg] of Object.entries({
+  btnBridgeFade:"Transición de fundido pendiente del motor de transiciones",
+  btnBridgeLogo:"Superposición del logo pendiente",
+  btnBridgeClearText:"Limpieza de superposición independiente pendiente",
+  btnOpenDiagModal:"Diagnóstico avanzado pendiente",
+  btnPreviewFullscreen:"Ampliación de Vista previa pendiente",
+  btnProgramFullscreen:"Vista Programa de pantalla completa pendiente",
+  btnFsViewList:"",btnFsViewGrid:"",
+  btnSaveVersion:"Versionado manual todavía no disponible",
+  btnDuplicateProject:"Duplicación de proyectos todavía no disponible"
+ }))if(msg)disable(id,msg);
+ const link=button("+ Vincular carpeta real","px-3 py-1.5 rounded-lg pill-cyan-active text-xs font-semibold",linkFolder);
+ $("moduleView_himnario")?.querySelector(".border-b")?.append(link);
+ const info=node("div","text-xs text-slate-300 pb-2");info.id="librarySourceInfo";$("hymnModuleGrid")?.before(info);
+ $("hymnEndBehavior").disabled=true;$("hymnEndBehavior").title="Comportamiento al terminar pendiente";
+ $("btnAddMultimedia").addEventListener("click",()=>run(linkFolder));
+ $("hymnModuleSearch").addEventListener("input",renderFiles);
+ $("multimediaSearchInput").addEventListener("input",renderFiles);
+ for(const item of document.querySelectorAll("[data-media-subtab]"))item.addEventListener("click",()=>run(async()=>{
+  state.type=item.dataset.mediaSubtab==="image"?"Imagenes":item.dataset.mediaSubtab==="audio"?"Audio":"Videos";await loadFiles();
+ }));
+ for(const [id,click] of [
+  ["btnBridgeQuickPlay",()=>project(chooseDestination())],["btnBridgeCut",()=>project(chooseDestination())],
+  ["btnProjectSelectedVerse",()=>project(chooseDestination())],["fsPillPlayBtn",()=>project(chooseDestination())],
+  ["btnBridgeBlack",()=>command("black")],["btnProgramPause",()=>command(state.sessions.some(s=>targets().includes(s.displayId)&&s.state==="paused")?"play":"pause")],
+  ["btnPreviewToAll",()=>project(state.displays.filter(d=>d.id!==state.operator).map(d=>d.id))],
+  ["btnProgramToAll",async()=>{const main=state.live.get(state.main);if(!main)throw Error("La salida principal no tiene contenido conocido para repetir");const previous=state.prepared;state.prepared=main;try{await project(state.displays.filter(d=>d.id!==state.operator).map(d=>d.id));}finally{state.prepared=previous;}}],
+  ["btnResetTargets",()=>{state.targets=new Set(state.main?[state.main]:[]);renderTargets();renderDisplays();renderProgram();}],
+  ["btnBiblePrevVerse",()=>stepVerse(-1)],["btnBibleNextVerse",()=>stepVerse(1)],
+  ["btnFsViewGrid",()=>setBibleView("grid")],["btnFsViewList",()=>setBibleView("list")],
+  ["fsPillViewToggleBtn",()=>setBibleView(state.view==="grid"?"list":"grid")],
+  ["btnFsPillSearchBtn",()=>{}],
+  ["btnOpenSettingsModal",screensModal],["btnMultiScreenMenu",screensModal],
+  ["btnCloseModal",closeModal],["btnImportBibleModal",async()=>{const r=await api.importBible();if(!r.cancelled){await loadBibles();announce("Biblia importada.");}}],
+  ["btnPreviewPlay",async()=>{const el=$("previewCanvasContent").querySelector("video,audio");if(!el)throw Error("No hay un video o audio en Vista previa");if(el.paused)await el.play();else el.pause();}],
+  ["btnPreviewMute",()=>{const el=$("previewCanvasContent").querySelector("video,audio");if(el){el.muted=!el.muted;announce(el.muted?"Vista previa silenciada":"Monitoreo de Vista previa activo");}}],
+  ["btnFsPillVersionBtn",()=>{$("jaBibleTranslation")?.focus();}],
+  ["btnToggleBibleInspector",()=>{$("fsBibleSearchAndInspector")?.classList.toggle("hidden");}],
+  ["fsPillSearchBtn",()=>{$("fsBibleSearchAndInspector")?.classList.toggle("hidden");}],
+  ["btnOpenSettingsModal",screensModal]
+ ]){const element=$(id);if(element)element.addEventListener("click",()=>run(click));}
+ $("jaBibleTranslation")?.addEventListener("change",()=>run(selectBible));
+ $("btnLargeTextToggle")?.addEventListener("click",()=>document.body.classList.toggle("large-text-mode"));
+ for(const id of ["btnProjectDropdown","btnProgramFullscreen","btnPreviewFullscreen"]){
+  if(id==="btnProjectDropdown")disable(id,"Gestión de proyectos en integración. La proyección manual está disponible.");
+ }
+ $("btnBridgeFade")?.classList.add("opacity-50");
+ $("programVolumeSlider").disabled=true;$("programVolumeSlider").title="Volumen independiente pendiente";
+ $("previewSeekSlider").disabled=true;$("previewSeekSlider").title="Utiliza el control nativo del video en Vista previa";
+ for(const el of [$("readingPlateToggle"),$("readingPlateOpacity"),$("scriptureBgSelect")])if(el){el.disabled=true;el.title="Personalización de fondos pendiente";}
+ $("btnRestoreScriptureBg").disabled=true;$("btnRestoreReadingPlate").disabled=true;
+ $("btnResetTargets")?.setAttribute("title","Solo restaura selección; no interrumpe otras pantallas.");
+ // The prototype's placeholder NVI/RVR1960 options are removed by loadBibles().
+ $("btnProjectSelectedVerse")?.setAttribute("title","Proyecta el contenido preparado en Vista previa.");
+ $("btnFsViewGrid")?.setAttribute("title","Vista real de libros y versículos.");
+ document.addEventListener("keydown",e=>{
+  if(e.target?.matches?.("input,textarea,select"))return;
+  if(state.module!=="biblia")return;
+  if(e.key==="ArrowRight"){e.preventDefault();run(()=>stepVerse(1));}
+  if(e.key==="ArrowLeft"){e.preventDefault();run(()=>stepVerse(-1));}
+ });
+ api.onDisplaysChanged(()=>run(refreshScreens));
+ api.onProjectionChanged(s=>{state.sessions=s;setTop();renderDisplays();renderProgram();});
+ setBibleView("grid");switchModule("biblia");
+ void run(refreshScreens);
+}
+if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",setup,{once:true});else setup();
 })();
