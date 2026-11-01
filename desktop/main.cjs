@@ -10,6 +10,7 @@ const scriptureStyle=require("./bible-style.cjs");
 const settingsPolicy=require("./settings-policy.cjs");
 const transitions=require("./transition-engine.cjs");
 const sessionPolicy=require("./session-policy.cjs");
+const thumbnailCache=require("./thumbnail-cache.cjs");
 
 let mainWindow=null;
 let root="";
@@ -322,6 +323,10 @@ function registerIpc() {
         return {cancelled:false,linked:store.loadSettings(root).linkedFolders[category]};
     });
     ipcMain.handle("ja:library",(_event,category)=>store.listLibrary(root,category));
+    ipcMain.handle("ja:thumbnail:read",(_event,file)=>
+        thumbnailCache.read(root,store.findAllowedFile(root,file)));
+    ipcMain.handle("ja:thumbnail:write",(_event,file,data)=>
+        thumbnailCache.write(root,store.findAllowedFile(root,file),data));
     ipcMain.handle("ja:media:url",(_event,file)=>pathToFileURL(store.findAllowedFile(root,file)).href);
     ipcMain.handle("ja:media:open",async(_event,file)=>shell.openPath(store.findAllowedFile(root,file)));
     ipcMain.handle("ja:project:list",()=>store.listProjects(root));
