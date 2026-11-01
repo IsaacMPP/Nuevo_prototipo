@@ -15,6 +15,8 @@ contextBridge.exposeInMainWorld("jaDesktop", Object.freeze({
     folderInfo: () => invoke("ja:folders"),
     selectFolder: category => invoke("ja:folder:select", category),
     library: category => invoke("ja:library", category),
+    thumbnailRead: file => invoke("ja:thumbnail:read",file),
+    thumbnailWrite: (file,jpeg) => invoke("ja:thumbnail:write",file,jpeg),
     openMedia: file => invoke("ja:media:open", file),
     mediaUrl: file => invoke("ja:media:url", file),
     projects: () => invoke("ja:project:list"),
