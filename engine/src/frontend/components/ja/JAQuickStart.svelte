@@ -8,7 +8,7 @@
         activePage.set("show")
         if (id === "shows") restoreJAPresentationWorkspace()
         if (section) drawerTabsData.update((data) => {
-            const previous = data[id] || { enabled: true, activeSubTab: null }
+            const previous = data[id] || { enabled: true, activeSubTab: null, openedSubSubTab: {} }
             data[id] = { ...previous, enabled: true, activeSubTab: section, openedSubSubTab: id === "media" && section === "online" ? { ...previous.openedSubSubTab, online: "youtube" } : previous.openedSubSubTab }
             return data
         })
