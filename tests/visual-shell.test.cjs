@@ -23,3 +23,12 @@ test("el diseño incorpora solo el controlador nativo JA y el CSS empaquetado",(
  assert.ok(!html.includes('<script src="https://cdn.tailwindcss.com/3.4.17"></script>'));
  assert.ok(html.includes('Content-Security-Policy'));
 });
+
+test("el instalador incluye el Centro de Configuración C1 real",()=>{
+ const html=fs.readFileSync(htmlPath,"utf8");
+ assert.ok(html.includes('<script src="../desktop/settings-center.js"></script>'));
+ assert.ok(html.includes('<link rel="stylesheet" href="../desktop/settings-center.css">'));
+ const bridge=fs.readFileSync(path.join(__dirname,"../desktop/bridge.js"),"utf8");
+ assert.ok(bridge.includes('jaSettingsCenter.open("pantallas")'));
+ assert.equal(bridge.includes("function screensModal()"),false);
+});
