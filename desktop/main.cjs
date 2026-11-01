@@ -14,9 +14,17 @@ const sessionPolicy=require("./session-policy.cjs");
 let mainWindow=null;
 let root="";
 const sessions=new Map();
+let quitting=false;
+function closeAllOutputs(){
+  for(const [id,data] of [...sessions.entries()]){
+    sessions.delete(id);
+    if(!data.window.isDestroyed())data.window.destroy();
+  }
+  notifyProjection();
+}
 let sessionCounter=0;
 function projectionState(){
-    return [...sessions.entries()].map(([id,value])=>({displayId:id,kind:value.kind||"empty",title:value.title||"",state:value.state||"empty",message:value.message||"",muted:value.muted!==false,position:value.position||0,duration:value.duration||0,volume:value.volume??100}));
+    return [...sessions.entries()].map(([id,value])=>({displayId:id,kind:value.kind||"empty",title:value.title||"",state:value.state||"empty",message:value.message||"",muted:value.muted!==false,position:value.position||0,duration:value.duration||0,volume:value.volume??100,verse:value.kind==="verse"?value.verse:null}));
 }
 function notifyProjection(){
     if(mainWindow&&!mainWindow.isDestroyed())mainWindow.webContents.send("ja:projection:changed",projectionState());
@@ -70,6 +78,7 @@ async function sendContent(target,content,title,kind){
     data.state="loading";data.kind=kind;data.title=title;
     data.muted=content.muted!==false;data.message="";data.position=0;data.duration=0;data.volume=100;
     data.sourceBible=kind==="verse"?content.sourceBible:null;
+    data.verse=kind==="verse"?{text:content.text,reference:content.reference,style:content.style}:null;
     data.window.webContents.send("ja:output:render",{action:"show",session,content});
     notifyProjection();
     return projectionState();
@@ -115,7 +124,11 @@ function createWindow() {
     mainWindow.webContents.on("will-navigate",(event,url)=>{
         if(url!==pathToFileURL(file).href){event.preventDefault();}
     });
-    mainWindow.on("closed",()=>{mainWindow=null;});
+    mainWindow.on("closed",()=>{
+        mainWindow=null;
+        // Projection windows must never keep the app alive after the operator closes JA.
+        if(!quitting){quitting=true;closeAllOutputs();app.quit();}
+    });
 }
 function ensureDisplay(id) {
     const matched=displays().find(d=>d.id===String(id));
@@ -152,7 +165,9 @@ function registerIpc() {
         const settings=store.loadSettings(root);settings.bibleStyle=style;store.saveSettings(root,settings);
         for(const [id,output] of sessions){
             if(output.kind==="verse"&&!output.window.isDestroyed()){
-                output.window.webContents.send("ja:output:render",{action:"style",style:{...style,backgroundUrl:style.background==="image"?pathToFileURL(style.backgroundFile).href:""}});
+                const applied={...style,backgroundUrl:style.background==="image"?pathToFileURL(style.backgroundFile).href:""};
+                if(output.verse)output.verse.style=applied;
+                output.window.webContents.send("ja:output:render",{action:"style",style:applied});
             }
         }
         return style;
@@ -190,6 +205,7 @@ function registerIpc() {
         if(!permission.allowed)return {updated:false,reason:permission.reason};
         const content=resolveVerse(file,book,chapter,verse,transitionOverride);
         output.title=content.reference;
+        output.verse={text:content.text,reference:content.reference,style:content.style};
         output.state=output.state==="black"&&!reveal?"black":"verse";
         output.message="";
         output.window.webContents.send("ja:output:render",{action:"verse",session:output.session,content,reveal});
@@ -231,10 +247,21 @@ function registerIpc() {
         if(command==="black"&&!sessions.has(String(displayId)))await destination(displayId);
         const output=sessions.get(String(displayId));
         if(!output||output.window.isDestroyed())throw Error("La pantalla aún no tiene una sesión activa");
-        output.window.webContents.send("ja:output:render",{action:command});
-        if(command==="black")output.state="black";
-        if(command==="clear"){output.state="empty";output.kind="empty";output.title="";output.sourceBible=null;}
-        if(command==="pause")output.state="paused";
+        if(command!=="clear")output.window.webContents.send("ja:output:render",{action:command});
+        if(command==="black"){
+            if(output.state==="black"){output.state=output.stateBeforeBlack||"empty";}
+            else {output.stateBeforeBlack=output.state;output.state="black";}
+        }
+        if(command==="clear"){
+            // Advance the generation so late autoplay/timeupdate from the previous
+            // video can never resurrect a cleared session in Program.
+            output.session=++sessionCounter;
+            output.window.webContents.send("ja:output:render",{action:"clear",session:output.session});
+            output.state="empty";output.kind="empty";output.title="";output.sourceBible=null;output.verse=null;
+            output.position=0;output.duration=0;output.message="";
+        }
+        if(command==="clear-text"&&output.kind==="verse"){output.state=output.state==="black"?"black":"background";}
+        if(command==="pause"&&(output.kind==="video"||output.kind==="audio"))output.state="paused";
         notifyProjection();return projectionState();
     });
     ipcMain.handle("ja:config:get",()=>{
@@ -245,11 +272,7 @@ function registerIpc() {
     });
     ipcMain.handle("ja:config:screens:closeOutputs",()=>{
         // Deliberate operator action only. Never close on mere Settings opening.
-        for(const [id,output] of [...sessions.entries()]){
-            sessions.delete(id);
-            if(!output.window.isDestroyed())output.window.close();
-        }
-        notifyProjection();
+        closeAllOutputs();
         return {closed:true};
     });
     ipcMain.handle("ja:config:screens:save",(_event,input)=>{
@@ -329,5 +352,5 @@ app.whenReady().then(()=>{
     screen.on("display-metrics-changed",notify);
     app.on("activate",()=>{if(BrowserWindow.getAllWindows().length===0)createWindow();});
 }).catch(err=>{dialog.showErrorBox("No se pudo iniciar JA",String(err));app.quit();});
-app.on("before-quit",()=>{for(const output of sessions.values())if(!output.window.isDestroyed())output.window.close();sessions.clear();});
-app.on("window-all-closed",()=>{if(process.platform!=="darwin")app.quit();});
+app.on("before-quit",()=>{quitting=true;closeAllOutputs();});
+app.on("window-all-closed",()=>app.quit());
