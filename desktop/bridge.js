@@ -14,11 +14,16 @@ const announce=(message)=>{const el=$("jaToast"),span=$("jaToastText");if(!el||!
 const run=async fn=>{try{return await fn();}catch(err){announce("Error: "+safe(err?.message||err));return null;}};
 function placeholder(container,label){container.replaceChildren(node("div","w-full h-full min-h-28 flex flex-col items-center justify-center text-center text-xs text-slate-400 p-6",label));}
 function drawVerse(container,text,reference){
- const base=node("div","w-full h-full flex flex-col items-center justify-center gap-3 p-5 text-center bg-[#071a4c]");
- const verse=node("div","text-white font-bold text-glow-shadow whitespace-pre-line font-serif-verse leading-snug",text);
- verse.style.fontSize="clamp(15px,2.1vw,38px)";
- base.append(node("div","text-amber-200 font-semibold font-serif-verse text-xs sm:text-sm",reference),verse);
- container.replaceChildren(base);
+ const st=state.bibleStyle;
+ const base=node("div","w-full h-full flex flex-col justify-center gap-2 p-5 text-center relative overflow-hidden");
+ base.style.background=st.background==="black"?"#000":st.background==="gradient"?"linear-gradient(135deg,#071a4c,#144c65 60%,#905e4d)":"#071a4c";
+ if(st.background==="image"&&state.backgroundUrl){base.style.backgroundImage="url("+JSON.stringify(state.backgroundUrl)+")";base.style.backgroundSize="cover";base.style.backgroundPosition="center";}
+ const plate=node("div","absolute inset-2 rounded-lg pointer-events-none");plate.style.background="rgba(0,0,0,"+st.plateOpacity/100+")";base.append(plate);
+ const ref=node("div","relative z-10 font-semibold text-xs sm:text-sm",reference);ref.style.color=st.referenceColor;ref.style.fontFamily=st.fontFamily;ref.style.display=st.showReference?"":"none";
+ const verse=node("div","relative z-10 font-bold whitespace-pre-line leading-snug",text);
+ verse.style.fontSize="clamp(15px,"+st.fontSize/26+"vw,65px)";
+ verse.style.color=st.textColor;verse.style.textAlign=st.textAlign;verse.style.fontFamily=st.fontFamily;
+ base.append(ref,verse);container.replaceChildren(base);
 }
 function formatTitle(display){return safe(display.name||"Pantalla "+display.id)+" · "+display.size.width+"×"+display.size.height;}
 function targets(){const external=state.displays.filter(d=>d.id!==state.operator);return external.filter(d=>state.targets.has(d.id)).map(d=>d.id);}
@@ -298,6 +303,103 @@ async function linkFolder(){
  const group=category(),response=await api.selectFolder(group);
  if(!response.cancelled){await loadFiles();announce("Carpeta vinculada: "+group);}
 }
+function currentStyledPreview(){
+ if(state.prepared?.kind==="verse")renderPreview();
+ const id=targets()[0]||state.main,live=state.live.get(id);
+ if(live?.kind==="verse")renderProgram();
+}
+async function refreshBackgrounds(){
+ const bg=$("scriptureBgSelect");if(!bg)return;
+ const current=state.bibleStyle;
+ const data=await api.library("Fondos Personalizados");
+ bg.replaceChildren();
+ const add=(value,label)=>{const opt=node("option","",label);opt.value=value;bg.append(opt);};
+ add("navy","Azul JA #071a4c");add("black","Negro");add("gradient","Degradado azul y atardecer");
+ for(const file of data.items.filter(f=>[".jpg",".jpeg",".png",".webp"].includes(f.extension)).slice(0,150))add("image:"+file.path,"🖼 "+file.name);
+ const target=current.background==="image"?"image:"+current.backgroundFile:current.background;
+ bg.value=[...bg.options].some(o=>o.value===target)?target:"navy";
+}
+function styleValue(){
+ const st={...state.bibleStyle};
+ const size=$("jaFontSize"),font=$("jaFontFamily"),color=$("jaFontColor"),ref=$("jaRefColor"),align=$("jaTextAlign");
+ if(size)st.fontSize=Number(size.value);
+ if(font)st.fontFamily=font.value;
+ if(color)st.textColor=color.value;
+ if(ref)st.referenceColor=ref.value;
+ if(align)st.textAlign=align.value;
+ const bg=$("scriptureBgSelect")?.value||"navy";
+ if(bg.startsWith("image:")){st.background="image";st.backgroundFile=bg.slice(6);}
+ else{st.background=bg;st.backgroundFile="";}
+ st.plateOpacity=$("readingPlateToggle")?.checked?Number($("readingPlateOpacity")?.value||0):0;
+ st.showReference=$("jaShowReference")?.checked!==false;
+ return st;
+}
+let styleSaveTimer=null;
+async function applyBibleStyle(){
+ const chosen=styleValue();state.bibleStyle=chosen;
+ state.backgroundUrl=chosen.background==="image"&&chosen.backgroundFile?await api.mediaUrl(chosen.backgroundFile):"";
+ currentStyledPreview();
+ state.bibleStyle=await api.saveBibleStyle(chosen);
+ $("jaStyleSaveStatus").textContent="✓ Estilo guardado y aplicado a las salidas bíblicas";
+}
+function scheduleStyle(){
+ const result=styleValue();state.bibleStyle=result;
+ if(result.background!=="image")state.backgroundUrl="";
+ currentStyledPreview();
+ clearTimeout(styleSaveTimer);
+ $("jaStyleSaveStatus").textContent="Guardando cambios…";
+ styleSaveTimer=setTimeout(()=>run(applyBibleStyle),250);
+}
+async function loadBibleStyle(){
+ state.bibleStyle=await api.bibleStyle();
+ if(state.bibleStyle.background==="image"&&state.bibleStyle.backgroundFile){
+  try{state.backgroundUrl=await api.mediaUrl(state.bibleStyle.backgroundFile);}catch{state.backgroundUrl="";}
+ }
+ await refreshBackgrounds();
+ $("jaFontSize").value=String(state.bibleStyle.fontSize);
+ $("jaFontFamily").value=state.bibleStyle.fontFamily;
+ $("jaFontColor").value=state.bibleStyle.textColor;
+ $("jaRefColor").value=state.bibleStyle.referenceColor;
+ $("jaTextAlign").value=state.bibleStyle.textAlign;
+ $("readingPlateToggle").checked=state.bibleStyle.plateOpacity>0;
+ $("readingPlateOpacity").value=String(state.bibleStyle.plateOpacity);
+ $("jaShowReference").checked=state.bibleStyle.showReference;
+ currentStyledPreview();
+}
+function createStyleControls(){
+ const inspector=$("fsBibleSearchAndInspector");if(!inspector)return;
+ const panel=node("div","grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-2 p-2 bg-[#0a1d39] border border-[#26436b] rounded-lg");
+ const control=(id,label,type,options)=>{
+  const holder=node("label","flex flex-col gap-1 text-[11px] text-slate-200",label);
+  const input=node(type==="select"?"select":"input","w-full min-w-0 rounded bg-[#050e24] border border-[#385784] text-white p-1.5 text-xs");
+  input.id=id;
+  if(type==="select")for(const [value,caption] of options){const opt=node("option","",caption);opt.value=value;input.append(opt);}
+  else if(type==="range"){input.type="range";input.min="24";input.max="100";input.step="1";}
+  else input.type=type;
+  holder.append(input);panel.append(holder);input.addEventListener(type==="range"?"input":"change",scheduleStyle);
+ };
+ control("jaFontSize","Tamaño de letra (24–100)","range");
+ control("jaFontFamily","Tipografía","select",[["Georgia","Georgia"],["Arial","Arial"],["Verdana","Verdana"],["Tahoma","Tahoma"],["Times New Roman","Times"]]);
+ control("jaFontColor","Color del texto","color");
+ control("jaRefColor","Color de referencia","color");
+ control("jaTextAlign","Alineación","select",[["center","Centro"],["left","Izquierda"],["right","Derecha"]]);
+ const label=node("label","flex items-center gap-2 text-[11px] text-slate-200","Mostrar referencia");
+ const tick=node("input");tick.type="checkbox";tick.id="jaShowReference";tick.checked=true;tick.addEventListener("change",scheduleStyle);label.prepend(tick);panel.append(label);
+ const load=button("📂 Vincular fondos","text-xs text-white bg-[#19436a] border border-[#406e96] rounded-lg p-2",async()=>{
+  const r=await api.selectFolder("Fondos Personalizados");if(!r.cancelled){await refreshBackgrounds();announce("Carpeta de fondos vinculada");}
+ });
+ panel.append(load);
+ const status=node("p","text-[11px] text-emerald-300 self-center","Estilos guardados localmente");status.id="jaStyleSaveStatus";panel.append(status);
+ inspector.append(panel);
+ for(const x of ["readingPlateToggle","readingPlateOpacity","scriptureBgSelect"]){
+  const input=$(x);input.disabled=false;input.addEventListener(x==="readingPlateOpacity"?"input":"change",scheduleStyle);
+ }
+ $("btnRestoreScriptureBg").disabled=false;
+ $("btnRestoreScriptureBg").addEventListener("click",()=>run(async()=>{$("scriptureBgSelect").value="navy";await applyBibleStyle();}));
+ $("btnRestoreReadingPlate").disabled=false;
+ $("btnRestoreReadingPlate").addEventListener("click",()=>run(async()=>{$("readingPlateToggle").checked=true;$("readingPlateOpacity").value="20";await applyBibleStyle();}));
+}
+
 function setup(){
  sidebar();
  // Hide all mock-only controls until their real service exists.
@@ -350,8 +452,8 @@ function setup(){
  $("btnBridgeFade")?.classList.add("opacity-50");
  $("programVolumeSlider").disabled=true;$("programVolumeSlider").title="Volumen independiente pendiente";
  $("previewSeekSlider").disabled=true;$("previewSeekSlider").title="Utiliza el control nativo del video en Vista previa";
- for(const el of [$("readingPlateToggle"),$("readingPlateOpacity"),$("scriptureBgSelect")])if(el){el.disabled=true;el.title="Personalización de fondos pendiente";}
- $("btnRestoreScriptureBg").disabled=true;$("btnRestoreReadingPlate").disabled=true;
+ createStyleControls();
+ void run(loadBibleStyle);
  $("btnResetTargets")?.setAttribute("title","Solo restaura selección; no interrumpe otras pantallas.");
  // The prototype's placeholder NVI/RVR1960 options are removed by loadBibles().
  $("btnProjectSelectedVerse")?.setAttribute("title","Proyecta el contenido preparado en Vista previa.");
