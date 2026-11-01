@@ -11,6 +11,7 @@
     import PreviewOutput from "./components/output/preview/PreviewOutput.svelte"
     import MediaControls from "./components/output/tools/MediaControls.svelte"
     import JAGlobalDestinationDialog from "./components/output/tools/JAGlobalDestinationDialog.svelte"
+    import JAQuickStart from "./components/ja/JAQuickStart.svelte"
     import { jaControlledOutputId } from "./utils/jaControlledOutput"
     import SettingsTabs from "./components/settings/SettingsTabs.svelte"
     import Projects from "./components/show/Projects.svelte"
@@ -49,6 +50,7 @@
 <div class="column">
     {#if !$focusMode}
         <Top {isWindows} />
+        <JAQuickStart />
     {/if}
     <div class="row">
         <Resizeable id="leftPanel">
