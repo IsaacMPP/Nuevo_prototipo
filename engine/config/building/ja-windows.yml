@@ -20,7 +20,7 @@ extraResources:
       - connector-*
 win:
   target: nsis
-  icon: build/public/icon.png
+  icon: build/public/ja-icon.ico
   files:
     - "!**/node_modules/openmediatransport/lib/{macos,linux-*,win-arm64}/**"
   asarUnpack:
@@ -29,5 +29,7 @@ win:
     - "**/node_modules/openmediatransport/**"
     - "**/node_modules/sherpa-onnx-*/**"
 nsis:
+  installerSidebar: build/public/ja-installer-sidebar.bmp
+  installerHeader: build/public/ja-installer-header.bmp
   oneClick: false
   allowToChangeInstallationDirectory: true
