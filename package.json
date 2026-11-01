@@ -1,8 +1,8 @@
 {
   "name": "ja-proyecciones-motor-propio",
   "private": true,
-  "version": "0.3.0",
-  "description": "JA Proyecciones: motor propio Electron con Biblia FSB, Himnario y proyección real HDMI",
+  "version": "0.3.1",
+  "description": "JA Proyecciones: diseño Gemini original conectado a motor propio Electron para Biblia, Himnario y HDMI",
   "main": "desktop/main.cjs",
   "scripts": {
     "build:ui": "node scripts/build-ui.cjs",
