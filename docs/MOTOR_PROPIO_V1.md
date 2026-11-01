@@ -36,3 +36,14 @@ Primera versión usable: Biblioteca de videos e imágenes, FSB/JSON y proyecció
 
 ## E2 visual Gemini — restauración de shell v0.3.1 (2026-11-01)
 El usuario rechazó explícitamente el aspecto de `desktop/console.html` y volvió a aportar la interfaz original y su HTML. Decisión ejecutada: abrir `build/index.html`, generado desde `prototype/index.html` por Tailwind local. Quitar la demostración inline que simulaba cuatro pantallas, salida en vivo y temporizadores. Nuevo `desktop/bridge.js` enlaza ID del prototipo con IPC ya presente. Módulos reales en este corte: cuadrícula/libros/capítulos/versículos FSB, importar Biblia, carpetas Himnario/Cantos Juveniles/Multimedia y Vista previa + enviar por IDs de pantalla; sin autoenvío. Programa muestra estados y representación de texto/foto pero no fotogramas reales del video proyectado. Los botones sin capacidad real se deshabilitan o anuncian pendiente. Nuevas pruebas visuales exigen estructura Gemini y ausencia del mock. Los assets de ejemplo generados dentro del mock no se reproducen ni se hacen pasar por contenido real. Compilación y prueba física pendientes de confirmar en el commit final.
+
+
+## Fase operativa 0.4.0 — alcance ejecutado
+- Contraste corregido en pestañas cuadrícula/lista y textos de libros/capítulos/versículos.
+- Ajustes bíblicos persistentes: fuente, tamaño, color de versículo/referencia, alineación, placa/opacidad y fondo integrado (azul/negro/degradado) o foto importada/vinculada. Selección a través de `Fondo / Opciones`; se reutiliza el contrato de archivos autorizados para la imagen. Guardado automático en `Configuracion/ajustes.json`; cambios aplicados en salidas que muestran un versículo sin modificar las sesiones de video.
+- Biblioteca `Fondos` funcional: vincular carpeta, buscar imagen/video, preparar en Vista previa y enviar a pantallas Windows.
+- Transporte local: vista previa video/audio con seek, controles play/pause; volumen individual por salida Programa enviado por IPC; información de progreso reportada por el decodificador Electron. Programa puede mostrar un espejo local silenciado del video preparado, sincronizado *aproximadamente* con la posición de la salida (NO es captura real de HDMI).
+- `Limpiar texto` actúa sobre la capa de letras bíblicas sin borrar la imagen/fondo. `Negro` es cortina opaca sobre el contenido. El audio principal requiere prueba con el destino Windows; secundarias quedan silenciadas por política.
+- Pruebas unitarias adicionales verifican validación de estilos, persistencia, rutas autorizadas, contraste y comando clear-text.
+### Sigue pendiente
+La experiencia NO puede considerarse equivalente a la antigua FreeShow hasta incorporar: YouTube, presentaciones y diapositivas, NDI, logo/transiciones, fondos dinámicos avanzados, códecs adicionales, campañas/proyectos, caché persistente de miniaturas y prueba de audio/video simultáneos en múltiples salidas. Nunca marcar estas funciones como listas sin pruebas.
