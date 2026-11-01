@@ -40,6 +40,7 @@ window.jaOutput.receive(async command=>{
  if(command.action==="style"){applyBibleStyle(command.style);return;}
  if(command.action==="black"){setBlack(true);lastState="black";status({state:"black"});return;}
  if(command.action==="clear"){reset();setBlack(false);lastState="empty";status({state:"empty"});return;}
+ if(command.action==="clear-text"){if(scripture){scripture.querySelector("#verse").style.visibility="hidden";scripture.querySelector("#reference").style.visibility="hidden";lastState="background";status({state:"background"});}return;}
  if(command.action==="volume"){if(media&&media.tagName!=="IMG"){media.volume=Math.max(0,Math.min(100,Number(command.volume)))/100;status({state:lastState});}return;}
  if(command.action==="seek"){if(media&&Number.isFinite(media.duration)){media.currentTime=Math.max(0,Math.min(media.duration,Number(command.position)));status({state:lastState});}return;}
  if(command.action==="pause"){media?.pause?.();lastState=media?"paused":lastState;status({state:lastState});return;}
