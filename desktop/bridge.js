@@ -100,7 +100,7 @@ function renderProgram(){
  const volume=$("programVolumeSlider");if(volume&&s?.volume!=null&&document.activeElement!==volume)volume.value=String(s.volume);
  if(!s){delete el.dataset.media;placeholder(el,"Programa sin señal · No hay contenido proyectándose");return;}
  if(s.state==="black"){delete el.dataset.media;placeholder(el,"Salida en negro");return;}
- if(known?.kind==="verse"){drawVerse(el,known.text,known.reference);return;}
+ if(known?.kind==="verse"){drawVerse(el,s.state==="background"?"":known.text,s.state==="background"?"":known.reference);return;}
  if(known?.kind==="image"&&known.url){
   if(el.dataset.media!==known.url){const img=node("img","w-full h-full object-contain");img.src=known.url;el.replaceChildren(img);el.dataset.media=known.url;}return;
  }
@@ -157,14 +157,14 @@ function fileCard(file){
  return item;
 }
 function renderFiles(){
- const q=state.module==="himnario"||state.module==="juveniles"?$("hymnModuleSearch")?.value||"":$("multimediaSearchInput")?.value||"";
+ const q=state.module==="fondos"?$("jaBackgroundSearch")?.value||"":state.module==="himnario"||state.module==="juveniles"?$("hymnModuleSearch")?.value||"":$("multimediaSearchInput")?.value||"";
  const list=state.files.filter(f=>f.name.toLocaleLowerCase("es").includes(q.trim().toLocaleLowerCase("es")));
- const el=state.module==="himnario"||state.module==="juveniles"?$("hymnModuleGrid"):$("multimediaCardsGrid");
+ const el=state.module==="fondos"?$("jaBackgroundGrid"):state.module==="himnario"||state.module==="juveniles"?$("hymnModuleGrid"):$("multimediaCardsGrid");
  if(!el)return;el.replaceChildren();
  if(!list.length)el.append(node("div","col-span-full rounded-xl border border-[#284674] p-6 text-slate-300 text-xs","No hay archivos aquí. Pulsa «Vincular carpeta» para utilizar tu biblioteca real."));
  for(const f of list.slice(0,220))el.append(fileCard(f));
 }
-function category(){return state.module==="himnario"?"Himnario Adventista":state.module==="juveniles"?"Cantos Juveniles":state.type;}
+function category(){return state.module==="himnario"?"Himnario Adventista":state.module==="juveniles"?"Cantos Juveniles":state.module==="fondos"?"Fondos Personalizados":state.type;}
 async function loadFiles(){
  const group=category(),data=await api.library(group);
  state.files=data.items;renderFiles();
@@ -179,7 +179,19 @@ function switchModule(id){
   const el=$(key);if(el){el.classList.toggle("hidden",key!==visible);el.classList.toggle("flex",key===visible);}
  }
  for(const b of document.querySelectorAll("#leftModuleSidebar button"))b.classList.toggle("sidebar-active",b.dataset.moduleId===id);
- if(id==="himnario"||id==="juveniles"){
+ if(id==="fondos"){
+  const holder=$("otherModuleContainer");holder.replaceChildren();
+  const head=node("div","flex flex-wrap items-center justify-between gap-2 mb-3");
+  head.append(node("strong","font-bold text-white","Fondos personalizados · Imágenes y videos"));
+  head.append(button("+ Vincular carpeta","px-3 py-1.5 rounded-lg pill-cyan-active text-xs",linkFolder));
+  holder.append(head);
+  const search=node("input","w-full mb-3 px-3 py-2 bg-[#050e24] border border-[#254470] rounded-lg text-white text-xs");
+  search.placeholder="Buscar fondos";search.id="jaBackgroundSearch";search.addEventListener("input",renderFiles);
+  holder.append(search);
+  const grid=node("div","grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-2");
+  grid.id="jaBackgroundGrid";holder.append(grid);
+  void run(loadFiles);
+ }else if(id==="himnario"||id==="juveniles"){
   const h=$("moduleView_himnario")?.querySelector("h2");if(h)h.textContent=id==="juveniles"?"♪ Cantos juveniles":"♫ Himnario Adventista";
   void run(loadFiles);
  }else if(id==="multimedia")void run(loadFiles);
@@ -434,7 +446,7 @@ function setup(){
  for(const [id,msg] of Object.entries({
   btnBridgeFade:"Transición de fundido pendiente del motor de transiciones",
   btnBridgeLogo:"Superposición del logo pendiente",
-  btnBridgeClearText:"Limpieza de superposición independiente pendiente",
+  
   btnOpenDiagModal:"Diagnóstico avanzado pendiente",
   btnPreviewFullscreen:"Ampliación de Vista previa pendiente",
   btnProgramFullscreen:"Vista Programa de pantalla completa pendiente",
@@ -455,7 +467,7 @@ function setup(){
  for(const [id,click] of [
   ["btnBridgeQuickPlay",()=>project(chooseDestination())],["btnBridgeCut",()=>project(chooseDestination())],
   ["btnProjectSelectedVerse",()=>project(chooseDestination())],["fsPillPlayBtn",()=>project(chooseDestination())],
-  ["btnBridgeBlack",()=>command("black")],["btnProgramPause",()=>command(state.sessions.some(s=>targets().includes(s.displayId)&&s.state==="paused")?"play":"pause")],
+  ["btnBridgeBlack",()=>command("black")],["btnBridgeClearText",()=>command("clear-text")],["btnProgramPause",()=>command(state.sessions.some(s=>targets().includes(s.displayId)&&s.state==="paused")?"play":"pause")],
   ["btnPreviewToAll",()=>project(state.displays.filter(d=>d.id!==state.operator).map(d=>d.id))],
   ["btnProgramToAll",async()=>{const main=state.live.get(state.main);if(!main)throw Error("La salida principal no tiene contenido conocido para repetir");const previous=state.prepared;state.prepared=main;try{await project(state.displays.filter(d=>d.id!==state.operator).map(d=>d.id));}finally{state.prepared=previous;}}],
   ["btnResetTargets",()=>{state.targets=new Set(state.main?[state.main]:[]);renderTargets();renderDisplays();renderProgram();}],
