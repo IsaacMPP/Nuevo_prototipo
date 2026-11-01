@@ -98,6 +98,11 @@ function unlinkFolder(root,category,folder){
     if(!validCategory(category))throw Error("Categoría inválida");
     if(typeof folder!=="string"||!folder)throw Error("Carpeta externa inválida");
     const settings=loadSettings(root);
+    if(settings.bibleStyle.background==="image"&&settings.bibleStyle.backgroundFile){
+        const rel=path.relative(path.resolve(folder),path.resolve(settings.bibleStyle.backgroundFile));
+        if(rel&&!rel.startsWith(".."+path.sep)&&rel!==".."&&!path.isAbsolute(rel))
+            throw Error("Esta carpeta contiene el fondo bíblico en uso. Cambia el fondo en Configuración > Biblia antes de desvincularla.");
+    }
     const original=Array.isArray(settings.linkedFolders[category])?settings.linkedFolders[category]:[];
     const target=path.normalize(path.resolve(folder)).toLowerCase();
     const filtered=original.filter(p=>path.normalize(path.resolve(p)).toLowerCase()!==target);
