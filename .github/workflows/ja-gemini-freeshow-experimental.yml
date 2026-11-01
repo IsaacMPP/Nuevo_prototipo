@@ -27,6 +27,9 @@ jobs:
         run: node --test experiments/ja-gemini-freeshow/integration.test.cjs
       - name: Dependencias FreeShow sin postinstall de Electron
         run: npm ci --prefix engine --ignore-scripts --no-audit --no-fund
+      - name: Preparar configuraciones productivas TypeScript de FreeShow
+        run: npm run prebuild
+        working-directory: engine
       - name: Compilar UI real Svelte contra el motor de FreeShow
         run: npm run build:frontend:prod
         working-directory: engine
