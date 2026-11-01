@@ -25,3 +25,10 @@
 | G01 | CI Windows | Compila, tests OK y genera instalador si está configurado |
 
 Los casos B*, A*, Y*, N* se dejan **pendientes hasta que el motor nativo esté integrado**. CI no sustituye pruebas físicas.
+
+## Diagnóstico CI — 2026-11-01
+- El shell existente mantiene 7/7 pruebas exitosas.
+- Error reproducido en workflow nuevo: `grandiose@1.0.0 install` -> `node-gyp rebuild` -> VS 2026 (18.x) no reconocida por node-gyp 11.5.0.
+- Remedio en rama: runner `windows-2022`, Python 3.12, comprobación del compilador C++ y npm ci reproducible para engine. Validación `vswhere`: superada.
+- Necesario generar Biblia RV1909 durante build (asset `public/ja-bibles/rv1909.fsb` no está en git) y las imágenes JA para NSIS.
+- No dar por aprobados el build Svelte, instalador ni HDMI/NDI/audio sin resultado verificable.

@@ -3,7 +3,7 @@
 Este repositorio tiene **dos interfaces**: el HTML de referencia en `prototype/index.html` (con shell en `desktop/`) y, como ejecución principal desde esta etapa, el **motor real FreeShow/JA 1.6.7** en `engine/` con su renderer Svelte, ventanas físicas y reproductores originales. La nueva banda de accesos JA usa los stores reales del motor.
 
 ## Ejecutar en Windows
-Requiere Node.js 22 o superior, npm e internet al instalar dependencias nativas.
+Requiere Node.js 22, npm, Python 3.12, Visual Studio 2022 con **Desarrollo de escritorio con C++**, e internet al instalar dependencias nativas. La compilación automatizada utiliza Windows Server 2022 porque node-gyp 11 no reconoce correctamente VS 2026.
 
 ```powershell
 git clone https://github.com/IsaacMPP/Nuevo_prototipo.git
@@ -26,7 +26,7 @@ npm run check:engine
 npm run pack:win
 ```
 
-El workflow `.github/workflows/windows-desktop.yml` instala, prueba y compila el engine en Windows; si finaliza exitosamente adjunta un instalador **JA-Proyecciones-Funcional-Windows** sin firma. Se conserva `npm run start:legacy` para examinar el HTML, `npm run check:legacy` para las pruebas del shell. Para estas últimas debe instalarse también npm en la raíz.
+El flujo `pack:win` genera RV1909, prueba el motor, compila Svelte y prepara el icono JA antes de empaquetar. El workflow `.github/workflows/windows-desktop.yml` instala, prueba y compila el engine en Windows 2022; si finaliza exitosamente adjunta un instalador **JA-Proyecciones-Funcional-Windows** sin firma. Se conserva `npm run start:legacy` para examinar el HTML, `npm run check:legacy` para las pruebas del shell. Para estas últimas debe instalarse también npm en la raíz.
 
 ## Alcance de esta entrega
 - Está conectado el inicio principal al motor real y existe navegación rápida a funciones nativas. No hay un segundo motor audiovisual.
@@ -36,3 +36,6 @@ El workflow `.github/workflows/windows-desktop.yml` instala, prueba y compila el
 
 ## Protección del proyecto
 Repositorio exclusivo: `IsaacMPP/Nuevo_prototipo`. Rama: `feature/escritorio-prototipo-ja`. PR #1 borrador. No modificar ni fusionar main ni tocar `JA_Proyecciones2`. Conservar GPL-3.0 y atribuciones del motor. Consultar `docs/ARQUITECTURA.md`, `docs/PRUEBAS.md`, `docs/E2_AUDITORIA_BASE_FUNCIONAL.md` y `docs/CONTINUIDAD_CHATGPT.md`.
+
+## Incidente de compilación 2026-11-01
+Los primeros workflows de E2-B fallaron al ejecutar `npm install --prefix engine`: `grandiose` (NDI) llamó a `node-gyp@11.5.0`, que no reconoció Visual Studio 2026 (18.x). Es un problema del compilador nativo, no del contenido de Himnario/Biblia. Se fijó Windows 2022, Python 3.12 y se comprobó el compilador C++ con vswhere. La nueva ruta genera además la RV1909 validada (66 libros) y el arte del instalador. **Hasta que el workflow actualizado termine en verde, no hay instalador funcional confirmado ni pruebas de pantalla/audio realizadas.**
