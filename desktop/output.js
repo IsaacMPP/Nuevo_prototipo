@@ -3,6 +3,7 @@
 const frame=document.querySelector("#frame"),black=document.querySelector("#black");
 let media=null,session=0,blacked=false,scripture=null;
 let lastState="empty",stateBeforeBlack="empty",lastTimeSent=0;
+let lastScriptureStyleKey="";
 const verseTransitions=window.jaTransitions.createController();
 function status(detail){
   const payload={session,...detail};
@@ -11,6 +12,7 @@ function status(detail){
 }
 function reset(){
   verseTransitions.cancel();
+  lastScriptureStyleKey="";
   if(media){media.pause?.();media.removeAttribute("src");media.load?.();media.remove();media=null;}
   if(scripture){scripture.remove();scripture=null;}
   frame.querySelector("#scripture")?.remove();
@@ -18,6 +20,9 @@ function reset(){
 function setBlack(value){blacked=!!value;black.style.display=blacked?"block":"none";}
 function applyBibleStyle(style={}){
  if(!scripture)return;
+ const key=JSON.stringify(style);
+ if(lastScriptureStyleKey===key)return; // Keep background pixels stable during verse-only changes.
+ lastScriptureStyleKey=key;
  const verse=scripture.querySelector("#verse"),ref=scripture.querySelector("#reference"),panel=scripture.querySelector("#readingPlate");
  const font=style.fontFamily||"Georgia";
  scripture.style.background=style.background==="black"?"#000":style.background==="gradient"?"linear-gradient(135deg,#071a4c,#13466a 60%,#754b46)":"#071a4c";
