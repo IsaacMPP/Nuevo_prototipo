@@ -1,49 +1,38 @@
-# JA Nuevo Prototipo
+# JA Proyecciones — primera base funcional Windows
 
-Proyecto independiente de escritorio para experimentar con la nueva interfaz de **JA Proyecciones 2**, sin modificar ni fusionar [el proyecto original](https://github.com/IsaacMPP/JA_Proyecciones2).
-
-## Estado real
-
-La interfaz HTML completa compartida por el usuario se conserva en `prototype/index.html`. La ejecutamos como aplicación **Electron** mediante un shell seguro que añade capacidades reales de Windows: inventario de monitores, asignación de operador/principal, carpetas locales separadas, vinculación de carpetas externas, biblioteca indexada, vista previa de archivos y proyectos/escenarios guardados.
-
-**La vista Programa, los cuatro monitores y varios botones del HTML original son demostraciones.** El shell impide que los controles de envío rápido simulen éxito. Antes de instalar motor FreeShow/JA no existen todavía salidas HDMI/NDI renderizadas, audio sincronizado, YouTube proyectado, importación bíblica operativa ni editor nativo de diapositivas. Véase `docs/ARQUITECTURA.md` para las etapas de integración y pruebas.
+Este repositorio tiene **dos interfaces**: el HTML de referencia en `prototype/index.html` (con shell en `desktop/`) y, como ejecución principal desde esta etapa, el **motor real FreeShow/JA 1.6.7** en `engine/` con su renderer Svelte, ventanas físicas y reproductores originales. La nueva banda de accesos JA usa los stores reales del motor.
 
 ## Ejecutar en Windows
-
-Requisitos: Node.js 22 o superior, npm e instalación de dependencias con internet la primera vez.
+Requiere Node.js 22 o superior, npm e internet al instalar dependencias nativas.
 
 ```powershell
 git clone https://github.com/IsaacMPP/Nuevo_prototipo.git
 cd Nuevo_prototipo
 git checkout feature/escritorio-prototipo-ja
-npm install
+npm run setup:engine
 npm start
 ```
 
-`npm run check` compila Tailwind local y prueba el módulo de almacenamiento. `npm run pack:win` crea un instalador Windows experimental mediante electron-builder. GitHub Actions genera un instalador sin firma en la rama de desarrollo cuando el workflow finaliza correctamente.
+La consola ejecuta **Himnario Adventista, Cantos Juveniles, Biblia RV1909, importación FSB/XML, Multimedia, YouTube, editor de presentaciones, vista previa/Programa y salidas del motor**. Accesos rápidos superiores llevan a los módulos existentes; no proyectan solo por abrirlos.
 
-## Datos locales y privacidad
+Himnario: colocar videos en `Documentos/JA Proyecciones 2 - Prototipo/Himnario Adventista` y usar la pestaña Himnario; puede vincular otras carpetas en su navegación. Biblia: entrar a la pestaña Biblia, seleccionar RV1909 o importar un FSB/XML propio, escoger libro/capítulo/versículo y usar las acciones nativas de salida. Multimedia y YouTube se manejan en sus pestañas originales; las pantallas se configuran en Ajustes > Pantallas. El ordenador del operador y las salidas de proyección no son equivalentes.
 
-La aplicación crea `Documentos/JA Proyecciones 2 - Prototipo/` con:
-`Biblias`, `Himnario Adventista`, `Cantos Juveniles`, `Fondos Personalizados`, `Audio`, `Imagenes`, `Videos`, `Importaciones`, `Presentaciones`, `Cache`, `Configuracion` y `Proyectos`.
+**Aislamiento:** los archivos nativos se almacenan bajo `Documentos/JA Proyecciones 2 - Prototipo`; la configuración de Electron se almacena en `AppData/JA Nuevo Prototipo Funcional`. No se sobrescriben los datos ni la instalación de `JA_Proyecciones2`, ni se usa `Documentos/FreeShow`. Las biblias con copyright solo se importan desde archivos autorizados del usuario.
 
-Las bibliotecas del JA anterior **no se modifican**. En el botón **📂 Biblioteca real**, puedes vincular otras carpetas para consultar archivos sin copiarlos. En **🗂 Proyectos**, puedes crear y guardar proyectos y escenarios. En **🖥 Pantallas**, se ven los monitores reales y se guarda cuál es el del operador y cuál el principal JA, sin activar proyección.
+## Pruebas y empaquetado
 
-## Arquitectura / próximos pasos
+```powershell
+npm run check:engine
+npm run pack:win
+```
 
-1. Reusar el motor FreeShow/JA 1.6.7 con auditoría de componentes, licencias y pruebas de regresión (no reimplementar reproductores).
-2. Conectar los botones del prototipo a comandos reales de salida con monitor separado de destino; proteger audio principal, capas y escenarios.
-3. Integrar Biblia nativa, importación FSB/XML, RV1909, navegación con flechas y fondos; Himnario, Multimedia, YouTube y Presentaciones como módulos reales.
-4. Integrar NDI como salida lógica configurada, descubrir HDMI, sesiones/sincronización y autoguardado.
-5. Probar hardware Windows e instalar únicamente después de validación.
+El workflow `.github/workflows/windows-desktop.yml` instala, prueba y compila el engine en Windows; si finaliza exitosamente adjunta un instalador **JA-Proyecciones-Funcional-Windows** sin firma. Se conserva `npm run start:legacy` para examinar el HTML, `npm run check:legacy` para las pruebas del shell. Para estas últimas debe instalarse también npm en la raíz.
 
-**No hay dos modos «Culto Joven» y «Culto Divino»**: se organizan como proyectos y escenarios en una sola interfaz.
+## Alcance de esta entrega
+- Está conectado el inicio principal al motor real y existe navegación rápida a funciones nativas. No hay un segundo motor audiovisual.
+- La copia íntegra del HTML original **todavía no ha sido rediseñada totalmente en componentes Svelte**. Ese traslado visual sigue pendiente: el motor y los módulos funcionan a través de la interfaz nativa JA.
+- CI/código no sustituyen las pruebas físicas de HDMI, dos pantallas, NDI, volumen independiente, YouTube, Biblia y cambios entre video/presentación.
+- Los escenarios JSON del shell se conservan pero todavía no se han convertido al esquema de proyectos del engine; no importarlos automáticamente ni proyectar al abrir.
 
-## Documentos de continuidad
-- [Arquitectura](docs/ARQUITECTURA.md)
-- [Decisiones](docs/DECISIONES.md)
-- [Pruebas](docs/PRUEBAS.md)
-- [Prompt de continuidad](docs/CONTINUIDAD_CHATGPT.md)
-
-## Licencia
-Se conserva la licencia GPL-3.0 y atribución de FreeShow/JA en el motor incorporado; ver [LICENSE](LICENSE) y los archivos de origen en `engine/`.
+## Protección del proyecto
+Repositorio exclusivo: `IsaacMPP/Nuevo_prototipo`. Rama: `feature/escritorio-prototipo-ja`. PR #1 borrador. No modificar ni fusionar main ni tocar `JA_Proyecciones2`. Conservar GPL-3.0 y atribuciones del motor. Consultar `docs/ARQUITECTURA.md`, `docs/PRUEBAS.md`, `docs/E2_AUDITORIA_BASE_FUNCIONAL.md` y `docs/CONTINUIDAD_CHATGPT.md`.
