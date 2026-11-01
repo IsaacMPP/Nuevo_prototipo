@@ -9,4 +9,8 @@ coverage/
 .DS_Store
 Thumbs.db
 vendor/
-engine/
+# El motor FreeShow se incorpora como una copia con licencia y origen registrado bajo engine/.
+# Nunca copiar node_modules, instaladores ni archivos personales al repositorio.
+engine/node_modules/
+engine/dist/
+engine/build/
