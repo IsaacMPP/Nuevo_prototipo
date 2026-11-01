@@ -15,6 +15,20 @@ contextBridge.exposeInMainWorld("jaDesktop", Object.freeze({
     projects: () => invoke("ja:project:list"),
     createProject: name => invoke("ja:project:create", name),
     saveProject: project => invoke("ja:project:save", project),
+    bibles: () => invoke("ja:bible:list"),
+    importBible: () => invoke("ja:bible:import"),
+    bibleStructure: file => invoke("ja:bible:structure",file),
+    bibleChapter: (file,book,chapter) => invoke("ja:bible:chapter",file,book,chapter),
+    projectionState: () => invoke("ja:projection:state"),
+    sendMedia: (file,display) => invoke("ja:projection:media",file,display),
+    sendVerse: (file,book,chapter,verse,display) => invoke("ja:projection:verse",file,book,chapter,verse,display),
+    projectionCommand: (display,action) => invoke("ja:projection:command",display,action),
+    onProjectionChanged: cb => {
+        if(typeof cb!=="function")return () => {};
+        const handler=(_event,value)=>cb(value);
+        ipcRenderer.on("ja:projection:changed",handler);
+        return () => ipcRenderer.removeListener("ja:projection:changed",handler);
+    },
     onDisplaysChanged: cb => {
         if (typeof cb !== "function") return () => {};
         const handler = (_event, value) => cb(value);
