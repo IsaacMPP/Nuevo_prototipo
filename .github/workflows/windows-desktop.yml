@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   shell-regression:
-    runs-on: windows-latest
+    runs-on: windows-2022
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
@@ -21,15 +21,25 @@ jobs:
       - run: npm run check:legacy
 
   native-engine:
-    runs-on: windows-latest
+    runs-on: windows-2022
     timeout-minutes: 80
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Use Python 3.12 for native node-gyp builds
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Confirm Visual Studio C++ toolchain
+        shell: pwsh
+        run: |
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationVersion
+          if (-not $vs -or -not $vs.StartsWith('17.')) { throw "Visual Studio 2022 C++ toolchain unavailable: $vs" }
+          Write-Host "Visual Studio 2022 build tools found: $vs"
       - name: Install FreeShow JA native dependencies
-        run: npm install --prefix engine --no-audit --no-fund
+        run: npm ci --prefix engine --no-audit --no-fund
       - name: Test native contracts
         run: npm --prefix engine run test:unit
       - name: Check Svelte
