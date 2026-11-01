@@ -10,4 +10,5 @@ target_link_libraries(ja-native-spike PRIVATE Qt6::Core Qt6::Gui Qt6::Quick Qt6:
 set_target_properties(ja-native-spike PROPERTIES WIN32_EXECUTABLE FALSE MACOSX_BUNDLE FALSE)
 enable_testing()
 add_test(NAME native_contract COMMAND ja-native-spike --self-test)
-set_tests_properties(native_contract PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QSG_RHI_BACKEND=software")
+add_test(NAME qml_window_smoke COMMAND ja-native-spike --ui-smoke)
+set_tests_properties(native_contract qml_window_smoke PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QSG_RHI_BACKEND=software")

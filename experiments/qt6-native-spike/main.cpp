@@ -13,6 +13,7 @@
 #include <QQmlContext>
 #include <QLibrary>
 #include <QDebug>
+#include <QTimer>
 #include <QPointer>
 
 // Deliberately independent of Electron, FreeShow and production JA settings.
@@ -117,6 +118,7 @@ static QString obsProbe() {
 int main(int argc,char **argv){
     QGuiApplication app(argc,argv);
     app.setApplicationName("JA · Qt nativo (solo experimento)");
+    qmlRegisterUncreatableType<Media>("JA.Native",1,0,"Media","Instancias controladas por C++");
     qmlRegisterType<FrameSurface>("JA.Native",1,0,"FrameSurface");
     Media preview,program;
     preview.setMuted(true);
@@ -134,6 +136,7 @@ int main(int argc,char **argv){
     qml.rootContext()->setContextProperty("obsStatus",obsProbe());
     qml.loadFromModule("JA.Spike","Main");
     if(qml.rootObjects().isEmpty())return 1;
+    if(app.arguments().contains("--ui-smoke"))QTimer::singleShot(400,&app,&QCoreApplication::quit);
     return app.exec();
 }
 #include "main.moc"
