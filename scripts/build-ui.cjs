@@ -21,6 +21,15 @@ let html = fs.readFileSync(source, "utf8");
 const cdn = /<script\s+src="https:\/\/cdn\.tailwindcss\.com\/3\.4\.17"><\/script>/;
 if (!cdn.test(html)) throw new Error("No se encontró la referencia Tailwind del prototipo");
 html = html.replace(cdn, '<link rel="stylesheet" href="tailwind.css">');
+// Retain Gemini's approved DOM/layout, not its simulated audiovisual logic.
+// Remove the single inline demo controller with its fictitious four screens,
+// playback timers, hard-coded Bible versions and sample thumbnails.
+const demos = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>[\s\S]*?<\/script>/gi)];
+if (demos.length !== 1) throw Error("El prototipo cambió: se esperaba exactamente un controlador de demostración");
+html = html.replace(demos[0][0], "");
+const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'self' file: data:; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' file: data:; media-src 'self' file:; object-src 'none'; connect-src 'none'">`;
+html = html.replace("</head>", csp + "\n</head>");
+
 // Las fuentes web originales son opcionales; con internet mantienen fidelidad visual,
 // y sin internet hay fuentes alternativas para la interfaz.
 html = html.replace("</body>", '<script src="../desktop/bridge.js"></script>\n</body>');
