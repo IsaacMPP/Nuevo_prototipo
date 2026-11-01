@@ -79,3 +79,11 @@ Control común de fuentes/tamaño, color, fondo por imagen real, placa, alineaci
 
 ## 9. Contraejemplos prohibidos
 No marcar "HDMI funcionando" por mostrar una tarjeta, ni "NDI conectado" por disponer de menú. No permitir agregar tres pantallas ficticias; no elegir la pantalla Windows principal como principal JA implícita. No reescribir el motor para arreglar CSS. No usar un control sin estado confirmado por backend. No cerrar PR, no fusionar main ni borrar `engine/` histórico.
+
+
+## Registro de ejecución — C1-01, 2026-11-01
+**Código implementado en rama, verificación pendiente de CI/Windows.** Se incorporó un área Configuración única (`desktop/settings-center.js/.css`) integrada a la UI Gemini mediante `scripts/build-ui.cjs`; se retiró el modal duplicado de `desktop/bridge.js`. Pestañas funcionales de pantallas y principal/operador, bibliotecas, estilo bíblico, general, diagnóstico y recuperación. Audio y NDI muestran estados de próximos módulos, no controles simulados.
+
+Servicios incorporados: `desktop/settings-policy.cjs` valida IDs, roles, conflictos de revisión y bloqueo por ventanas abiertas; `main.cjs` expone `ja:config:get`, `ja:config:screens:save` atómico, `ja:config:screens:closeOutputs` explícito, `ja:config:folder:unlink`, `ja:config:recover`. `core.cjs` versión de esquema, revisiones, copias anteriores, aviso de corrupción y restauración solo bajo solicitud; desvinclular nunca borra archivos y bloquea quitar un fondo activo de Biblia. `preload.cjs` ofrece solo los IPC requeridos.
+
+**Regla de cierre:** este cambio es la subunidad C1-01, NO el C1 completo ni S1. El instalador sólo se considerará disponible tras CI verde. C1 queda pendiente de ensayo en Windows de C1-01/03/04/05/06/09/10/11/12 y de identificación avanzada S1, salidas/audio A1, operación con 2 monitores. Configurar pantalla distinta durante proyección requiere acción explícita de cierre y confirmación (sin relocalización automática). No marcar C1 aceptado sin evidencia operativa del usuario.
