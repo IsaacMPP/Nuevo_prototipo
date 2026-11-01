@@ -25,8 +25,8 @@ jobs:
         run: node experiments/ja-gemini-freeshow/prepare-gemini.cjs
       - name: Verificaciones de aislamiento y archivo generado
         run: node --test experiments/ja-gemini-freeshow/integration.test.cjs
-      - name: Dependencias FreeShow sin postinstall de Electron
-        run: npm ci --prefix engine --ignore-scripts --no-audit --no-fund
+      - name: Dependencias completas de FreeShow y Electron
+        run: npm ci --prefix engine --no-audit --no-fund
       - name: Preparar configuraciones productivas TypeScript de FreeShow
         run: npm run prebuild
         working-directory: engine
@@ -36,3 +36,33 @@ jobs:
       - name: Compilar TypeScript del proceso de salida original sin cambios
         run: npm run build:electron:prod
         working-directory: engine
+      - name: Preparar Biblia RV1909 del motor original
+        run: python scripts/ja/build_rv1909.py
+        working-directory: engine
+      - name: Compilar servidores de FreeShow
+        run: npm run build:servers:prod
+        working-directory: engine
+      - name: Preparar distribución de archivos del motor
+        run: node scripts/postBuild.js
+        working-directory: engine
+      - name: Crear identidad visual del instalador experimental
+        run: |
+          python -m pip install --disable-pip-version-check Pillow
+          python engine/scripts/ja/create-installer-art.py
+      - name: Asignar appId experimental para no sobreescribir JA2
+        run: node experiments/ja-gemini-freeshow/prepare-installer.cjs
+      - name: Generar instalador NSIS Windows x64 sin firma
+        run: npx electron-builder --config config/building/ja-gemini-experimental.generated.yaml --win nsis --x64 --publish never
+        working-directory: engine
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Publicar instalador experimental
+        uses: actions/upload-artifact@v4
+        with:
+          name: JA-Gemini-FreeShow-Experimental-Windows
+          path: |
+            engine/dist/*.exe
+            engine/release/*.exe
+            engine/ja-gemini-build-info.json
+          if-no-files-found: error
+          retention-days: 14
