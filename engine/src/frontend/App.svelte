@@ -1,5 +1,6 @@
 <script lang="ts">
     import MainLayout from "./MainLayout.svelte"
+    import JaGeminiShell from "./components/ja/JaGeminiShell.svelte"
     import MainOutput from "./MainOutput.svelte"
     import ContextMenu from "./components/context/ContextMenu.svelte"
     import Pdf from "./components/export/Pdf.svelte"
@@ -54,6 +55,8 @@
     $: secondaryContrast = `--secondary-text: ${contrastColor === "#000000" ? "#131313" : "#f0f0ff"};`
     $: globalStyle = `${isWindows ? "height: calc(100% - 25px);" : ""}${secondaryContrast}${blending}`
 
+    // Solo en la rama experimental: no se altera ninguna ventana de proyección.
+    let jaGeminiEnabled = true
     let ready = false
     $: if ($loaded) hasLoaded()
     function hasLoaded() {
@@ -89,7 +92,12 @@
             <Guide />
             <ProgressPanel />
 
-            <MainLayout />
+            {#if jaGeminiEnabled}
+                <JaGeminiShell on:classic={() => (jaGeminiEnabled = false)} />
+            {:else}
+                <div class="ja-classic-return"><button type="button" on:click={() => (jaGeminiEnabled = true)}>← Volver al diseño JA Gemini</button></div>
+                <MainLayout />
+            {/if}
 
             {#if ready && Object.keys($profiles).filter((a) => a !== "admin").length && $activeProfile === null}
                 <ProfileSelector />
@@ -114,4 +122,6 @@
     .closeAd {
         height: 1px;
     }
+    .ja-classic-return { position: fixed; top: 26px; right: 24px; z-index: 9000; }
+    .ja-classic-return button { background: #071a4c; color: white; border: 1px solid #4cd1fd; border-radius: 8px; padding: 8px 12px; cursor: pointer; }
 </style>

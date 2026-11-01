@@ -1,0 +1,36 @@
+name: JA Gemini + FreeShow · prueba aislada
+on:
+  push:
+    branches:
+      - experiment/gemini-freeshow
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gemini-engine:
+    runs-on: windows-2022
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Dependencias del diseño original
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Construir el diseño Gemini aprobado sin simuladores
+        run: npm run build:ui
+      - name: Integrar Gemini con la consola Svelte FreeShow
+        run: node experiments/ja-gemini-freeshow/prepare-gemini.cjs
+      - name: Verificaciones de aislamiento y archivo generado
+        run: node --test experiments/ja-gemini-freeshow/integration.test.cjs
+      - name: Dependencias FreeShow sin postinstall de Electron
+        run: npm ci --prefix engine --ignore-scripts --no-audit --no-fund
+      - name: Compilar UI real Svelte contra el motor de FreeShow
+        run: npm run build:frontend:prod
+        working-directory: engine
+      - name: Compilar TypeScript del proceso de salida original sin cambios
+        run: npm run build:electron:prod
+        working-directory: engine
