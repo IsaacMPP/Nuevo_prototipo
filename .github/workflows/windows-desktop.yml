@@ -1,36 +1,48 @@
-name: JA Prototipo · Windows
+name: JA Proyecciones · Motor propio Windows
 on:
   push:
     branches:
-      - feature/escritorio-prototipo-ja
+      - feature/motor-propio-v1
   workflow_dispatch:
+
+concurrency:
+  group: ja-native-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  test-build:
-    runs-on: windows-latest
-    timeout-minutes: 40
+  native-windows:
+    runs-on: windows-2022
+    timeout-minutes: 45
     steps:
-      - name: Checkout new prototype only
+      - name: Descargar código del motor propio
         uses: actions/checkout@v4
-      - name: Node.js
+      - name: Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Install dependencies
+      - name: Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Instalar dependencias Electron sin FreeShow
         run: npm install --no-audit --no-fund
-      - name: Generate offline styles and test native services
+      - name: Preparar Biblia pública RV1909 validada
+        run: npm run prepare:bible
+      - name: Validar los 66 libros y referencias
+        run: python -c "import json; d=json.load(open('desktop/assets/rv1909.fsb',encoding='utf-8')); assert d[0]=='ja-rv1909' and len(d[1]['books'])==66"
+      - name: Pruebas de seguridad, proyección, bibliotecas y navegador
         run: npm run check
-      - name: Package experimental Windows installer
+      - name: Crear instalador de Windows sin firma
         run: npm run pack:win
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-      - name: Upload unsigned prototype installer
+      - name: Publicar instalador de prueba
         uses: actions/upload-artifact@v4
         with:
-          name: JA-Nuevo-Prototipo-Experimental-Windows
+          name: JA-Proyecciones-Motor-Propio-Windows
           path: dist/*.exe
           if-no-files-found: error
           retention-days: 14
