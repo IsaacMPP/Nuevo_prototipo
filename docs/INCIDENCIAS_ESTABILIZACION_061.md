@@ -31,3 +31,7 @@
 **CI:** sintaxis, suite de tests, diseño compilado, caché, cierre y limpieza, instalador Windows. **Físico obligatorio:** reproducir con monitor operador + iPad Spacedesk en Extender (ideal tercera salida) los casos OUT-01/02, B1-15/16, H1-01/02 y A1-01/02/03. Grabar breves videos mostrando el contenido en pantalla física y programa tras realizar las acciones. Registrar modelo/resolución, tipo de conexión, versión, archivo MP4/códec, tiempo y salidas involucradas.
 
 **Puerta de cierre:** ningún S0/S1 abierto; los resultados de pantalla/audio/scroll deben estar respaldados por pruebas del operador en Windows. La compilación verde por sí sola **no** cierra esta ronda de estabilización.
+
+
+## Evidencia automatizada 0.6.1
+[GitHub Actions #41357085284](https://github.com/IsaacMPP/Nuevo_prototipo/actions/runs/41357085284), SHA `9eb21912c90063bc909c45c407b649ad84ee29cb`: **SUCCESS, 47 pruebas correctas, ninguna fallida**. Instalador `JA Proyecciones Setup 0.6.1.exe` creado con electron-builder NSIS x64 y publicado en [artifact 13104125758](https://github.com/IsaacMPP/Nuevo_prototipo/actions/runs/41357085284/artifacts/13104125758). No se ha realizado aún aceptación física en Windows/Spacedesk. Las incidencias del presente documento quedan con estado `CORRECCIÓN EN CÓDIGO / CI APROBADO / HARDWARE PENDIENTE`.
