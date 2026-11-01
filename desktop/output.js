@@ -1,7 +1,7 @@
 "use strict";
 (() => {
 const frame=document.querySelector("#frame"),black=document.querySelector("#black");
-let media=null,session=0,blacked=false,scripture=null;
+let media=null,session=0,generation=0,blacked=false,scripture=null;
 let lastState="empty",stateBeforeBlack="empty",lastTimeSent=0;
 let lastScriptureStyleKey="";
 const verseTransitions=window.jaTransitions.createController();
@@ -11,6 +11,7 @@ function status(detail){
   window.jaOutput.status(payload);
 }
 function reset(){
+  ++generation;
   verseTransitions.cancel();
   lastScriptureStyleKey="";
   if(media){media.pause?.();media.removeAttribute("src");media.load?.();media.remove();media=null;}
@@ -68,7 +69,7 @@ window.jaOutput.receive(async command=>{
    return;
  }
  if(command.action==="black"){if(blacked){setBlack(false);lastState=stateBeforeBlack;}else{stateBeforeBlack=lastState;setBlack(true);lastState="black";}status({state:lastState});return;}
- if(command.action==="clear"){reset();setBlack(false);lastState="empty";status({state:"empty"});return;}
+ if(command.action==="clear"){reset();if(Number.isSafeInteger(command.session))session=command.session;setBlack(false);lastState="empty";stateBeforeBlack="empty";status({state:"empty"});return;}
  if(command.action==="clear-text"){if(scripture){verseTransitions.cancel();scripture.querySelector("#verse").style.visibility="hidden";scripture.querySelector("#reference").style.visibility="hidden";stateBeforeBlack="background";lastState=blacked?"black":"background";status({state:lastState});}return;}
  if(command.action==="volume"){if(media&&media.tagName!=="IMG"){media.volume=Math.max(0,Math.min(100,Number(command.volume)))/100;status({state:lastState});}return;}
  if(command.action==="seek"){if(media&&Number.isFinite(media.duration)){media.currentTime=Math.max(0,Math.min(media.duration,Number(command.position)));status({state:lastState});}return;}
@@ -81,8 +82,7 @@ window.jaOutput.receive(async command=>{
  }
  if(command.action==="restart"){if(media){media.currentTime=0;try{await media.play();lastState="playing";status({state:lastState});}catch(err){lastState="error";status({state:"error",message:String(err.message||err)});}}return;}
  if(command.action!=="show")return;
- session=command.session;
- reset();setBlack(false);lastTimeSent=0;
+ reset();session=command.session;const showGeneration=generation;setBlack(false);lastTimeSent=0;
  if(command.content.kind==="verse"){
    scripture=document.createElement("div");scripture.id="scripture";
    const panel=document.createElement("div");panel.id="readingPlate";
@@ -102,15 +102,15 @@ window.jaOutput.receive(async command=>{
  media.src=command.content.url;
  if(kind!=="image"){
    media.autoplay=true;media.loop=false;media.muted=!!command.content.muted;media.volume=1;
-   media.addEventListener("ended",()=>{lastState="ended";status({state:lastState});});
-   media.addEventListener("timeupdate",timeupdate);
-   media.addEventListener("loadedmetadata",()=>status({state:lastState}));
-   media.addEventListener("error",()=>{lastState="error";status({state:"error",message:"No se pudo decodificar este archivo. Usa MP4 H.264/AAC o WebM."});});
+   media.addEventListener("ended",()=>{if(showGeneration!==generation)return;lastState="ended";status({state:lastState});});
+   media.addEventListener("timeupdate",()=>{if(showGeneration===generation)timeupdate();});
+   media.addEventListener("loadedmetadata",()=>{if(showGeneration===generation)status({state:lastState});});
+   media.addEventListener("error",()=>{if(showGeneration!==generation)return;lastState="error";status({state:"error",message:"No se pudo decodificar este archivo. Usa MP4 H.264/AAC o WebM."});});
  }else media.addEventListener("error",()=>{lastState="error";status({state:"error",message:"No se pudo abrir la imagen"});});
  frame.insertBefore(media,black);
  if(kind!=="image"){
-   try{await media.play();lastState="playing";status({state:lastState});}
-   catch(err){lastState="error";status({state:"error",message:String(err.message||err)});}
+   try{await media.play();if(showGeneration!==generation)return;lastState="playing";status({state:lastState});}
+   catch(err){if(showGeneration!==generation)return;lastState="error";status({state:"error",message:String(err.message||err)});}
  }else {lastState="image";status({state:lastState});}
 });
 })();
