@@ -1,0 +1,35 @@
+# Instalador JA independiente: sin firma empresarial de FreeShow
+appId: mx.ja.proyecciones.nuevo
+productName: JA Proyecciones
+artifactName: JA-Proyecciones-${version}-${arch}.${ext}
+directories:
+  output: dist
+files:
+  - build/electron/**
+  - build/types/**
+  - public/**
+  - "!**/node_modules/*/{CHANGELOG*,README*,test*,example*,docs}"
+  - "!**/node_modules/**/*.{d.ts,ts,map}"
+  - "!**/node_modules/**/prebuild/node-v*"
+  - "!**/node_modules/grandiose/ndi/**"
+  - "!**/node_modules/osr-capture/**/on12_harness.exe"
+extraResources:
+  - from: node_modules/slideshow/
+    to: slideshow
+    filter:
+      - connector-*
+win:
+  target: nsis
+  icon: build/public/ja-icon.ico
+  files:
+    - "!**/node_modules/openmediatransport/lib/{macos,linux-*,win-arm64}/**"
+  asarUnpack:
+    - "**/node_modules/macadam/**/*.node"
+    - "**/node_modules/libspotifyctl/**/*"
+    - "**/node_modules/openmediatransport/**"
+    - "**/node_modules/sherpa-onnx-*/**"
+nsis:
+  installerSidebar: build/public/ja-installer-sidebar.bmp
+  installerHeader: build/public/ja-installer-header.bmp
+  oneClick: false
+  allowToChangeInstallationDirectory: true

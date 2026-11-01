@@ -1,0 +1,18 @@
+# Prompt autocontenido — JA Proyecciones funcional E2-B
+
+Continuamos el proyecto **JA Nuevo Prototipo, ahora primera base funcional**, en el repositorio https://github.com/IsaacMPP/Nuevo_prototipo, rama `feature/escritorio-prototipo-ja`, PR #1 abierto en borrador. **No tocar ni fusionar main**, ni modificar JA_Proyecciones2.
+
+Historia: `prototype/index.html` y `desktop/` eran una simulación Electron v0.1.1 con carpetas y monitores reales. El motor FreeShow/JA 1.6.7 independiente en `engine/` proviene de `76b6cb371e68f8ce36bcaea0223e4041a1dfd638`. Se autorizó dar paso a un sistema funcional, por lo que `npm start` usa ahora el motor Electron/Svelte de `engine/`. `npm run start:legacy` conserva el shell visual.
+
+Modificaciones E2-B:
+- `engine/src/frontend/components/ja/JAQuickStart.svelte` montado en `MainLayout.svelte`: botones a Himnario, Biblia, Multimedia, YouTube, Presentaciones y ajustes de pantallas, únicamente cambian los stores de navegación nativa. No ejecutan `setOutput`.
+- `engine/src/types/Tabs.ts`: añadida la pestaña hymns al tipo.
+- `engine/src/electron/utils/files.ts`, `jaContentFolders.ts`, `data/store.ts`: carpetas bajo `Documentos/JA Proyecciones 2 - Prototipo` y configuración independiente de FreeShow en `AppData/JA Nuevo Prototipo Funcional`. No migrar ni sobrescribir directorios previos.
+- `engine/config/building/ja-windows.yml` y workflow Windows: ahora construyen el motor, tests unitarios/Svelte, instalador JA sin firma.
+- `package.json`: `npm run setup:engine`, `npm start`, `npm run check:engine`, `npm run pack:win`; modo legado separado.
+
+Debe leerse `docs/E2_AUDITORIA_BASE_FUNCIONAL.md`, `docs/ARQUITECTURA.md` y `docs/PRUEBAS.md`. Verificar si el último workflow funciona; **no afirmar compilación exitosa ni hardware probado si no se confirmó**. Siguiente entrega: corregir fallos CI de raíz, validar carga real de Biblia RV1909/FSB/XML, Himnario y rutas vinculadas, Multimedia, YouTube, presentaciones, salida HDMI con audio principal y auxiliares mudas; probar NDI/OBS. Después migrar componentes visuales del HTML a Svelte de manera progresiva, con proyectos y escenarios compatibles y autoguardado sin emitir al abrir. Evitar una segunda implementación de motores y parches aislados. Al finalizar cualquier cambio, ejecutar pruebas, documentar y generar otro prompt de continuidad.
+
+## Incidente y correcciones de 2026-11-01 (posterior a E2-B)
+El usuario reportó muchos errores. Logs GitHub Actions del SHA 231ae1ab confirmaron que la instalación de `grandiose`/NDI fallaba con `node-gyp@11.5.0`, porque `windows-latest` usaba Visual Studio 2026 (18.x), incompatible con el detector de VS de esa versión. `npm install --prefix engine` terminaba con exit code 1; pruebas del shell eran 7/7 correctas. En la rama se ajustó `.github/workflows/windows-desktop.yml` a `windows-2022` con Python 3.12 y una comprobación vswhere de C++ 17.x; esta comprobación de VS2022 ya pasó. Se recuperaron `engine/scripts/ja/build_rv1909.py` y `create-installer-art.py` para CI (el recurso RV1909 no estaba versionado en `engine/public` y habría faltado en el instalador). El config `engine/config/building/ja-windows.yml` ahora referencia el icono/imagenes JA generados. Se corrigió el fallback `openedSubSubTab` de `JAQuickStart.svelte` para que sus tipos de Svelte sean coherentes. Los comandos locales `setup:engine`, `check:engine`, `pack:win` deben reflejar la misma preparación. 
+**Estado:** no declarar solución completa hasta ver `native-engine` finalizado y superado, pruebas Svelte, build e instalador. Verificar el último run en Actions; pruebas de hardware Windows/HDMI/NDI/audio siguen pendientes. No modificar main ni JA_Proyecciones2. Tras cada cambio, ejecutar tests y renovar este prompt.

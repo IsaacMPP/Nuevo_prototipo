@@ -1,0 +1,72 @@
+name: JA Proyecciones · motor funcional Windows
+on:
+  push:
+    branches:
+      - feature/escritorio-prototipo-ja
+  workflow_dispatch:
+
+concurrency:
+  group: ja-functional-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  shell-regression:
+    runs-on: windows-2022
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+      - run: npm run check:legacy
+
+  native-engine:
+    runs-on: windows-2022
+    timeout-minutes: 80
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Use Python 3.12 for native node-gyp builds
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Confirm Visual Studio C++ toolchain
+        shell: pwsh
+        run: |
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationVersion
+          if (-not $vs -or -not $vs.StartsWith('17.')) { throw "Visual Studio 2022 C++ toolchain unavailable: $vs" }
+          Write-Host "Visual Studio 2022 build tools found: $vs"
+      - name: Install FreeShow JA native dependencies
+        run: npm ci --prefix engine --no-audit --no-fund
+      - name: Test native contracts
+        run: npm --prefix engine run test:unit
+      - name: Check Svelte
+        run: npm --prefix engine run test:svelte
+      - name: Generate verified public-domain RV1909 Bible
+        run: python engine/scripts/ja/build_rv1909.py
+      - name: Validate bundled RV1909 contents
+        run: python -c "import json; d=json.load(open('engine/public/ja-bibles/rv1909.fsb', encoding='utf-8')); assert d[0] == 'ja-rv1909' and len(d[1]['books']) == 66"
+      - name: Build FreeShow JA output engine
+        run: npm --prefix engine run build
+      - name: Install JA Windows artwork generator
+        run: python -m pip install --disable-pip-version-check Pillow
+      - name: Generate JA app and installer artwork
+        run: python engine/scripts/ja/create-installer-art.py
+      - name: Package JA unsigned Windows application
+        working-directory: engine
+        run: npx electron-builder --config config/building/ja-windows.yml --win nsis --x64 --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Upload unsigned JA functional installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: JA-Proyecciones-Funcional-Windows
+          path: engine/dist/*.exe
+          if-no-files-found: error
+          retention-days: 14
