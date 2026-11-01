@@ -1,49 +1,48 @@
-# JA Nuevo Prototipo
+# JA Proyecciones — primera versión del motor propio (Windows)
 
-Proyecto independiente de escritorio para experimentar con la nueva interfaz de **JA Proyecciones 2**, sin modificar ni fusionar [el proyecto original](https://github.com/IsaacMPP/JA_Proyecciones2).
+**Objetivo:** utilizar una consola de proyección real, ligera y autónoma, sin el motor FreeShow ni sus dependencias nativas. Esta rama inicia desde la última versión funcional del shell (a9790c27), conserva el prototipo HTML original y crea el motor propio en `desktop/`. No se modifica `main`, la rama FreeShow ni `JA_Proyecciones2`.
 
-## Estado real
-
-La interfaz HTML completa compartida por el usuario se conserva en `prototype/index.html`. La ejecutamos como aplicación **Electron** mediante un shell seguro que añade capacidades reales de Windows: inventario de monitores, asignación de operador/principal, carpetas locales separadas, vinculación de carpetas externas, biblioteca indexada, vista previa de archivos y proyectos/escenarios guardados.
-
-**La vista Programa, los cuatro monitores y varios botones del HTML original son demostraciones.** El shell impide que los controles de envío rápido simulen éxito. Antes de instalar motor FreeShow/JA no existen todavía salidas HDMI/NDI renderizadas, audio sincronizado, YouTube proyectado, importación bíblica operativa ni editor nativo de diapositivas. Véase `docs/ARQUITECTURA.md` para las etapas de integración y pruebas.
-
-## Ejecutar en Windows
-
-Requisitos: Node.js 22 o superior, npm e instalación de dependencias con internet la primera vez.
+## Instalar y probar
+En Windows, con Node.js 22 o 24 instalado:
 
 ```powershell
-git clone https://github.com/IsaacMPP/Nuevo_prototipo.git
+git clone -b feature/motor-propio-v1 https://github.com/IsaacMPP/Nuevo_prototipo.git
 cd Nuevo_prototipo
-git checkout feature/escritorio-prototipo-ja
 npm install
 npm start
 ```
 
-`npm run check` compila Tailwind local y prueba el módulo de almacenamiento. `npm run pack:win` crea un instalador Windows experimental mediante electron-builder. GitHub Actions genera un instalador sin firma en la rama de desarrollo cuando el workflow finaliza correctamente.
+**Biblia RV1909:** el instalador construido en CI la trae incluida cuando se supera la validación criptográfica del archivo público oficial. En desarrollo, para instalar la RV1909 localmente ejecutar `npm run prepare:bible` con Python 3.12+ y conexión. También se pueden importar biblias en formato **FSB (JSON) o JSON** desde la aplicación. Por ahora no se admite XML ni todos los formatos FSB específicos de terceros; esos archivos deben validarse o convertirse mediante un importador posterior. No se incluyen RV1960/RV1995/NVI por derechos de autor.
 
-## Datos locales y privacidad
+## Uso básico
+1. Conectar un monitor/proyector adicional con el escritorio Windows en **modo Extender**.
+2. En **Pantallas**, elegir el monitor del operador y la **salida principal**, guardar. La consola impide usar el monitor del operador como destino.
+3. Seleccionar **Himnario Adventista**, vincular una carpeta con videos compatibles y elegir un archivo. La vista previa local aparece en la consola; presionar **Enviar a proyección** para iniciar la salida física.
+4. En **Biblia**, elegir RV1909 o **Importar FSB/JSON**, seleccionar libro, capítulo y versículo; después enviar a proyección. Se puede avanzar/retroceder por versículos.
+5. Usar los controles de Programa: reproducir, pausar, reiniciar, negro, limpiar.
 
-La aplicación crea `Documentos/JA Proyecciones 2 - Prototipo/` con:
-`Biblias`, `Himnario Adventista`, `Cantos Juveniles`, `Fondos Personalizados`, `Audio`, `Imagenes`, `Videos`, `Importaciones`, `Presentaciones`, `Cache`, `Configuracion` y `Proyectos`.
+La aplicación conserva por separado las carpetas, recursos y proyectos experimentales en `Documentos/JA Proyecciones 2 - Prototipo`. Las carpetas externas vinculadas se leen sin mover ni modificar los archivos originales.
 
-Las bibliotecas del JA anterior **no se modifican**. En el botón **📂 Biblioteca real**, puedes vincular otras carpetas para consultar archivos sin copiarlos. En **🗂 Proyectos**, puedes crear y guardar proyectos y escenarios. En **🖥 Pantallas**, se ven los monitores reales y se guarda cuál es el del operador y cuál el principal JA, sin activar proyección.
+## Cobertura de la primera versión
+- **Implementado en código:** detección real de monitores, destino explícito, ventanas Electron fullscreen para emitir imágenes/video/audio/versículos, sesiones independientes por salida, principal con audio y auxiliares silenciadas por defecto, Vista previa del operador, Biblia FSB/JSON con importación validada, carpetas vinculadas, controles de reproducción y borrado.
+- **Sin garantía aún:** pruebas físicas con proyector/audio específico, pantalla Programa con imagen en vivo sincronizada (muestra estado), rendimiento con múltiples videos y compatibilidad con todas las variantes H.264/HEVC/MKV/AVI.
+- **Pendiente para posteriores fases:** NDI, XML/OSIS/Zefania, fondos personalizables para versículos, transiciones, YouTube, importación PowerPoint/PDF, adaptador de proyectos/escenarios y autoguardado con restauración.
 
-## Arquitectura / próximos pasos
+Los archivos MP4 requieren codecs soportados por Chromium, habitualmente H.264/AAC; AVI/MKV/MOV pueden aparecer en las carpetas pero se marcan **requiere conversión** y no se envían al motor actual.
 
-1. Reusar el motor FreeShow/JA 1.6.7 con auditoría de componentes, licencias y pruebas de regresión (no reimplementar reproductores).
-2. Conectar los botones del prototipo a comandos reales de salida con monitor separado de destino; proteger audio principal, capas y escenarios.
-3. Integrar Biblia nativa, importación FSB/XML, RV1909, navegación con flechas y fondos; Himnario, Multimedia, YouTube y Presentaciones como módulos reales.
-4. Integrar NDI como salida lógica configurada, descubrir HDMI, sesiones/sincronización y autoguardado.
-5. Probar hardware Windows e instalar únicamente después de validación.
+## Instalador
+El workflow de GitHub Actions para esta rama instala solo dependencias del escritorio propio, valida los 66 libros de RV1909, ejecuta pruebas nativas y genera el instalador no firmado **JA-Proyecciones-Motor-Propio-Windows**.
 
-**No hay dos modos «Culto Joven» y «Culto Divino»**: se organizan como proyectos y escenarios en una sola interfaz.
+<Link omitted in Markdown; buscar el artifact en https://github.com/IsaacMPP/Nuevo_prototipo/actions >
 
-## Documentos de continuidad
-- [Arquitectura](docs/ARQUITECTURA.md)
-- [Decisiones](docs/DECISIONES.md)
-- [Pruebas](docs/PRUEBAS.md)
-- [Prompt de continuidad](docs/CONTINUIDAD_CHATGPT.md)
+```powershell
+npm run check
+npm run pack:win
+```
 
-## Licencia
-Se conserva la licencia GPL-3.0 y atribución de FreeShow/JA en el motor incorporado; ver [LICENSE](LICENSE) y los archivos de origen en `engine/`.
+`npm run pack:win` presupone que `npm run prepare:bible` se ejecutó si se requiere la Biblia integrada; GitHub Actions ejecuta automáticamente su preparación. No afirmar éxito del instalador hasta que CI esté verde y se ensaye con Windows real.
+
+## Alcance legal
+Se conservó `engine/` (copia anterior de FreeShow GPL-3.0) como referencia histórica aislada. **No se instala, ejecuta ni empaqueta desde esta rama.** No borrar ni cambiar sus licencias. El motor nuevo de `desktop/` no importa código FreeShow; se debe revisar la distribución/licencia del repositorio completo antes de publicar una versión comercial.
+
+Ver `docs/MOTOR_PROPIO_V1.md` y `docs/CONTINUIDAD_CHATGPT.md`. PR #1 anterior sigue borrador; esta versión lleva su propia rama y PR borrador.
