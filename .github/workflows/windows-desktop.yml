@@ -1,0 +1,36 @@
+name: JA Prototipo · Windows
+on:
+  push:
+    branches:
+      - feature/escritorio-prototipo-ja
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-build:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout new prototype only
+        uses: actions/checkout@v4
+      - name: Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Generate offline styles and test native services
+        run: npm run check
+      - name: Package experimental Windows installer
+        run: npm run pack:win
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Upload unsigned prototype installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: JA-Nuevo-Prototipo-Experimental-Windows
+          path: dist/*.exe
+          if-no-files-found: error
+          retention-days: 14
