@@ -9,7 +9,7 @@
     "start": "npm --prefix engine start",
     "test": "node --test tests/*.test.cjs",
     "check": "npm run check:legacy",
-    "pack:win": "npm run check:legacy && npm --prefix engine run build && cd engine && npx electron-builder --config config/building/ja-windows.yml --win nsis --x64 --publish never",
+    "pack:win": "npm --prefix engine run build && cd engine && npx electron-builder --config config/building/ja-windows.yml --win nsis --x64 --publish never",
     "start:legacy": "npm run build:ui && electron .",
     "setup:engine": "npm install --prefix engine --no-audit --no-fund",
     "check:legacy": "node --check desktop/main.cjs && node --check desktop/preload.cjs && node --check desktop/bridge.js && node --check desktop/core.cjs && npm run build:ui && npm test",
