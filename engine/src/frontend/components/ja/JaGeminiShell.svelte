@@ -21,6 +21,7 @@
     let playingPath = ""
     let stopVideoState: (() => void) | null = null
     let cleanup: Array<() => void> = []
+    let programSeek: HTMLInputElement | null = null
     let previewMedia: HTMLMediaElement | null = null
     let timer: ReturnType<typeof setTimeout> | null = null
     let videoState = { paused: true, muted: false, currentTime: 0, duration: 0 }
@@ -136,6 +137,11 @@
         }
         const counter = el("programTimeCounter")
         if (counter) counter.textContent = playingPath ? time(videoState.currentTime) + " / " + time(videoState.duration) : "—"
+        if (programSeek) {
+            programSeek.disabled = !playingPath || !Number.isFinite(videoState.duration) || videoState.duration <= 0
+            programSeek.max = String(Math.max(1, videoState.duration))
+            if (document.activeElement !== programSeek) programSeek.value = String(videoState.currentTime)
+        }
     }
     function sourceFiles() {
         const folders = Object.values(get(mediaFolders)).filter(Boolean)
@@ -303,6 +309,20 @@
         bind("btnProgramPause", pauseProgram)
         bind("btnBridgeClearText", () => notice("Limpiar texto se habilitará al integrar Biblia"))
         bind("btnBridgeBlack", () => notice("Cortina negra: todavía no integrada"))
+        const programStatus = el("programTimeCounter")?.parentElement
+        if (programStatus) {
+            programSeek = document.createElement("input")
+            programSeek.type = "range"
+            programSeek.min = "0"; programSeek.max = "1"; programSeek.step = "0.1"
+            programSeek.disabled = true
+            programSeek.title = "Buscar posición real del vídeo en Programa"
+            programSeek.className = "w-full accent-emerald-400"
+            programSeek.addEventListener("change", () => {
+                if (playingPath && selectedId && programSeek) VideoPlayer.seekTo(playingPath, selectedId, Number(programSeek.value))
+            })
+            programStatus.append(programSeek)
+            cleanup.push(() => programSeek?.remove())
+        }
         const programButtons = el("btnProgramPause")?.parentElement
         if (programButtons) {
             const clear = document.createElement("button")
