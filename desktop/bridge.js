@@ -68,13 +68,26 @@ function renderDisplays(){
   el.append(card);
  }
 }
+function timeText(seconds){const t=Math.floor(Number(seconds)||0);return Math.floor(t/60)+":"+String(t%60).padStart(2,"0");}
+function previewProgress(){
+ const media=$("previewCanvasContent")?.querySelector("video,audio"),slider=$("previewSeekSlider"),counter=$("previewTimeCounter");
+ if(!media)return;
+ if(counter)counter.textContent=timeText(media.currentTime)+" / "+timeText(media.duration);
+ if(slider){slider.disabled=!Number.isFinite(media.duration);slider.max=String(media.duration||1);if(document.activeElement!==slider)slider.value=String(media.currentTime||0);}
+}
 function renderPreview(){
  const target=$("previewCanvasContent");if(!target)return;
  const c=state.prepared;
  if(!c){placeholder(target,"Vista previa · Selecciona un himno, archivo o versículo");$("previewTimeCounter").textContent="Sin archivo";return;}
  if(c.kind==="verse"){drawVerse(target,c.text,c.reference);$("previewTimeCounter").textContent=c.reference;return;}
  if(c.kind==="image"){const img=node("img","w-full h-full object-contain");img.src=c.url;img.alt=c.title;target.replaceChildren(img);}
- else {const elem=node(c.kind==="video"?"video":"audio","w-full h-full object-contain");elem.src=c.url;elem.controls=true;elem.muted=true;elem.preload="metadata";target.replaceChildren(elem);}
+ else {
+  const elem=node(c.kind==="video"?"video":"audio","w-full h-full object-contain");
+  elem.src=c.url;elem.controls=true;elem.muted=true;elem.preload="metadata";
+  elem.addEventListener("loadedmetadata",previewProgress);
+  elem.addEventListener("timeupdate",previewProgress);
+  target.replaceChildren(elem);
+ }
  $("previewTimeCounter").textContent=c.title;
 }
 function renderProgram(){
@@ -83,13 +96,28 @@ function renderProgram(){
  const badge=$("programBadgeText"),label=$("programStateLabel");
  if(badge)badge.textContent=s?"Programa · "+s.state:"Programa · Sin emisión";
  if(label)label.textContent=s? s.state+" · "+s.title:"Sin proyección";
- $("programTimeCounter").textContent="—";
- if(!s){placeholder(el,"Programa sin señal · No hay contenido proyectándose");return;}
- if(s.state==="black"){placeholder(el,"Salida en negro");return;}
+ $("programTimeCounter").textContent=s?.duration?timeText(s.position)+" / "+timeText(s.duration):"—";
+ const volume=$("programVolumeSlider");if(volume&&s?.volume!=null&&document.activeElement!==volume)volume.value=String(s.volume);
+ if(!s){delete el.dataset.media;placeholder(el,"Programa sin señal · No hay contenido proyectándose");return;}
+ if(s.state==="black"){delete el.dataset.media;placeholder(el,"Salida en negro");return;}
  if(known?.kind==="verse"){drawVerse(el,known.text,known.reference);return;}
- if(known?.kind==="image"&&known.url){const img=node("img","w-full h-full object-contain");img.src=known.url;el.replaceChildren(img);return;}
- // A display state is not a decoded video frame: label accordingly.
- placeholder(el,s.title+" · "+s.state+" (estado de la salida, no monitorización del fotograma)");
+ if(known?.kind==="image"&&known.url){
+  if(el.dataset.media!==known.url){const img=node("img","w-full h-full object-contain");img.src=known.url;el.replaceChildren(img);el.dataset.media=known.url;}return;
+ }
+ if(known?.kind==="video"&&known.url){
+  let video=el.querySelector("video");
+  if(!video||el.dataset.media!==known.url){
+   video=node("video","w-full h-full object-contain");
+   video.src=known.url;video.muted=true;video.playsInline=true;video.preload="metadata";
+   el.replaceChildren(video);el.dataset.media=known.url;
+  }
+  if(Number.isFinite(video.duration)&&Math.abs(video.currentTime-(s.position||0))>2)video.currentTime=Math.max(0,Math.min(video.duration,s.position||0));
+  if(s.state==="playing"&&video.paused)void video.play().catch(()=>{});
+  if(s.state!=="playing"&&!video.paused)video.pause();
+  return;
+ }
+ if(known?.kind==="audio"){placeholder(el,"♫ "+s.title+" · "+s.state);return;}
+ placeholder(el,s.title+" · "+s.state+" (estado de la salida)");
 }
 async function refreshScreens(){
  const data=await api.displays(),external=data.displays.filter(d=>d.id!==data.operatorDisplayId);
@@ -450,8 +478,15 @@ function setup(){
   if(id==="btnProjectDropdown")disable(id,"Gestión de proyectos en integración. La proyección manual está disponible.");
  }
  $("btnBridgeFade")?.classList.add("opacity-50");
- $("programVolumeSlider").disabled=true;$("programVolumeSlider").title="Volumen independiente pendiente";
- $("previewSeekSlider").disabled=true;$("previewSeekSlider").title="Utiliza el control nativo del video en Vista previa";
+ $("programVolumeSlider").disabled=false;
+ $("programVolumeSlider").addEventListener("input",()=>run(async()=>{
+  for(const display of chooseDestination())await api.setOutputTransport(display,"volume",Number($("programVolumeSlider").value));
+ }));
+ $("previewSeekSlider").disabled=true;
+ $("previewSeekSlider").addEventListener("input",()=>{
+  const media=$("previewCanvasContent").querySelector("video,audio");
+  if(media&&Number.isFinite(media.duration))media.currentTime=Math.max(0,Math.min(media.duration,Number($("previewSeekSlider").value)));
+ });
  createStyleControls();
  void run(loadBibleStyle);
  $("btnResetTargets")?.setAttribute("title","Solo restaura selección; no interrumpe otras pantallas.");
