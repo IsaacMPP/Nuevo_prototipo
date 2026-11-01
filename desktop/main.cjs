@@ -204,6 +204,15 @@ function registerIpc() {
             root,version:app.getVersion(),sessions:projectionState(),
             categories:store.FOLDERS.filter(store.validCategory)};
     });
+    ipcMain.handle("ja:config:screens:closeOutputs",()=>{
+        // Deliberate operator action only. Never close on mere Settings opening.
+        for(const [id,output] of [...sessions.entries()]){
+            sessions.delete(id);
+            if(!output.window.isDestroyed())output.window.close();
+        }
+        notifyProjection();
+        return {closed:true};
+    });
     ipcMain.handle("ja:config:screens:save",(_event,input)=>{
         const current=store.loadSettings(root);
         const validated=settingsPolicy.validateScreens(input,displays(),current,sessions.size);
