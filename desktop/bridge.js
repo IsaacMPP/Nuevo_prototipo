@@ -6,7 +6,7 @@ const api=window.jaDesktop;
 if(!api)return;
 const $=id=>document.getElementById(id);
 const state={displays:[],operator:"",main:"",targets:new Set(),sessions:[],module:"biblia",type:"Videos",
- files:[],selected:null,prepared:null,live:new Map(),bibles:[],bible:null,structure:null,chapter:null,book:0,chapterIndex:0,verse:0,view:"grid",bibleStyle:{fontSize:56,fontFamily:"Georgia",textColor:"#ffffff",referenceColor:"#ffe6a0",background:"navy",backgroundFile:"",plateOpacity:20,textAlign:"center",showReference:true},backgroundUrl:""};
+ files:[],selected:null,prepared:null,live:new Map(),bibles:[],bible:null,structure:null,chapter:null,book:0,chapterIndex:0,verse:0,view:"grid",bibleStyle:{fontSize:56,fontFamily:"Georgia",textColor:"#ffffff",referenceColor:"#ffe6a0",background:"navy",backgroundFile:"",plateOpacity:20,textAlign:"center",showReference:true},backgroundUrl:"",verseTransition:{type:"fade",durationMs:320}};
 const safe=s=>String(s??"");
 const node=(tag,classes="",text)=>{const n=document.createElement(tag);n.className=classes;n.textContent=text===undefined?"":safe(text);return n;};
 const button=(label,classes,click)=>{const b=node("button",classes,label);b.type="button";b.addEventListener("click",()=>run(click));return b;};
@@ -128,11 +128,12 @@ async function refreshScreens(){
  setTop();renderTargets();renderDisplays();renderProgram();
 }
 function chooseDestination(){const chosen=targets();if(!chosen.length)throw Error("Selecciona un proyector real en la barra de destinos");return chosen;}
-async function project(ids){
+async function project(ids,transitionOverride=null){
  if(!state.prepared)throw Error("Selecciona un himno, archivo o versículo para Vista previa");
+ if(!ids.length)throw Error("No hay pantallas elegidas para proyectar");
  for(const id of ids){
   const c=state.prepared;
-  if(c.kind==="verse")await api.sendVerse(c.bible,c.book,c.chapter,c.verse,id);
+  if(c.kind==="verse")await api.sendVerse(c.bible,c.book,c.chapter,c.verse,id,transitionOverride);
   else await api.sendMedia(c.file,id);
   state.live.set(id,{...c});
  }
@@ -292,11 +293,41 @@ function renderBible(){
  }
  const pill=$("fsFloatingRefPill");if(pill)pill.textContent=state.bible.name+": "+currentBibleRef();
 }
+let verseNavigation=0;
 async function stepVerse(step){
- if(!state.chapter)return;
- const next=state.verse+step;
- if(next<0||next>=state.chapter.verses.length)return;
- state.verse=next;renderBible();prepareVerse();
+ if(!state.chapter||!state.bible||![1,-1].includes(step))return;
+ const request=++verseNavigation;
+ const books=state.structure?.books||[];
+ let book=state.book,chapter=state.chapterIndex,index=state.verse+step;
+ let nextChapter=state.chapter;
+ if(index<0||index>=nextChapter.verses.length){
+  if(step>0){
+   if(chapter+1<(books[book]?.chapters||0)){chapter++;}
+   else if(book+1<books.length){book++;chapter=0;}
+   else return;
+  }else{
+   if(chapter>0)chapter--;
+   else if(book>0){book--;chapter=books[book].chapters-1;}
+   else return;
+  }
+  nextChapter=await api.bibleChapter(state.bible.path,book,chapter);
+  if(request!==verseNavigation)return;
+  if(!nextChapter.verses.length)throw Error("El capítulo no tiene versículos");
+  index=step>0?0:nextChapter.verses.length-1;
+ }
+ state.book=book;state.chapterIndex=chapter;state.chapter=nextChapter;state.verse=index;
+ renderBible();prepareVerse();
+ const snapshot={...state.prepared};
+ const selected=targets();
+ if(!selected.length)return;
+ let updated=0,skipped=0;
+ for(const id of selected){
+  const result=await api.updateProjectedVerse(snapshot.bible,snapshot.book,snapshot.chapter,snapshot.verse,id);
+  if(result.updated){state.live.set(id,{...snapshot});updated++;}
+  else skipped++;
+ }
+ if(request===verseNavigation){state.sessions=await api.projectionState();renderDisplays();renderProgram();}
+ if(skipped&&updated===0)announce("Vista previa actualizada. Para iniciar la Biblia en esa pantalla pulsa Proyectar.");
 }
 function openModal(title,content){
  $("modalTitle").textContent=title;
@@ -409,7 +440,7 @@ function setup(){
  sidebar();
  // Hide all mock-only controls until their real service exists.
  for(const [id,msg] of Object.entries({
-  btnBridgeFade:"Transición de fundido pendiente del motor de transiciones",
+
   btnBridgeLogo:"Superposición del logo pendiente",
   
   btnOpenDiagModal:"Diagnóstico avanzado pendiente",
@@ -430,7 +461,9 @@ function setup(){
   state.type=item.dataset.mediaSubtab==="image"?"Imagenes":item.dataset.mediaSubtab==="audio"?"Audio":"Videos";await loadFiles();
  }));
  for(const [id,click] of [
-  ["btnBridgeQuickPlay",()=>project(chooseDestination())],["btnBridgeCut",()=>project(chooseDestination())],
+  ["btnBridgeQuickPlay",()=>project(chooseDestination())],
+   ["btnBridgeCut",()=>project(chooseDestination(),state.prepared?.kind==="verse"?{type:"cut",durationMs:0}:null)],
+   ["btnBridgeFade",()=>state.prepared?.kind==="verse"?project(chooseDestination(),{type:"fade",durationMs:state.verseTransition.durationMs}):announce("El fundido de videos e imágenes se validará en L1. El motor de transición bíblica ya funciona.")],
   ["btnProjectSelectedVerse",()=>project(chooseDestination())],["fsPillPlayBtn",()=>project(chooseDestination())],
   ["btnBridgeBlack",()=>command("black")],["btnBridgeClearText",()=>command("clear-text")],["btnProgramPause",()=>command(state.sessions.some(s=>targets().includes(s.displayId)&&s.state==="paused")?"play":"pause")],
   ["btnPreviewToAll",()=>project(state.displays.filter(d=>d.id!==state.operator).map(d=>d.id))],
@@ -460,7 +493,7 @@ function setup(){
   const clear=button("✕",compact,()=>command("clear"));clear.title="Limpiar completamente la salida seleccionada";
   nativeTransport.append(restart,clear);
  }
- $("btnBridgeFade")?.classList.add("opacity-50");
+ $("btnBridgeFade")?.setAttribute("title","Fundido real para versículos; video e imágenes pendientes de L1");
  $("programVolumeSlider").disabled=false;
  $("programVolumeSlider").addEventListener("input",()=>run(async()=>{
   for(const display of chooseDestination())await api.setOutputTransport(display,"volume",Number($("programVolumeSlider").value));
@@ -471,7 +504,9 @@ function setup(){
   if(media&&Number.isFinite(media.duration))media.currentTime=Math.max(0,Math.min(media.duration,Number($("previewSeekSlider").value)));
  });
  createStyleControls();
+ setupVerseTransitionControls();
  void run(loadBibleStyle);
+ void run(loadVerseTransition);
  $("btnResetTargets")?.setAttribute("title","Solo restaura selección; no interrumpe otras pantallas.");
  // The prototype's placeholder NVI/RVR1960 options are removed by loadBibles().
  $("btnProjectSelectedVerse")?.setAttribute("title","Proyecta el contenido preparado en Vista previa.");
