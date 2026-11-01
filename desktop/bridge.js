@@ -6,7 +6,7 @@ const api=window.jaDesktop;
 if(!api)return;
 const $=id=>document.getElementById(id);
 const state={displays:[],operator:"",main:"",targets:new Set(),sessions:[],module:"biblia",type:"Videos",
- files:[],selected:null,prepared:null,live:new Map(),bibles:[],bible:null,structure:null,chapter:null,book:0,chapterIndex:0,verse:0,view:"grid"};
+ files:[],selected:null,prepared:null,live:new Map(),bibles:[],bible:null,structure:null,chapter:null,book:0,chapterIndex:0,verse:0,view:"grid",bibleStyle:{fontSize:56,fontFamily:"Georgia",textColor:"#ffffff",referenceColor:"#ffe6a0",background:"navy",backgroundFile:"",plateOpacity:20,textAlign:"center",showReference:true},backgroundUrl:""};
 const safe=s=>String(s??"");
 const node=(tag,classes="",text)=>{const n=document.createElement(tag);n.className=classes;n.textContent=text===undefined?"":safe(text);return n;};
 const button=(label,classes,click)=>{const b=node("button",classes,label);b.type="button";b.addEventListener("click",()=>run(click));return b;};
@@ -168,8 +168,13 @@ function setBibleView(view){
  state.view=view;
  $("fsBibleSubViewGrid")?.classList.toggle("hidden",view!=="grid");
  $("fsBibleSubViewList")?.classList.toggle("hidden",view!=="list");
- $("btnFsViewGrid")?.classList.toggle("bg-amber-500",view==="grid");
- $("btnFsViewList")?.classList.toggle("bg-amber-500",view==="list");
+ for(const [id,active] of [["btnFsViewGrid",view==="grid"],["btnFsViewList",view==="list"]]){
+  const btn=$(id);if(!btn)continue;
+  btn.classList.remove("text-slate-950","text-slate-300","bg-amber-500");
+  btn.style.color=active?"#07152b":"#eef5ff";
+  btn.style.backgroundColor=active?"#f59e0b":"#15284b";
+  btn.style.opacity="1";
+ }
 }
 function bookColor(index){return index<5?"#8d3445":index<17?"#6a452f":index<22?"#456348":index<39?"#394a78":index<43?"#346d42":index<53?"#544875":"#65522f";}
 function bookAbbr(name,index){
@@ -225,13 +230,13 @@ function renderBible(){
   const el=$(id);el.replaceChildren();
   for(const book of groups[gi]){
    const b=button(bookAbbr(book.name,book.index),"h-8 border border-[#061126] text-[10px] font-bold "+(book.index===state.book?"ring-2 ring-amber-400":""),async()=>{state.book=book.index;state.chapterIndex=0;state.verse=0;await loadChapter();});
-   b.title=book.name;b.style.background=bookColor(book.index);el.append(b);
+   b.title=book.name;b.style.background=bookColor(book.index);b.style.color="#fff";b.style.textShadow="0 1px 2px #000";el.append(b);
   }
  });
  const ch=$("fsGridChapters"),vs=$("fsGridVerses");ch.replaceChildren();vs.replaceChildren();
  const chapters=books[state.book]?.chapters||0;
- for(let i=0;i<chapters;i++)ch.append(button(String(i+1),"h-7 text-[11px] font-semibold "+(i===state.chapterIndex?"bg-[#364962] ring-1 ring-amber-400":"text-slate-100 hover:bg-[#203254]"),async()=>{state.chapterIndex=i;state.verse=0;await loadChapter();}));
- for(let i=0;i<state.chapter.verses.length;i++)vs.append(button(String(state.chapter.verses[i].number),"h-7 text-[11px] font-semibold "+(i===state.verse?"ring-1 ring-amber-400 bg-[#393528]":"text-amber-400 hover:bg-[#203254]"),()=>{state.verse=i;renderBible();prepareVerse();}));
+ for(let i=0;i<chapters;i++)ch.append(button(String(i+1),"h-7 text-white text-[11px] font-semibold "+(i===state.chapterIndex?"bg-[#364962] ring-1 ring-amber-400":"text-slate-100 hover:bg-[#203254]"),async()=>{state.chapterIndex=i;state.verse=0;await loadChapter();}));
+ for(let i=0;i<state.chapter.verses.length;i++)vs.append(button(String(state.chapter.verses[i].number),"h-7 text-amber-300 text-[11px] font-semibold "+(i===state.verse?"ring-1 ring-amber-400 bg-[#393528]":"text-amber-400 hover:bg-[#203254]"),()=>{state.verse=i;renderBible();prepareVerse();}));
  const bookList=$("fsListBooksCol"),chapterList=$("fsListChaptersCol"),verseList=$("fsListVersesCol");
  bookList.replaceChildren();chapterList.replaceChildren();verseList.replaceChildren();
  for(const book of books)bookList.append(button(book.name,"w-full px-2 py-2 border-b border-[#1b2945] text-xs text-left "+(book.index===state.book?"bg-[#24436b]":"hover:bg-[#203154]"),async()=>{state.book=book.index;state.chapterIndex=0;state.verse=0;await loadChapter();}));
