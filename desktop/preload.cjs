@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld("jaDesktop", Object.freeze({
     info: () => invoke("ja:info"),
     config: () => invoke("ja:config:get"),
     saveScreens: value => invoke("ja:config:screens:save",value),
+    closeOutputsForSettings: () => invoke("ja:config:screens:closeOutputs"),
     unlinkFolder: (category,folder) => invoke("ja:config:folder:unlink",category,folder),
     recoverConfig: () => invoke("ja:config:recover"),
     displays: () => invoke("ja:displays"),
