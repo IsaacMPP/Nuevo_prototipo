@@ -1,15 +1,20 @@
 {
   "name": "ja-nuevo-prototipo",
   "private": true,
-  "version": "0.1.1",
-  "description": "Consola experimental de escritorio JA; adaptación controlada del prototipo y futura integración con FreeShow.",
+  "version": "0.2.0",
+  "description": "Consola funcional JA sobre el motor nativo FreeShow/JA, con datos aislados.",
   "main": "desktop/main.cjs",
   "scripts": {
     "build:ui": "node scripts/build-ui.cjs",
-    "start": "npm run build:ui && electron .",
+    "start": "npm --prefix engine start",
     "test": "node --test tests/*.test.cjs",
-    "check": "node --check desktop/main.cjs && node --check desktop/preload.cjs && node --check desktop/bridge.js && node --check desktop/core.cjs && npm run build:ui && npm test",
-    "pack:win": "npm run check && electron-builder --win nsis --x64 --publish never"
+    "check": "npm run check:legacy",
+    "pack:win": "npm run check:legacy && npm --prefix engine run build && cd engine && npx electron-builder --config config/building/ja-windows.yml --win nsis --x64 --publish never",
+    "start:legacy": "npm run build:ui && electron .",
+    "setup:engine": "npm install --prefix engine --no-audit --no-fund",
+    "check:legacy": "node --check desktop/main.cjs && node --check desktop/preload.cjs && node --check desktop/bridge.js && node --check desktop/core.cjs && npm run build:ui && npm test",
+    "check:engine": "npm --prefix engine run test:unit && npm --prefix engine run test:svelte && npm --prefix engine run build",
+    "pack:legacy": "npm run check && electron-builder --win nsis --x64 --publish never"
   },
   "devDependencies": {
     "electron": "37.10.3",
