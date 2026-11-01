@@ -13,17 +13,32 @@ const button=(label,classes,click)=>{const b=node("button",classes,label);b.type
 const announce=(message)=>{const el=$("jaToast"),span=$("jaToastText");if(!el||!span)return;span.textContent=safe(message);el.classList.remove("hidden");clearTimeout(announce.timeout);announce.timeout=setTimeout(()=>el.classList.add("hidden"),3600);};
 const run=async fn=>{try{return await fn();}catch(err){announce("Error: "+safe(err?.message||err));return null;}};
 function placeholder(container,label){container.replaceChildren(node("div","w-full h-full min-h-28 flex flex-col items-center justify-center text-center text-xs text-slate-400 p-6",label));}
-function drawVerse(container,text,reference){
- const st=state.bibleStyle;
- const base=node("div","w-full h-full flex flex-col justify-center gap-2 p-5 text-center relative overflow-hidden");
+function drawVerse(container,text,reference,providedStyle=null){
+ const st=providedStyle||state.bibleStyle;
+ const base=node("div","ja-scripture w-full h-full flex flex-col justify-center gap-1 p-3 text-center relative overflow-hidden");
  base.style.background=st.background==="black"?"#000":st.background==="gradient"?"linear-gradient(135deg,#071a4c,#144c65 60%,#905e4d)":"#071a4c";
- if(st.background==="image"&&state.backgroundUrl){base.style.backgroundImage="url("+JSON.stringify(state.backgroundUrl)+")";base.style.backgroundSize="cover";base.style.backgroundPosition="center";}
- const plate=node("div","absolute inset-2 rounded-lg pointer-events-none");plate.style.background="rgba(0,0,0,"+st.plateOpacity/100+")";base.append(plate);
- const ref=node("div","relative z-10 font-semibold text-xs sm:text-sm",reference);ref.style.color=st.referenceColor;ref.style.fontFamily=st.fontFamily;ref.style.display=st.showReference?"":"none";
+ const url=providedStyle?.backgroundUrl||state.backgroundUrl;
+ if(st.background==="image"&&url){base.style.backgroundImage="url("+JSON.stringify(url)+")";base.style.backgroundSize="cover";base.style.backgroundPosition="center";}
+ const plate=node("div","absolute inset-2 rounded-lg pointer-events-none");
+ plate.style.background="rgba(0,0,0,"+(Number(st.plateOpacity)||0)/100+")";base.append(plate);
+ const ref=node("div","relative z-10 font-semibold text-xs",reference);
+ ref.style.color=st.referenceColor;ref.style.fontFamily=st.fontFamily;ref.style.display=st.showReference?"":"none";
  const verse=node("div","relative z-10 font-bold whitespace-pre-line leading-snug",text);
- verse.style.fontSize="clamp(15px,"+st.fontSize/26+"vw,65px)";
  verse.style.color=st.textColor;verse.style.textAlign=st.textAlign;verse.style.fontFamily=st.fontFamily;
+ verse.style.overflowWrap="anywhere";
  base.append(ref,verse);container.replaceChildren(base);
+ const fit=()=>{
+  if(!base.isConnected)return;
+  // Scale by actual monitor CARD width, not viewport vw (which made Program
+  // bigger than the real HDMI/iPad projection and clipped long verses).
+  const usable=Math.max(100,base.clientWidth-24);
+  let size=Math.max(11,Math.min(43,Number(st.fontSize||56)*usable/1100));
+  verse.style.fontSize=size+"px";
+  for(let i=0;i<40&&(verse.scrollHeight+ref.offsetHeight+24>base.clientHeight||verse.scrollWidth>base.clientWidth-20);i++){
+   if(size<=11)break;size=Math.max(11,size-1);verse.style.fontSize=size+"px";
+  }
+ };
+ requestAnimationFrame(fit);
 }
 function formatTitle(display){return safe(display.name||"Pantalla "+display.id)+" · "+display.size.width+"×"+display.size.height;}
 function targets(){const external=state.displays.filter(d=>d.id!==state.operator);return external.filter(d=>state.targets.has(d.id)).map(d=>d.id);}
@@ -31,7 +46,7 @@ function setTop(){
  const strong=[...document.querySelectorAll("header strong")].find(el=>el.parentElement?.textContent?.includes("Pantallas conectadas:"));
  if(strong)strong.textContent=state.displays.length+" detectadas";
  const header= [...document.querySelectorAll("header strong")].find(el=>el.parentElement?.textContent?.includes("Estado:"));
- if(header)header.textContent=state.sessions.length?"Salida activa":"Sin proyección";
+ if(header)header.textContent=state.sessions.some(x=>x.state!=="empty")?"Salida activa":"Sin proyección";
  const project=$("activeProjectLabel");if(project)project.textContent="Modo: Operación manual";
  const save=$("autosaveStatusText");if(save)save.textContent="Proyectos sin abrir";
  const dot=$("autosaveDot");if(dot)dot.className="w-2 h-2 rounded-full bg-slate-500";
@@ -56,7 +71,7 @@ function renderDisplays(){
  const external=state.displays.filter(d=>d.id!==state.operator);
  if(!external.length){el.append(node("p","text-center text-xs text-slate-300 p-4","Sin proyectores conectados. Abre ⚙ Configuración."));return;}
  for(const d of external){
-  const session=state.sessions.find(s=>s.displayId===d.id);
+  const session=state.sessions.find(s=>s.displayId===d.id&&s.state!=="empty");
   const title=d.id===state.main?"Pantalla principal":d.name;
   const active=state.targets.has(d.id);
   const card=node("div","rounded-xl border p-1.5 flex items-center gap-2 cursor-pointer "+(active?"border-emerald-500 bg-[#0b2239]":"border-[#1c3a6e] bg-[#0a1938]"));
@@ -83,7 +98,7 @@ function renderPreview(){
  if(c.kind==="image"){const img=node("img","w-full h-full object-contain");img.src=c.url;img.alt=c.title;target.replaceChildren(img);}
  else {
   const elem=node(c.kind==="video"?"video":"audio","w-full h-full object-contain");
-  elem.src=c.url;elem.controls=true;elem.muted=true;elem.preload="metadata";
+  elem.src=c.url;elem.controls=false;elem.muted=true;elem.preload="metadata";
   elem.addEventListener("loadedmetadata",previewProgress);
   elem.addEventListener("timeupdate",previewProgress);
   target.replaceChildren(elem);
@@ -98,8 +113,14 @@ function renderProgram(){
  if(label)label.textContent=s? s.state+" · "+s.title:"Sin proyección";
  $("programTimeCounter").textContent=s?.duration?timeText(s.position)+" / "+timeText(s.duration):"—";
  const volume=$("programVolumeSlider");if(volume&&s?.volume!=null&&document.activeElement!==volume)volume.value=String(s.volume);
- if(!s||s.state==="empty"){delete el.dataset.media;placeholder(el,"Programa sin señal · No hay contenido proyectándose");return;}
- if(s.state==="black"){delete el.dataset.media;placeholder(el,"Salida en negro");return;}
+ if(!s||s.state==="empty"){delete el.dataset.media;delete el.dataset.scene;placeholder(el,"Programa sin señal · No hay contenido proyectándose");return;}
+ if(s.state==="black"){delete el.dataset.media;delete el.dataset.scene;placeholder(el,"Salida en negro");return;}
+ if(s.kind==="verse"&&s.verse){
+  const scene=s.verse;
+  const key=JSON.stringify([s.state,scene.text,scene.reference,scene.style]);
+  if(el.dataset.scene!==key){drawVerse(el,s.state==="background"?"":scene.text,s.state==="background"?"":scene.reference,scene.style);el.dataset.scene=key;}
+  return;
+ }
  if(known?.kind==="verse"){drawVerse(el,s.state==="background"?"":known.text,s.state==="background"?"":known.reference);return;}
  if(known?.kind==="image"&&known.url){
   if(el.dataset.media!==known.url){const img=node("img","w-full h-full object-contain");img.src=known.url;el.replaceChildren(img);el.dataset.media=known.url;}return;
@@ -111,7 +132,8 @@ function renderProgram(){
    video.src=known.url;video.muted=true;video.playsInline=true;video.preload="metadata";
    el.replaceChildren(video);el.dataset.media=known.url;
   }
-  if(Number.isFinite(video.duration)&&Math.abs(video.currentTime-(s.position||0))>2)video.currentTime=Math.max(0,Math.min(video.duration,s.position||0));
+  if(Number.isFinite(video.duration)&&Math.abs(video.currentTime-(s.position||0))>0.65)
+   video.currentTime=Math.max(0,Math.min(video.duration,s.position||0));
   if(s.state==="playing"&&video.paused)void video.play().catch(()=>{});
   if(s.state!=="playing"&&!video.paused)video.pause();
   return;
@@ -567,7 +589,11 @@ function setup(){
   }
  }));
  api.onDisplaysChanged(()=>run(refreshScreens));
- api.onProjectionChanged(s=>{state.sessions=s;setTop();renderDisplays();renderProgram();});
+ api.onProjectionChanged(s=>{
+  state.sessions=s;
+  for(const item of s)if(item.state==="empty"||item.kind==="empty")state.live.delete(item.displayId);
+  setTop();renderDisplays();renderProgram();
+});
  setBibleView("grid");switchModule("biblia");
  void run(refreshScreens);
 }
