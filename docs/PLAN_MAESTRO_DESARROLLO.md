@@ -82,3 +82,7 @@ Ningún módulo nuevo antes de cierre de la etapa activa. Si una función avanza
 
 ## Excepción de prioridad autorizada por el propietario: B1-01 (2026-11-01)
 El usuario confirmó en Windows que ya detecta pantallas y pidió **corregir inmediatamente Biblia**: las flechas cambian sólo Vista previa, necesita actualización de la salida y transición suave. Queda autorizada esta unidad correctiva B1-01 antes del cierre formal C1, **sin marcar C1 como aceptado**. No se inicia ninguna otra etapa mientras B1-01 esté pendiente de pruebas: seguimiento en [B1_BIBLIA_PROYECCION_TRANSICIONES.md](B1_BIBLIA_PROYECCION_TRANSICIONES.md). El motor de transiciones se entrega como contrato y compositor reutilizable, pero sólo se habilita para texto bíblico en este corte; medias/presentaciones siguen L1/T1.
+
+
+### Gate B1-01, comprobación CI (2026-11-01)
+**CI APROBADO:** [41355688075](https://github.com/IsaacMPP/Nuevo_prototipo/actions/runs/41355688075), SHA `215c0320`, **41/41 pruebas**, 0 fallidas; instalador 0.6.0 generado en [artifact 13103207201](https://github.com/IsaacMPP/Nuevo_prototipo/actions/runs/41355688075/artifacts/13103207201). **Aceptación física pendiente** de lista B1-01..14. Si hay defecto S0/S1, corregir dentro de B1 antes de avanzar. C1 sigue con validación física pendiente.
