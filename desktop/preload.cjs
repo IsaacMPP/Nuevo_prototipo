@@ -4,6 +4,10 @@ const { contextBridge, ipcRenderer } = require("electron");
 const invoke = (channel, ...args) => ipcRenderer.invoke(channel, ...args);
 contextBridge.exposeInMainWorld("jaDesktop", Object.freeze({
     info: () => invoke("ja:info"),
+    config: () => invoke("ja:config:get"),
+    saveScreens: value => invoke("ja:config:screens:save",value),
+    unlinkFolder: (category,folder) => invoke("ja:config:folder:unlink",category,folder),
+    recoverConfig: () => invoke("ja:config:recover"),
     displays: () => invoke("ja:displays"),
     setOperator: id => invoke("ja:set-operator", id),
     setMain: id => invoke("ja:set-main", id),
