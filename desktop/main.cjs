@@ -6,13 +6,14 @@ const {pathToFileURL} = require("node:url");
 const store = require("./core.cjs");
 const bible = require("./bible.cjs");
 const policy = require("./projection-policy.cjs");
+const scriptureStyle=require("./bible-style.cjs");
 
 let mainWindow=null;
 let root="";
 const sessions=new Map();
 let sessionCounter=0;
 function projectionState(){
-    return [...sessions.entries()].map(([id,value])=>({displayId:id,kind:value.kind||"empty",title:value.title||"",state:value.state||"empty",message:value.message||"",muted:value.muted!==false}));
+    return [...sessions.entries()].map(([id,value])=>({displayId:id,kind:value.kind||"empty",title:value.title||"",state:value.state||"empty",message:value.message||"",muted:value.muted!==false,position:value.position||0,duration:value.duration||0,volume:value.volume??100}));
 }
 function notifyProjection(){
     if(mainWindow&&!mainWindow.isDestroyed())mainWindow.webContents.send("ja:projection:changed",projectionState());
@@ -64,7 +65,7 @@ async function sendContent(target,content,title,kind){
     const session=++sessionCounter;
     data.session=session;
     data.state="loading";data.kind=kind;data.title=title;
-    data.muted=content.muted!==false;data.message="";
+    data.muted=content.muted!==false;data.message="";data.position=0;data.duration=0;data.volume=100;
     data.window.webContents.send("ja:output:render",{action:"show",session,content});
     notifyProjection();
     return projectionState();
@@ -129,6 +130,25 @@ function registerIpc() {
     });
     ipcMain.handle("ja:bible:structure",(_event,file)=>bible.structure(bible.parseBible(allowedBible(file))));
     ipcMain.handle("ja:bible:chapter",(_event,file,b,c)=>bible.chapter(bible.parseBible(allowedBible(file)),b,c));
+    ipcMain.handle("ja:bible:style:get",()=>store.loadSettings(root).bibleStyle);
+    ipcMain.handle("ja:bible:style:save",(_event,raw)=>{
+        const style=scriptureStyle.normalize(raw);
+        if(style.background==="image"){
+            if(!style.backgroundFile)throw Error("Selecciona un fondo de imagen");
+            const images=store.listLibrary(root,"Fondos Personalizados").items;
+            const file=store.findAllowedFile(root,style.backgroundFile);
+            if(!images.some(x=>x.path===file))throw Error("El fondo debe estar en Fondos Personalizados");
+            if(![".png",".jpg",".jpeg",".webp"].includes(path.extname(file).toLowerCase()))throw Error("Usa JPG, PNG o WebP para fondos bíblicos");
+            style.backgroundFile=file;
+        }
+        const settings=store.loadSettings(root);settings.bibleStyle=style;store.saveSettings(root,settings);
+        for(const [id,output] of sessions){
+            if(output.kind==="verse"&&!output.window.isDestroyed()){
+                output.window.webContents.send("ja:output:render",{action:"style",style:{...style,backgroundUrl:style.background==="image"?pathToFileURL(style.backgroundFile).href:""}});
+            }
+        }
+        return style;
+    });
     ipcMain.handle("ja:projection:state",()=>projectionState());
     ipcMain.handle("ja:projection:media",async(_event,file,displayId)=>{
         const allowed=store.findAllowedFile(root,file),kind=policy.mediaKind(allowed);
@@ -140,7 +160,26 @@ function registerIpc() {
         const v=current.verses[Number(verse)];
         if(!v)throw Error("Selecciona un versículo válido");
         const content=policy.safeVerse({text:v.text,reference:current.reference+":"+v.number});
-        return sendContent(displayId,{kind:"verse",...content,muted:true},content.reference,"verse");
+        const style=store.loadSettings(root).bibleStyle;
+        const backgroundUrl=style.background==="image"&&style.backgroundFile?pathToFileURL(store.findAllowedFile(root,style.backgroundFile)).href:"";
+        return sendContent(displayId,{kind:"verse",...content,style:{...style,backgroundUrl},muted:true},content.reference,"verse");
+    });
+    ipcMain.handle("ja:projection:transport",(_event,displayId,command,value)=>{
+        policy.chooseDisplay(displays(),operatorId(),displayId);
+        const output=sessions.get(String(displayId));
+        if(!output||output.window.isDestroyed())throw Error("Salida no activa");
+        if(!["volume","seek"].includes(command))throw Error("Control no permitido");
+        const number=Number(value);
+        if(!Number.isFinite(number))throw Error("Valor no válido");
+        if(command==="volume"){
+            const volume=Math.max(0,Math.min(100,Math.round(number)));
+            output.volume=volume;
+            output.window.webContents.send("ja:output:render",{action:"volume",volume});
+        }else{
+            if(number<0||number>86400)throw Error("Posición fuera de rango");
+            output.window.webContents.send("ja:output:render",{action:"seek",position:number});
+        }
+        notifyProjection();return projectionState();
     });
     ipcMain.handle("ja:projection:command",async(_event,displayId,action)=>{
         const command=policy.validateCommand(action);
@@ -197,6 +236,9 @@ app.whenReady().then(()=>{
             if(data.window.webContents===event.sender&&message?.session===data.session){
                 data.state=String(message.state||data.state).slice(0,40);
                 data.message=String(message.message||"").slice(0,240);
+                if(Number.isFinite(message.position))data.position=message.position;
+                if(Number.isFinite(message.duration))data.duration=message.duration;
+                if(Number.isFinite(message.volume))data.volume=message.volume;
                 notifyProjection();break;
             }
         }
