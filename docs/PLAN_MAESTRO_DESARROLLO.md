@@ -72,3 +72,9 @@ Ningún módulo nuevo antes de cierre de la etapa activa. Si una función avanza
 
 ## 7. Siguiente trabajo concreto
 **Iniciar C1-00: auditar la pantalla Configuración actual y generar su contrato de datos/UX y pruebas.** Implementar únicamente tras aprobación de este plan y del alcance de Configuración. Las pantallas/equipos físicos no pueden validarse desde CI; preparar checklist para ensayo conjunto. La definición funcional detallada de C1 está en `docs/C1_CONFIGURACION_ESPECIFICACION.md`, el inventario comparado en `docs/INVENTARIO_FUNCIONES_JA.md`.
+
+
+## Estado de ejecución de C1-01 (registro 2026-11-01)
+**EN DESARROLLO / pendiente CI y validación Windows.** El núcleo de Configuración ya dispone de UI unificada, reasignación de operador/principal en una transacción, inventario físico, carpetas vinculadas/desvinculadas, ajuste de Biblia, versiones y diagnóstico/recuperación. Se añadió un cierre explícito de ventanas de salida con confirmación, necesario para no reasignar pantallas mientras otra está abierta.
+
+**No completar la etapa todavía:** CI del último commit, instalador, smoke en Windows, un monitor sin destino y luego operador+HDMI en modo Extender, casos C1-01 a C1-14. Pestañas NDI/Audio son informativas hasta sus módulos correspondientes. La secuencia obligatoria sigue C1 → S1 → A1; no iniciar YouTube/NDI/Presentaciones mientras C1 no esté aceptada.
