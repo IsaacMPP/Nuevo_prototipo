@@ -8,6 +8,7 @@ const bible = require("./bible.cjs");
 const policy = require("./projection-policy.cjs");
 const scriptureStyle=require("./bible-style.cjs");
 const settingsPolicy=require("./settings-policy.cjs");
+const transitions=require("./transition-engine.cjs");
 
 let mainWindow=null;
 let root="";
@@ -67,6 +68,7 @@ async function sendContent(target,content,title,kind){
     data.session=session;
     data.state="loading";data.kind=kind;data.title=title;
     data.muted=content.muted!==false;data.message="";data.position=0;data.duration=0;data.volume=100;
+    data.sourceBible=kind==="verse"?content.sourceBible:null;
     data.window.webContents.send("ja:output:render",{action:"show",session,content});
     notifyProjection();
     return projectionState();
@@ -154,20 +156,58 @@ function registerIpc() {
         }
         return style;
     });
+    ipcMain.handle("ja:bible:transition:get",()=>store.loadSettings(root).verseTransition);
+    ipcMain.handle("ja:bible:transition:save",(_event,value)=>{
+        const chosen=transitions.validate(value);
+        const current=store.loadSettings(root);
+        store.saveSettings(root,{...current,verseTransition:chosen});
+        return chosen;
+    });
     ipcMain.handle("ja:projection:state",()=>projectionState());
     ipcMain.handle("ja:projection:media",async(_event,file,displayId)=>{
         const allowed=store.findAllowedFile(root,file),kind=policy.mediaKind(allowed);
         const muted=String(displayId)!==store.loadSettings(root).mainDisplayId;
         return sendContent(displayId,{kind,url:pathToFileURL(allowed).href,muted},path.basename(allowed),kind);
     });
-    ipcMain.handle("ja:projection:verse",async(_event,file,book,chapter,verse,displayId)=>{
+    function resolveVerse(file,book,chapter,verse,transitionOverride){
+        if(typeof file!=="string"||!file)throw Error("Biblia no seleccionada");
+        for(const index of [book,chapter,verse])if(!Number.isSafeInteger(index)||index<0)throw Error("Índice bíblico inválido");
         const parsed=bible.parseBible(allowedBible(file)),current=bible.chapter(parsed,book,chapter);
-        const v=current.verses[Number(verse)];
+        const v=current.verses[verse];
         if(!v)throw Error("Selecciona un versículo válido");
-        const content=policy.safeVerse({text:v.text,reference:current.reference+":"+v.number});
-        const style=store.loadSettings(root).bibleStyle;
+        const text=policy.safeVerse({text:v.text,reference:current.reference+":"+v.number});
+        const settings=store.loadSettings(root),style=settings.bibleStyle;
         const backgroundUrl=style.background==="image"&&style.backgroundFile?pathToFileURL(store.findAllowedFile(root,style.backgroundFile)).href:"";
-        return sendContent(displayId,{kind:"verse",...content,style:{...style,backgroundUrl},muted:true},content.reference,"verse");
+        return {kind:"verse",...text,style:{...style,backgroundUrl},transition:transitions.choose(settings.verseTransition,transitionOverride),sourceBible:file,muted:true};
+    }
+    // In-place update: only affects an already-projecting Bible session, never
+    // a video/audio/fondos session and never another output selected elsewhere.
+    function updateVerseIfActive(file,book,chapter,verse,displayId,transitionOverride){
+        policy.chooseDisplay(displays(),operatorId(),displayId);
+        const output=sessions.get(String(displayId));
+        if(!output||output.window.isDestroyed()||output.kind!=="verse")
+            return {updated:false,reason:"La salida no está mostrando una Biblia"};
+        if(output.sourceBible!==file)
+            return {updated:false,reason:"Esta salida muestra otra versión de la Biblia"};
+        const content=resolveVerse(file,book,chapter,verse,transitionOverride);
+        output.title=content.reference;
+        output.state=output.state==="black"?"black":"verse";
+        output.message="";
+        output.window.webContents.send("ja:output:render",{action:"verse",session:output.session,content});
+        notifyProjection();
+        return {updated:true,displayId:String(displayId),reference:content.reference,transition:content.transition};
+    }
+    ipcMain.handle("ja:projection:verse:update",(_event,file,book,chapter,verse,displayId,transitionOverride)=>
+        updateVerseIfActive(file,book,chapter,verse,displayId,transitionOverride));
+    ipcMain.handle("ja:projection:verse",async(_event,file,book,chapter,verse,displayId,transitionOverride)=>{
+        policy.chooseDisplay(displays(),operatorId(),displayId);
+        const existing=sessions.get(String(displayId));
+        if(existing&&!existing.window.isDestroyed()&&existing.kind==="verse"&&existing.sourceBible===file){
+            const result=updateVerseIfActive(file,book,chapter,verse,displayId,transitionOverride);
+            return result;
+        }
+        const content=resolveVerse(file,book,chapter,verse,transitionOverride);
+        return sendContent(displayId,content,content.reference,"verse");
     });
     ipcMain.handle("ja:projection:transport",(_event,displayId,command,value)=>{
         policy.chooseDisplay(displays(),operatorId(),displayId);
@@ -194,7 +234,7 @@ function registerIpc() {
         if(!output||output.window.isDestroyed())throw Error("La pantalla aún no tiene una sesión activa");
         output.window.webContents.send("ja:output:render",{action:command});
         if(command==="black")output.state="black";
-        if(command==="clear"){output.state="empty";output.kind="empty";output.title="";}
+        if(command==="clear"){output.state="empty";output.kind="empty";output.title="";output.sourceBible=null;}
         if(command==="pause")output.state="paused";
         notifyProjection();return projectionState();
     });
