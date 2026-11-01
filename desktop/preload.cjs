@@ -26,11 +26,14 @@ contextBridge.exposeInMainWorld("jaDesktop", Object.freeze({
     bibleChapter: (file,book,chapter) => invoke("ja:bible:chapter",file,book,chapter),
     bibleStyle: () => invoke("ja:bible:style:get"),
     saveBibleStyle: style => invoke("ja:bible:style:save",style),
+    bibleTransition: () => invoke("ja:bible:transition:get"),
+    saveBibleTransition: value => invoke("ja:bible:transition:save",value),
+    updateProjectedVerse: (file,book,chapter,verse,display,transition) => invoke("ja:projection:verse:update",file,book,chapter,verse,display,transition),
     setOutputTransport: (display,command,value) => invoke("ja:projection:transport",display,command,value),
 
     projectionState: () => invoke("ja:projection:state"),
     sendMedia: (file,display) => invoke("ja:projection:media",file,display),
-    sendVerse: (file,book,chapter,verse,display) => invoke("ja:projection:verse",file,book,chapter,verse,display),
+    sendVerse: (file,book,chapter,verse,display,transition) => invoke("ja:projection:verse",file,book,chapter,verse,display,transition),
     projectionCommand: (display,action) => invoke("ja:projection:command",display,action),
     onProjectionChanged: cb => {
         if(typeof cb!=="function")return () => {};
