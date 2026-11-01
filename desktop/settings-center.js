@@ -179,7 +179,22 @@ async function bible(){
   const result=await api.selectFolder("Fondos Personalizados");if(!result.cancelled){await refresh();await render();setStatus("✓ Fondos vinculados");}
  })));
  body.append(form);
- info("Se aplica la configuración global del editor bíblico existente. El módulo B1 completará estilos independientes por salida, búsqueda y navegación avanzada.");
+ const transition=await api.bibleTransition();
+ const transCard=card();
+ transCard.append(el("h3","","Transición al cambiar versículo en pantallas activas"));
+ const transMode=select([["fade","Fundido suave"],["cut","Corte inmediato"]],transition.type);
+ const transDuration=textInput(transition.durationMs||320,"number");transDuration.min="120";transDuration.max="1200";transDuration.step="40";
+ const applyState=()=>{transDuration.disabled=transMode.value==="cut";};
+ transMode.addEventListener("change",applyState);applyState();
+ transCard.append(add(el("div","js-grid"),label("Efecto",transMode),label("Duración del fundido (ms)",transDuration)));
+ transCard.append(btnrow(button("Guardar transición",async()=>{
+  const chosen={type:transMode.value,durationMs:transMode.value==="cut"?0:Number(transDuration.value)};
+  await api.saveBibleTransition(chosen);
+  await refresh();await render();window.dispatchEvent(new Event("ja:settings:transition-changed"));
+  setStatus("✓ Transición bíblica guardada para las salidas activas");
+ },"js-primary")));
+ body.append(transCard);
+ info("El Fundido cambia solamente texto/referencia y conserva fondo, música y sesiones de otras pantallas. La transición de video e imágenes se habilitará tras las pruebas del módulo L1.");
 }
 async function general(){
  heading("General","Información auténtica de la aplicación y su almacenamiento.");
