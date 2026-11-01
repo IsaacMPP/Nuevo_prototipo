@@ -304,41 +304,6 @@ function openModal(title,content){
  $("modalOverlay").classList.remove("hidden");$("modalOverlay").classList.add("flex");
 }
 function closeModal(){$("modalOverlay").classList.add("hidden");$("modalOverlay").classList.remove("flex");}
-function screensModal(){
- const wrap=node("div","flex flex-col gap-3");
- wrap.append(node("p","text-slate-300","Pantallas detectadas por Windows: "+state.displays.length+". Configura el operador y la pantalla principal. No se proyecta automáticamente."));
- const selection=(label,options,id)=>{
-  wrap.append(node("label","font-semibold text-slate-200",label));
-  const sel=node("select","w-full bg-[#050e24] p-2 border border-[#264b80] rounded-lg text-white");
-  sel.id=id;
-  for(const [value,title] of options){const opt=node("option","",title);opt.value=value;sel.append(opt);}
-  wrap.append(sel);return sel;
- };
- const optionList=state.displays.map(d=>[d.id,formatTitle(d)]);
- const op=selection("Monitor del operador",optionList,"realOperator");
- op.value=state.operator;
- const makeMain=()=>{
-  const existing=$("realMain"),old=existing?.value||state.main;
-  if(existing)existing.remove();
-  const sel=node("select","w-full bg-[#050e24] p-2 border border-[#264b80] rounded-lg text-white");sel.id="realMain";
-  for(const [value,label] of [["","— Sin asignar —"],...optionList.filter(x=>x[0]!==op.value)]){
-   const o=node("option","",label);o.value=value;sel.append(o);
-  }
-  sel.value=old===op.value?"":old;wrap.insertBefore(sel,footer);
- };
- wrap.append(node("label","font-semibold text-slate-200","Pantalla principal HDMI/DisplayPort"));
- const footer=node("div","flex justify-end gap-2 mt-2");
- footer.append(button("Cancelar","px-3 py-2 rounded-lg border border-[#345b88]",closeModal));
- footer.append(button("Guardar asignación","px-3 py-2 rounded-lg pill-cyan-active",async()=>{
-  const chosenOperator=op.value,main=$("realMain").value;
-  if(chosenOperator===main&&main)throw Error("Operador y salida principal no pueden coincidir");
-  if(main===state.operator&&chosenOperator!==state.operator)await api.setMain("");
-  if(chosenOperator!==state.operator)await api.setOperator(chosenOperator);
-  await api.setMain(main);closeModal();await refreshScreens();announce("Configuración de pantallas guardada.");
- }));
- wrap.append(footer);op.addEventListener("change",makeMain);makeMain();
- openModal("Pantallas y salidas de proyección JA",wrap);
-}
 async function linkFolder(){
  const group=category(),response=await api.selectFolder(group);
  if(!response.cancelled){await loadFiles();announce("Carpeta vinculada: "+group);}
@@ -475,14 +440,14 @@ function setup(){
   ["btnFsViewGrid",()=>setBibleView("grid")],["btnFsViewList",()=>setBibleView("list")],
   ["fsPillViewToggleBtn",()=>setBibleView(state.view==="grid"?"list":"grid")],
   ["btnFsPillSearchBtn",()=>{}],
-  ["btnOpenSettingsModal",screensModal],["btnMultiScreenMenu",screensModal],
+  ["btnOpenSettingsModal",()=>window.jaSettingsCenter.open("pantallas")],["btnMultiScreenMenu",()=>window.jaSettingsCenter.open("pantallas")],
   ["btnCloseModal",closeModal],["btnImportBibleModal",async()=>{const r=await api.importBible();if(!r.cancelled){await loadBibles();announce("Biblia importada.");}}],
   ["btnPreviewPlay",async()=>{const el=$("previewCanvasContent").querySelector("video,audio");if(!el)throw Error("No hay un video o audio en Vista previa");if(el.paused)await el.play();else el.pause();}],
   ["btnPreviewMute",()=>{const el=$("previewCanvasContent").querySelector("video,audio");if(el){el.muted=!el.muted;announce(el.muted?"Vista previa silenciada":"Monitoreo de Vista previa activo");}}],
   ["btnFsPillVersionBtn",()=>{$("jaBibleTranslation")?.focus();}],
   ["btnToggleBibleInspector",()=>{$("fsBibleSearchAndInspector")?.classList.toggle("hidden");}],
   ["fsPillSearchBtn",()=>{$("fsBibleSearchAndInspector")?.classList.toggle("hidden");}],
-  ["btnOpenSettingsModal",screensModal]
+  ["btnOpenSettingsModal",()=>window.jaSettingsCenter.open("pantallas")]
  ]){const element=$(id);if(element)element.addEventListener("click",()=>run(click));}
  $("jaBibleTranslation")?.addEventListener("change",()=>run(selectBible));
  $("btnLargeTextToggle")?.addEventListener("click",()=>document.body.classList.toggle("large-text-mode"));
@@ -518,6 +483,15 @@ function setup(){
   if(e.key==="ArrowRight"){e.preventDefault();run(()=>stepVerse(1));}
   if(e.key==="ArrowLeft"){e.preventDefault();run(()=>stepVerse(-1));}
  });
+ window.addEventListener("ja:settings:screens-changed",()=>run(refreshScreens));
+ window.addEventListener("ja:settings:bible-changed",()=>run(loadBibleStyle));
+ window.addEventListener("ja:settings:folders-changed",e=>run(async()=>{
+  if(e.detail?.category==="Fondos Personalizados")await refreshBackgrounds();
+  if(["himnario","juveniles","multimedia","fondos"].includes(state.module)){
+   const current=category();
+   if(current===e.detail?.category)await loadFiles();
+  }
+ }));
  api.onDisplaysChanged(()=>run(refreshScreens));
  api.onProjectionChanged(s=>{state.sessions=s;setTop();renderDisplays();renderProgram();});
  setBibleView("grid");switchModule("biblia");
