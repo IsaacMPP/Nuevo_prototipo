@@ -1,0 +1,19 @@
+/* JA 0.6.1: fixed control deck, independently scrolling libraries */
+html,body{height:100%;max-height:100%;overflow:hidden}
+body{display:flex;flex-direction:column;min-height:0}
+body > header,body > section{flex-shrink:0}
+body > main{min-height:0;overflow:hidden;flex:1 1 auto}
+body > main > aside,body > main > section{min-height:0;overflow:hidden}
+body > main > section{justify-content:flex-start!important}
+#moduleView_himnario,#moduleView_multimedia,#moduleView_biblia,#moduleView_other{min-height:0;overflow:hidden;flex:1 1 auto}
+#hymnModuleGrid,#multimediaCardsGrid,#otherModuleContainer{min-height:0;overflow:auto;align-content:start;overscroll-behavior:contain}
+#hymnModuleGrid,#multimediaCardsGrid{flex:1 1 auto;padding-right:5px;padding-bottom:16px}
+#multiscreenCardsList{justify-content:flex-start!important;align-content:flex-start!important;gap:7px;overflow-y:auto;min-height:0}
+#multiscreenCardsList > div{flex:0 0 auto}
+#previewCanvasContent,#programCanvasContent{container-type:inline-size;overflow:hidden}
+#previewCanvasContent video,#programCanvasContent video{width:100%;height:100%;object-fit:contain}
+#previewCanvasContent audio{width:100%;margin:auto}
+#previewCanvasContent .ja-scripture,#programCanvasContent .ja-scripture{width:100%;height:100%;overflow:hidden}
+#hymnModuleGrid > button,#multimediaCardsGrid > button{min-width:0}
+.ja-thumb{width:100%;height:auto;aspect-ratio:16/9;object-fit:cover;border-radius:7px;display:block;background:#06132a}
+@media(max-width:1023px){body > main{display:grid;overflow:auto}body>main>section{min-height:370px}#hymnModuleGrid,#multimediaCardsGrid{max-height:55vh}}
