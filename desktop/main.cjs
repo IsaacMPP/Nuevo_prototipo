@@ -183,16 +183,16 @@ function registerIpc() {
     }
     // In-place update: only affects an already-projecting Bible session, never
     // a video/audio/fondos session and never another output selected elsewhere.
-    function updateVerseIfActive(file,book,chapter,verse,displayId,transitionOverride){
+    function updateVerseIfActive(file,book,chapter,verse,displayId,transitionOverride,reveal=false){
         policy.chooseDisplay(displays(),operatorId(),displayId);
         const output=sessions.get(String(displayId));
         const permission=sessionPolicy.canAdvanceVerse(output,file);
         if(!permission.allowed)return {updated:false,reason:permission.reason};
         const content=resolveVerse(file,book,chapter,verse,transitionOverride);
         output.title=content.reference;
-        output.state=output.state==="black"?"black":"verse";
+        output.state=output.state==="black"&&!reveal?"black":"verse";
         output.message="";
-        output.window.webContents.send("ja:output:render",{action:"verse",session:output.session,content});
+        output.window.webContents.send("ja:output:render",{action:"verse",session:output.session,content,reveal});
         notifyProjection();
         return {updated:true,displayId:String(displayId),reference:content.reference,transition:content.transition};
     }
@@ -202,7 +202,7 @@ function registerIpc() {
         policy.chooseDisplay(displays(),operatorId(),displayId);
         const existing=sessions.get(String(displayId));
         if(existing&&!existing.window.isDestroyed()&&existing.kind==="verse"&&existing.sourceBible===file){
-            const result=updateVerseIfActive(file,book,chapter,verse,displayId,transitionOverride);
+            const result=updateVerseIfActive(file,book,chapter,verse,displayId,transitionOverride,true);
             return result;
         }
         const content=resolveVerse(file,book,chapter,verse,transitionOverride);
