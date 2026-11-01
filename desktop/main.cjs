@@ -9,6 +9,7 @@ const policy = require("./projection-policy.cjs");
 const scriptureStyle=require("./bible-style.cjs");
 const settingsPolicy=require("./settings-policy.cjs");
 const transitions=require("./transition-engine.cjs");
+const sessionPolicy=require("./session-policy.cjs");
 
 let mainWindow=null;
 let root="";
@@ -185,10 +186,8 @@ function registerIpc() {
     function updateVerseIfActive(file,book,chapter,verse,displayId,transitionOverride){
         policy.chooseDisplay(displays(),operatorId(),displayId);
         const output=sessions.get(String(displayId));
-        if(!output||output.window.isDestroyed()||output.kind!=="verse")
-            return {updated:false,reason:"La salida no está mostrando una Biblia"};
-        if(output.sourceBible!==file)
-            return {updated:false,reason:"Esta salida muestra otra versión de la Biblia"};
+        const permission=sessionPolicy.canAdvanceVerse(output,file);
+        if(!permission.allowed)return {updated:false,reason:permission.reason};
         const content=resolveVerse(file,book,chapter,verse,transitionOverride);
         output.title=content.reference;
         output.state=output.state==="black"?"black":"verse";
