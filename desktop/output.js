@@ -27,7 +27,10 @@ function applyBibleStyle(style={}){
  const verse=scripture.querySelector("#verse"),ref=scripture.querySelector("#reference"),panel=scripture.querySelector("#readingPlate");
  const font=style.fontFamily||"Georgia";
  scripture.style.background=style.background==="black"?"#000":style.background==="gradient"?"linear-gradient(135deg,#071a4c,#13466a 60%,#754b46)":"#071a4c";
- scripture.style.backgroundImage=style.background==="image"&&style.backgroundUrl?"url("+JSON.stringify(style.backgroundUrl)+")":scripture.style.backgroundImage="none";
+ // Setting backgroundImage to "none" destroyed the gradient after setting
+ // the shorthand background. Only override image when explicitly selected.
+ if(style.background==="image"&&style.backgroundUrl)
+   scripture.style.backgroundImage="url("+JSON.stringify(style.backgroundUrl)+")";
  scripture.style.backgroundSize="cover";scripture.style.backgroundPosition="center";
  scripture.style.textAlign=style.textAlign||"center";
  verse.style.fontFamily=font+", serif";
