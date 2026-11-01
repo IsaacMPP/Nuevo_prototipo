@@ -18,7 +18,8 @@ function notifyProjection(){
     if(mainWindow&&!mainWindow.isDestroyed())mainWindow.webContents.send("ja:projection:changed",projectionState());
 }
 function operatorId(){
-    return store.loadSettings(root).operatorDisplayId||String(screen.getPrimaryDisplay().id);
+    const preferred=store.loadSettings(root).operatorDisplayId;
+    return displays().some(d=>d.id===preferred)?preferred:String(screen.getPrimaryDisplay().id);
 }
 async function destination(id){
     const display=policy.chooseDisplay(displays(),operatorId(),id);
@@ -37,7 +38,7 @@ async function destination(id){
     win.webContents.on("will-navigate",event=>event.preventDefault());
     win.webContents.setWindowOpenHandler(()=>({action:"deny"}));
     await win.loadFile(path.join(__dirname,"output.html"));
-    win.show();
+    win.showInactive();
     notifyProjection();
     return data;
 }
@@ -185,9 +186,10 @@ function registerIpc() {
     ipcMain.handle("ja:project:create",(_event,name)=>store.createProject(root,name));
     ipcMain.handle("ja:project:save",(_event,data)=>store.saveProject(root,data));
 }
+app.commandLine.appendSwitch("autoplay-policy","no-user-gesture-required");
 app.whenReady().then(()=>{
     root=store.ensureStructure(store.dataRoot(app.getPath("documents")));
-    app.commandLine.appendSwitch("autoplay-policy","no-user-gesture-required");
+
     registerIpc();
     ipcMain.on("ja:output:status",(event,message)=>{
         for(const data of sessions.values()){
