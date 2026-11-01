@@ -61,3 +61,12 @@ test("carpeta externa desconectada no se borra de la configuración",t=>{
     assert.deepEqual(content.missing,[folder]);
     assert.equal(core.loadSettings(root).linkedFolders.Videos.includes(folder),true);
 });
+
+test("Importaciones usa lista blanca y lectura segura de medios",t=>{
+    const root=fresh(t);
+    fs.writeFileSync(path.join(root,"Importaciones","recurso.pdf"),"%PDF-test");
+    fs.writeFileSync(path.join(root,"Importaciones","peligro.exe"),"MZ");
+    assert.equal(core.listLibrary(root,"Importaciones").items.length,1);
+    assert.ok(core.findAllowedFile(root,path.join(root,"Importaciones","recurso.pdf")).endsWith("recurso.pdf"));
+    assert.throws(()=>core.findAllowedFile(root,path.join(root,"Importaciones","peligro.exe")),/no autorizado/i);
+});

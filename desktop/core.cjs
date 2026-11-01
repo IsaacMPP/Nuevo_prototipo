@@ -16,6 +16,7 @@ const ACCEPTED = Object.freeze({
     Audio: [".mp3", ".wav", ".ogg", ".m4a", ".flac"],
     Imagenes: [".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"],
     Videos: [".mp4", ".webm", ".mkv", ".avi", ".mov"],
+    Importaciones: [".fsb", ".json", ".xml", ".xmm", ".mp4", ".webm", ".mkv", ".avi", ".mov", ".jpg", ".jpeg", ".png", ".webp", ".pdf", ".pptx", ".ppt", ".mp3", ".wav"],
     Presentaciones: [".pdf", ".pptx", ".ppt", ".odp", ".json"]
 });
 function dataRoot(documents) { return path.join(documents, "JA Proyecciones 2 - Prototipo"); }
@@ -119,15 +120,21 @@ function listProjects(root) {
 }
 function findAllowedFile(root,candidate) {
     const target=path.resolve(candidate);
+    if(!fs.existsSync(target)||!fs.statSync(target).isFile())throw Error("Archivo no autorizado");
+    const realTarget=fs.realpathSync(target);
     const s=loadSettings(root);
-    const sources=FOLDERS.filter(validCategory).flatMap(cat=>[
-        path.join(root,cat),...(Array.isArray(s.linkedFolders[cat])?s.linkedFolders[cat]:[])
-    ]);
-    const allowed=sources.some(folder=>{
-        const relative=path.relative(path.resolve(folder),target);
-        return !relative.startsWith("..") && !path.isAbsolute(relative) && relative!=="";
+    const allowed=FOLDERS.filter(validCategory).some(cat=>{
+        const dirs=[path.join(root,cat),...(Array.isArray(s.linkedFolders[cat])?s.linkedFolders[cat]:[])];
+        return dirs.some(dir=>{
+            try {
+                const realRoot=fs.realpathSync(dir);
+                const rel=path.relative(realRoot,realTarget);
+                return !!rel && rel!==".." && !rel.startsWith(".."+path.sep) && !path.isAbsolute(rel) &&
+                    !!ACCEPTED[cat]?.includes(path.extname(realTarget).toLowerCase());
+            } catch {return false;}
+        });
     });
-    if(!allowed||!fs.existsSync(target)||!fs.statSync(target).isFile())throw Error("Archivo no autorizado");
-    return target;
+    if(!allowed)throw Error("Archivo no autorizado");
+    return realTarget;
 }
 module.exports={FOLDERS,ACCEPTED,dataRoot,ensureStructure,validCategory,atomicJson,readJson,loadSettings,saveSettings,linkFolder,listLibrary,createProject,saveProject,listProjects,findAllowedFile};
