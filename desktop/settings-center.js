@@ -100,7 +100,12 @@ async function screens(){
  operator.addEventListener("change",assign);
  form.append(add(el("div","js-grid"),label("Pantalla del operador",operator),mainHolder));
  const sessions=current.sessions.filter(s=>s.state!=="empty");
- form.append(el("p","js-muted",sessions.length?"Hay "+sessions.length+" salida(s) activa(s). Limpia y cierra las ventanas antes de cambiar asignaciones.":"Cambiar asignaciones no envía contenido ni abre ventanas."));
+ form.append(el("p","js-muted",current.sessions.length?"Hay "+current.sessions.length+" ventana(s) de salida abierta(s). Para reasignar pantallas debes cerrarlas explícitamente.":"Cambiar asignaciones no envía contenido ni abre ventanas."));
+ if(current.sessions.length)form.append(button("Cerrar ventanas de salida (interrumpe proyección)",async()=>{
+  if(!confirm("Se cerrarán todas las ventanas de proyección y se detendrán sus contenidos. ¿Continuar?"))return;
+  await api.closeOutputsForSettings();await refresh();await render();
+  setStatus("✓ Ventanas cerradas. Ahora puedes guardar la nueva asignación.");
+ },"js-warn"));
  form.append(btnrow(button("Guardar asignación",async()=>{
   const response=await api.saveScreens({operatorDisplayId:operator.value,mainDisplayId:main.value,revision:cfg.revision});
   current=await api.config();
