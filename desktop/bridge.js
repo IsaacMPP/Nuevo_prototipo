@@ -301,21 +301,14 @@ function stepVerse(step){
 async function advanceVerse(step){
  if(!state.chapter||!state.bible||![1,-1].includes(step))return;
  const books=state.structure?.books||[];
- let book=state.book,chapter=state.chapterIndex,index=state.verse+step;
- let nextChapter=state.chapter;
- if(index<0||index>=nextChapter.verses.length){
-  if(step>0){
-   if(chapter+1<(books[book]?.chapters||0)){chapter++;}
-   else if(book+1<books.length){book++;chapter=0;}
-   else return;
-  }else{
-   if(chapter>0)chapter--;
-   else if(book>0){book--;chapter=books[book].chapters-1;}
-   else return;
-  }
+ const moved=window.jaBibleNavigation.move(books,{book:state.book,chapter:state.chapterIndex,verse:state.verse,verses:state.chapter.verses.length},step);
+ if(!moved)return;
+ const book=moved.book,chapter=moved.chapter;
+ let index=moved.verse,nextChapter=state.chapter;
+ if(moved.needsFetch){
   nextChapter=await api.bibleChapter(state.bible.path,book,chapter);
   if(!nextChapter.verses.length)throw Error("El capítulo no tiene versículos");
-  index=step>0?0:nextChapter.verses.length-1;
+  if(index===-1)index=nextChapter.verses.length-1;
  }
  state.book=book;state.chapterIndex=chapter;state.chapter=nextChapter;state.verse=index;
  renderBible();prepareVerse();
