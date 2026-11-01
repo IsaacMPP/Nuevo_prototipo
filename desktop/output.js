@@ -44,7 +44,7 @@ function applyBibleStyle(style={}){
 }
 function timeupdate(){
  const now=Date.now();
- if(now-lastTimeSent>1000){lastTimeSent=now;status({state:lastState});}
+ if(now-lastTimeSent>250){lastTimeSent=now;status({state:lastState});}
 }
 window.jaOutput.receive(async command=>{
  if(!command||typeof command!=="object")return;
