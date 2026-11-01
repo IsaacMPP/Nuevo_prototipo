@@ -44,3 +44,6 @@ Las bibliotecas del JA anterior **no se modifican**. En el botón **📂 Bibliot
 - [Decisiones](docs/DECISIONES.md)
 - [Pruebas](docs/PRUEBAS.md)
 - [Prompt de continuidad](docs/CONTINUIDAD_CHATGPT.md)
+
+## Licencia
+Se conserva la licencia GPL-3.0 y atribución de FreeShow/JA en el motor incorporado; ver [LICENSE](LICENSE) y los archivos de origen en `engine/`.

@@ -21,9 +21,8 @@ let html = fs.readFileSync(source, "utf8");
 const cdn = /<script\s+src="https:\/\/cdn\.tailwindcss\.com\/3\.4\.17"><\/script>/;
 if (!cdn.test(html)) throw new Error("No se encontró la referencia Tailwind del prototipo");
 html = html.replace(cdn, '<link rel="stylesheet" href="tailwind.css">');
-html = html.replace(/<link rel="preconnect" href="https:\/\/fonts\.googleapis\.com"\s*\/?>(\r?\n)?/g, "");
-html = html.replace(/<link rel="preconnect" href="https:\/\/fonts\.gstatic\.com" crossorigin\s*\/?>(\r?\n)?/g, "");
-html = html.replace(/<link href="https:\/\/fonts\.googleapis\.com\/css2[^"]*" rel="stylesheet">/g, "");
+// Las fuentes web originales son opcionales; con internet mantienen fidelidad visual,
+// y sin internet hay fuentes alternativas para la interfaz.
 html = html.replace("</body>", '<script src="../desktop/bridge.js"></script>\n</body>');
 fs.writeFileSync(path.join(out, "index.html"), html, "utf8");
 console.log("Interfaz offline generada: build/index.html");
