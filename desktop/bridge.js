@@ -293,10 +293,13 @@ function renderBible(){
  }
  const pill=$("fsFloatingRefPill");if(pill)pill.textContent=state.bible.name+": "+currentBibleRef();
 }
-let verseNavigation=0;
-async function stepVerse(step){
+let verseNavigation=Promise.resolve();
+function stepVerse(step){
+ verseNavigation=verseNavigation.catch(()=>{}).then(()=>advanceVerse(step));
+ return verseNavigation;
+}
+async function advanceVerse(step){
  if(!state.chapter||!state.bible||![1,-1].includes(step))return;
- const request=++verseNavigation;
  const books=state.structure?.books||[];
  let book=state.book,chapter=state.chapterIndex,index=state.verse+step;
  let nextChapter=state.chapter;
@@ -311,7 +314,6 @@ async function stepVerse(step){
    else return;
   }
   nextChapter=await api.bibleChapter(state.bible.path,book,chapter);
-  if(request!==verseNavigation)return;
   if(!nextChapter.verses.length)throw Error("El capítulo no tiene versículos");
   index=step>0?0:nextChapter.verses.length-1;
  }
@@ -326,7 +328,7 @@ async function stepVerse(step){
   if(result.updated){state.live.set(id,{...snapshot});updated++;}
   else skipped++;
  }
- if(request===verseNavigation){state.sessions=await api.projectionState();renderDisplays();renderProgram();}
+ state.sessions=await api.projectionState();renderDisplays();renderProgram();
  if(skipped&&updated===0)announce("Vista previa actualizada. Para iniciar la Biblia en esa pantalla pulsa Proyectar.");
 }
 function openModal(title,content){
@@ -530,7 +532,9 @@ function setup(){
   const clear=button("✕",compact,()=>command("clear"));clear.title="Limpiar completamente la salida seleccionada";
   nativeTransport.append(restart,clear);
  }
- $("btnBridgeFade")?.setAttribute("title","Fundido real para versículos; video e imágenes pendientes de L1");
+ const fadeButton=$("btnBridgeFade");
+ if(fadeButton){fadeButton.disabled=false;fadeButton.removeAttribute("aria-disabled");
+  fadeButton.classList.remove("opacity-50");fadeButton.setAttribute("title","Fundido real para versículos; video e imágenes pendientes de L1");}
  $("programVolumeSlider").disabled=false;
  $("programVolumeSlider").addEventListener("input",()=>run(async()=>{
   for(const display of chooseDestination())await api.setOutputTransport(display,"volume",Number($("programVolumeSlider").value));
