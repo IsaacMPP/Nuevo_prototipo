@@ -136,6 +136,13 @@ function renderProgram(){
    video.currentTime=Math.max(0,Math.min(video.duration,s.position||0));
   if(s.state==="playing"&&video.paused)void video.play().catch(()=>{});
   if(s.state!=="playing"&&!video.paused)video.pause();
+  // Preview is an independent surface. When it is preparing this same file,
+  // correct timeline drift without changing its pause/mute state.
+  if(state.prepared?.kind==="video"&&state.prepared.file===known.file){
+   const preview=$("previewCanvasContent")?.querySelector("video");
+   if(preview&&Number.isFinite(preview.duration)&&Math.abs(preview.currentTime-(s.position||0))>0.75)
+     preview.currentTime=Math.max(0,Math.min(preview.duration,s.position||0));
+  }
   return;
  }
  if(known?.kind==="audio"){placeholder(el,"♫ "+s.title+" · "+s.state);return;}
