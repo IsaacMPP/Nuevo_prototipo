@@ -1,0 +1,36 @@
+#jaSettingsRoot[hidden]{display:none!important}
+#jaSettingsRoot{position:fixed;inset:0;z-index:10000;background:rgba(1,6,20,.9);color:#e9f1ff;font-family:Arial,"Segoe UI",sans-serif;display:flex;align-items:center;justify-content:center;padding:22px}
+#jaSettingsRoot *{box-sizing:border-box}
+#jaSettingsRoot .js-window{width:min(1150px,100%);height:min(760px,96vh);min-height:490px;background:#07152d;border:1px solid #315782;box-shadow:0 26px 100px #000b;border-radius:15px;overflow:hidden;display:flex;flex-direction:column}
+#jaSettingsRoot .js-header{padding:16px 22px;background:#071a4c;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #315782;gap:14px}
+#jaSettingsRoot .js-header strong{font-size:17px}#jaSettingsRoot .js-header p{font-size:12px;color:#b9d2ea;margin:4px 0 0}
+#jaSettingsRoot button,#jaSettingsRoot select,#jaSettingsRoot input{font:inherit}
+#jaSettingsRoot button{cursor:pointer}#jaSettingsRoot button:disabled{cursor:not-allowed;opacity:.45}
+#jaSettingsRoot .js-close{border:1px solid #5175a1;border-radius:8px;background:#153359;color:#fff;padding:7px 12px}
+#jaSettingsRoot .js-content{display:grid;grid-template-columns:200px minmax(0,1fr);flex:1;min-height:0}
+#jaSettingsRoot .js-nav{background:#091e3c;padding:16px 10px;overflow-y:auto;border-right:1px solid #284b74}
+#jaSettingsRoot .js-tab{border:1px solid transparent;background:transparent;color:#d1e2f4;text-align:left;display:block;width:100%;padding:12px;border-radius:8px;margin-bottom:6px;font-size:12px}
+#jaSettingsRoot .js-tab[aria-selected=true]{background:#15416c;border-color:#4cd1fd;color:#fff}
+#jaSettingsRoot .js-main{overflow-y:auto;padding:20px 24px;min-width:0}
+#jaSettingsRoot h2{font-size:19px;font-weight:700;margin:0 0 6px}#jaSettingsRoot h3{font-size:14px;margin:16px 0 9px}
+#jaSettingsRoot .js-muted{color:#aebfd7;font-size:12px;line-height:1.5;margin:0 0 14px}
+#jaSettingsRoot .js-card{background:#0d2343;border:1px solid #304d76;border-radius:11px;padding:15px;margin-bottom:13px}
+#jaSettingsRoot .js-card p{font-size:12px;line-height:1.6;color:#c1d6ed;margin:4px 0}
+#jaSettingsRoot .js-row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+#jaSettingsRoot .js-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+#jaSettingsRoot .js-field{display:flex;flex-direction:column;gap:6px;font-size:12px;color:#d5e6fa;margin-bottom:12px;min-width:0}
+#jaSettingsRoot input,#jaSettingsRoot select{background:#061329;border:1px solid #42648c;border-radius:8px;padding:9px 10px;color:#fff;width:100%;min-width:0}
+#jaSettingsRoot input[type=checkbox]{width:auto;accent-color:#4cd1fd}
+#jaSettingsRoot input[type=color]{height:43px;padding:3px}
+#jaSettingsRoot input[type=range]{accent-color:#4cd1fd}
+#jaSettingsRoot .js-button{border:1px solid #3c6898;border-radius:8px;color:#f7faff;background:#153c63;padding:9px 12px;font-size:12px}
+#jaSettingsRoot .js-primary{background:#4cd1fd;color:#071a4c;border-color:#4cd1fd;font-weight:700}
+#jaSettingsRoot .js-warn{color:#ffd28d;border-color:#7d5833;background:#382a21}
+#jaSettingsRoot .js-badge{padding:4px 8px;border:1px solid #3c7591;border-radius:20px;color:#b6e8f1;font-size:11px}
+#jaSettingsRoot .js-status{border-top:1px solid #28466a;padding:11px 20px;background:#091d39;color:#c7d9ec;display:flex;align-items:center;gap:10px;font-size:12px}
+#jaSettingsRoot .js-path{word-break:break-all;font-size:11px;color:#97bfd9}
+#jaSettingsRoot .js-list{display:flex;flex-direction:column;gap:8px}
+#jaSettingsRoot .js-danger{color:#ffc0c0}
+#jaSettingsRoot .js-tip{padding:12px;border-left:3px solid #4cd1fd;background:#102d4d;border-radius:4px;color:#d4e3f1;font-size:12px;line-height:1.6;margin:12px 0}
+#jaSettingsRoot :is(button,input,select):focus-visible{outline:2px solid #4cd1fd;outline-offset:2px}
+@media(max-width:740px){#jaSettingsRoot{padding:6px}#jaSettingsRoot .js-window{height:99vh;min-height:0}#jaSettingsRoot .js-content{grid-template-columns:114px minmax(0,1fr)}#jaSettingsRoot .js-main{padding:13px}#jaSettingsRoot .js-nav{padding:9px 5px}#jaSettingsRoot .js-tab{padding:9px 6px;font-size:11px}}
