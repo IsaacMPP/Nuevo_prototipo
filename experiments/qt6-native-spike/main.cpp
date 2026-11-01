@@ -80,7 +80,7 @@ private:
     QString err;
 };
 
-class FrameSurface final:public QQuickPaintedItem {
+class FrameSurface:public QQuickPaintedItem {
     Q_OBJECT
     Q_PROPERTY(Media *media READ media WRITE setMedia NOTIFY mediaChanged)
 public:
