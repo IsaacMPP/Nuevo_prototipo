@@ -78,3 +78,7 @@ Ningún módulo nuevo antes de cierre de la etapa activa. Si una función avanza
 **EN DESARROLLO / pendiente CI y validación Windows.** El núcleo de Configuración ya dispone de UI unificada, reasignación de operador/principal en una transacción, inventario físico, carpetas vinculadas/desvinculadas, ajuste de Biblia, versiones y diagnóstico/recuperación. Se añadió un cierre explícito de ventanas de salida con confirmación, necesario para no reasignar pantallas mientras otra está abierta.
 
 **No completar la etapa todavía:** CI del último commit, instalador, smoke en Windows, un monitor sin destino y luego operador+HDMI en modo Extender, casos C1-01 a C1-14. Pestañas NDI/Audio son informativas hasta sus módulos correspondientes. La secuencia obligatoria sigue C1 → S1 → A1; no iniciar YouTube/NDI/Presentaciones mientras C1 no esté aceptada.
+
+
+## Excepción de prioridad autorizada por el propietario: B1-01 (2026-11-01)
+El usuario confirmó en Windows que ya detecta pantallas y pidió **corregir inmediatamente Biblia**: las flechas cambian sólo Vista previa, necesita actualización de la salida y transición suave. Queda autorizada esta unidad correctiva B1-01 antes del cierre formal C1, **sin marcar C1 como aceptado**. No se inicia ninguna otra etapa mientras B1-01 esté pendiente de pruebas: seguimiento en [B1_BIBLIA_PROYECCION_TRANSICIONES.md](B1_BIBLIA_PROYECCION_TRANSICIONES.md). El motor de transiciones se entrega como contrato y compositor reutilizable, pero sólo se habilita para texto bíblico en este corte; medias/presentaciones siguen L1/T1.
