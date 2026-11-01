@@ -25,3 +25,15 @@ test("un proyecto no puede ser fondo ejecutable y los fondos externos se validan
  fs.writeFileSync(invalid,"MZ");
  assert.throws(()=>core.findAllowedFile(dir,invalid),/no autorizado/i);
 });
+
+test("el motor incluye la orden segura para limpiar solamente el texto",()=>{
+ const policy=require("../desktop/projection-policy.cjs");
+ assert.equal(policy.validateCommand("clear-text"),"clear-text");
+ assert.throws(()=>policy.validateCommand("delete-all-projects"),/no autorizado/);
+});
+test("el diseño ofrece controles visuales editables y alto contraste",()=>{
+ const code=fs.readFileSync(path.join(__dirname,"../desktop/bridge.js"),"utf8");
+ assert.ok(code.includes("btn.style.color=active?"),"El modo inactivo debe usar texto claro");
+ for(const id of ["jaFontSize","jaFontFamily","jaFontColor","jaRefColor","jaTextAlign","jaStyleSaveStatus"])assert.ok(code.includes(id),id);
+ assert.ok(code.includes('api.saveBibleStyle('),"Deben guardarse cambios mediante IPC");
+});
