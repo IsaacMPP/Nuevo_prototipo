@@ -20,7 +20,7 @@ function chooseDisplay(displays,operatorId,destinationId){
   return target;
 }
 function validateCommand(command){
-  if(!["pause","play","restart","black","clear"].includes(command))throw Error("Comando de proyección no autorizado");
+  if(!["pause","play","restart","black","clear","clear-text"].includes(command))throw Error("Comando de proyección no autorizado");
   return command;
 }
 function safeVerse(verse){
