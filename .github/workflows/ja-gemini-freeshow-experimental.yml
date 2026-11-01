@@ -17,9 +17,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: npm
       - name: Dependencias del diseño original
-        run: npm ci --ignore-scripts --no-audit --no-fund
+        run: npm install --ignore-scripts --no-audit --no-fund
       - name: Construir el diseño Gemini aprobado sin simuladores
         run: npm run build:ui
       - name: Integrar Gemini con la consola Svelte FreeShow
