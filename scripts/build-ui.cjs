@@ -32,9 +32,12 @@ html = html.replace("</head>", csp + '<link rel="stylesheet" href="../desktop/se
 
 // Faux titlebar controls belong to Gemini's mockup, not Electron: Windows
 // already supplies working minimize/maximize/close buttons.
-const fakeTitlebar=/<div class="hidden sm:flex items-center gap-2\\.5 pl-2 ml-1 border-l border-\\[#1e3a6d\\] text-slate-400 text-xs">[\\s\\S]*?<\\/div>/;
-if(!fakeTitlebar.test(html))throw Error("No se pudieron localizar los controles ficticios de la ventana");
-html=html.replace(fakeTitlebar,"");
+const fauxStart='<div class="hidden sm:flex items-center gap-2.5 pl-2 ml-1 border-l border-[#1e3a6d] text-slate-400 text-xs">';
+const fauxIndex=html.indexOf(fauxStart);
+if(fauxIndex<0)throw Error("No se pudieron localizar los controles ficticios de la ventana");
+const fauxEnd=html.indexOf("</div>",fauxIndex);
+if(fauxEnd<0)throw Error("Controles de ventana ficticios mal cerrados");
+html=html.slice(0,fauxIndex)+html.slice(fauxEnd+6);
 
 // Las fuentes web originales son opcionales; con internet mantienen fidelidad visual,
 // y sin internet hay fuentes alternativas para la interfaz.
