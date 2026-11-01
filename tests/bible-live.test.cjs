@@ -70,3 +70,23 @@ test("no se recargan ventanas al navegar y el controlador envía un mensaje in-p
  const html=fs.readFileSync(path.join(__dirname,"../desktop/output.html"),"utf8");
  assert.ok(html.indexOf("transition-runtime.js")<html.indexOf("output.js"));
 });
+
+test("flechas atraviesan capítulo y libro sin perder el índice correcto",()=>{
+ const nav=require("../desktop/bible-navigation.js");
+ const books=[{chapters:2},{chapters:1}];
+ assert.deepEqual(nav.move(books,{book:0,chapter:0,verse:0,verses:3},1),{book:0,chapter:0,verse:1,needsFetch:false});
+ assert.deepEqual(nav.move(books,{book:0,chapter:0,verse:2,verses:3},1),{book:0,chapter:1,verse:0,needsFetch:true});
+ assert.deepEqual(nav.move(books,{book:0,chapter:1,verse:1,verses:2},1),{book:1,chapter:0,verse:0,needsFetch:true});
+ assert.deepEqual(nav.move(books,{book:1,chapter:0,verse:0,verses:3},-1),{book:0,chapter:1,verse:-1,needsFetch:true});
+ assert.deepEqual(nav.move(books,{book:0,chapter:1,verse:0,verses:2},-1),{book:0,chapter:0,verse:-1,needsFetch:true});
+ assert.equal(nav.move(books,{book:0,chapter:0,verse:0,verses:3},-1),null);
+ assert.equal(nav.move(books,{book:1,chapter:0,verse:2,verses:3},1),null);
+ assert.throws(()=>nav.move(books,{book:0,chapter:100,verse:0,verses:2},1),/fuera de rango/);
+});
+test("el renderer de operador carga navegación compartida antes del bridge",()=>{
+ const builder=fs.readFileSync(path.join(__dirname,"../scripts/build-ui.cjs"),"utf8");
+ assert.ok(builder.includes("desktop/bible-navigation.js"));
+ const bridge=fs.readFileSync(path.join(__dirname,"../desktop/bridge.js"),"utf8");
+ assert.ok(bridge.includes("jaBibleNavigation.move("));
+ assert.ok(bridge.includes("verseNavigation=verseNavigation.catch(()=>{}).then("));
+});
