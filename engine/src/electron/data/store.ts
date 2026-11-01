@@ -3,6 +3,7 @@
 // https://www.npmjs.com/package/electron-store
 
 import Store from "electron-store"
+import { app } from "electron"
 import { mkdirSync, statSync } from "fs"
 import path from "path"
 import type { Event } from "../../types/Calendar"
@@ -25,8 +26,11 @@ import { getMigratedJAYouthPlayers } from "./jaYouthOnlineMigration"
 
 // throwaway test path for Playwright tests
 const mockStorePath = process.env.FS_MOCK_STORE_PATH
+// The JA functional copy must never share FreeShow's Electron store.
+const jaStorePath = mockStorePath || path.join(app.getPath("appData"), "JA Nuevo Prototipo Funcional")
+mkdirSync(jaStorePath, { recursive: true })
 
-export const config = new Store<Config>({ defaults: defaultConfig, cwd: mockStorePath })
+export const config = new Store<Config>({ defaults: defaultConfig, cwd: jaStorePath })
 
 export const storeFilesData = {
     SHOWS: { fileName: "shows", portable: false, defaults: {} as TrimmedShows, minify: true }, // cache
