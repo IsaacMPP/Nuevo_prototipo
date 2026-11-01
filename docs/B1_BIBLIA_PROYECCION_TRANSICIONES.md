@@ -48,3 +48,8 @@ El usuario detecta sus monitores y confirmó que las flechas cambian el versícu
 - Este cambio **NO implementa** fundido de video, mezcla de audio, cambio de fondo con crossfade, slide/PPT, superposiciones complejas, NDI o YouTube; todos van por etapas L1/T1/N1/Y1.
 - Fallas nuevas: registrar pantalla exacta, versión, combinación de botones/versión bíblica, video/fotos de proyección y los mensajes de error; corregir raíz, agregar regresión, volver a compilar y repetir prueba Windows.
 - Prohibido tocar `main`, fusionar PR #2, cambiar `JA_Proyecciones2` o reimportar motores FreeShow.
+
+
+## Verificación automatizada — entrega 0.6.0
+**Código verificado:** `215c03209ae7054778be2445eaa53201735d26eb` · [GitHub Actions run 41355688075](https://github.com/IsaacMPP/Nuevo_prototipo/actions/runs/41355688075) **success**. Se ejecutaron **41 pruebas, 41 aprobadas, 0 fallidas** (incluyendo regresiones C1, B1 y paquetes del shell). Se produjo correctamente el instalador NSIS x64 `JA Proyecciones Setup 0.6.0.exe` y el [artifact 13103207201](https://github.com/IsaacMPP/Nuevo_prototipo/actions/runs/41355688075/artifacts/13103207201) (ZIP 94,990,104 bytes).
+**Estado real:** `CI APROBADO / WINDOWS FÍSICO PENDIENTE`. No se ha podido probar desde GitHub Actions la transición visual en una pantalla HDMI ni el aislamiento de una segunda salida con audio; estas son pruebas manuales bloqueantes B1-01..B1-14. No declarar el módulo aceptado ni comenzar otros módulos hasta obtener esa evidencia/corregir fallos.
