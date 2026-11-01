@@ -1,0 +1,32 @@
+{
+  "name": "ja-nuevo-prototipo",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Consola experimental de escritorio JA; adaptación controlada del prototipo y futura integración con FreeShow.",
+  "main": "desktop/main.cjs",
+  "scripts": {
+    "build:ui": "node scripts/build-ui.cjs",
+    "start": "npm run build:ui && electron .",
+    "test": "node --test tests/*.test.cjs",
+    "check": "npm run build:ui && npm test",
+    "pack:win": "npm run check && electron-builder --win nsis --x64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "37.10.3",
+    "tailwindcss": "3.4.17",
+    "electron-builder": "26.0.12"
+  },
+  "build": {
+    "appId": "mx.ja.nuevo-prototipo",
+    "productName": "JA Nuevo Prototipo",
+    "asar": true,
+    "directories": { "output": "dist" },
+    "files": [
+      "build/**/*",
+      "desktop/**/*",
+      "package.json"
+    ],
+    "win": { "target": ["nsis"] },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true }
+  }
+}
