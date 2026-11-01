@@ -495,7 +495,7 @@ function setup(){
  for(const [id,click] of [
   ["btnBridgeQuickPlay",()=>project(chooseDestination())],
    ["btnBridgeCut",()=>project(chooseDestination(),state.prepared?.kind==="verse"?{type:"cut",durationMs:0}:null)],
-   ["btnBridgeFade",()=>state.prepared?.kind==="verse"?project(chooseDestination(),{type:"fade",durationMs:state.verseTransition.durationMs}):announce("El fundido de videos e imágenes se validará en L1. El motor de transición bíblica ya funciona.")],
+   ["btnBridgeFade",()=>state.prepared?.kind==="verse"?project(chooseDestination(),{type:"fade",durationMs:state.verseTransition.durationMs||320}):announce("El fundido de videos e imágenes se validará en L1. El motor de transición bíblica ya funciona.")],
   ["btnProjectSelectedVerse",()=>project(chooseDestination())],["fsPillPlayBtn",()=>project(chooseDestination())],
   ["btnBridgeBlack",()=>command("black")],["btnBridgeClearText",()=>command("clear-text")],["btnProgramPause",()=>command(state.sessions.some(s=>targets().includes(s.displayId)&&s.state==="paused")?"play":"pause")],
   ["btnPreviewToAll",()=>project(state.displays.filter(d=>d.id!==state.operator).map(d=>d.id))],
