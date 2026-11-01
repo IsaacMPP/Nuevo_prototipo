@@ -322,7 +322,7 @@ async function stepVerse(step){
  if(!selected.length)return;
  let updated=0,skipped=0;
  for(const id of selected){
-  const result=await api.updateProjectedVerse(snapshot.bible,snapshot.book,snapshot.chapter,snapshot.verse,id);
+  const result=await api.updateProjectedVerse(snapshot.bible,snapshot.book,snapshot.chapter,snapshot.verse,id,state.verseTransition);
   if(result.updated){state.live.set(id,{...snapshot});updated++;}
   else skipped++;
  }
@@ -436,6 +436,43 @@ function createStyleControls(){
  $("btnRestoreReadingPlate").addEventListener("click",()=>run(async()=>{$("readingPlateToggle").checked=true;$("readingPlateOpacity").value="20";await applyBibleStyle();}));
 }
 
+let transitionSave=null;
+async function loadVerseTransition(){
+ state.verseTransition=await api.bibleTransition();
+ const mode=$("jaVerseTransitionMode"),duration=$("jaVerseTransitionDuration"),label=$("jaVerseDurationLabel");
+ if(mode)mode.value=state.verseTransition.type;
+ if(duration){duration.value=String(state.verseTransition.durationMs||320);duration.disabled=state.verseTransition.type==="cut";}
+ if(label)label.textContent=state.verseTransition.type==="cut"?"Sin animación":(state.verseTransition.durationMs+" ms");
+}
+function setupVerseTransitionControls(){
+ const anchor=$("btnBibleNextVerse")?.parentElement;
+ if(!anchor)return;
+ const wrap=node("label","inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-[#35547c] bg-[#0d2144] text-[11px] text-slate-200");
+ wrap.title="Transición real al cambiar versículos en las pantallas seleccionadas que ya muestran Biblia";
+ wrap.append(node("span","text-slate-200 font-medium","Transición"));
+ const mode=node("select","bg-[#06152f] text-white border border-[#36547f] rounded px-1 py-1 text-[11px]");
+ mode.id="jaVerseTransitionMode";
+ for(const [value,title] of [["fade","Fundido"],["cut","Corte"]]){const opt=node("option","",title);opt.value=value;mode.append(opt);}
+ wrap.append(mode);
+ const duration=node("input","w-16 accent-amber-400");duration.type="range";
+ duration.id="jaVerseTransitionDuration";duration.min="120";duration.max="1200";duration.step="40";duration.value="320";
+ wrap.append(duration);
+ const label=node("span","text-amber-200 tabular-nums text-[10px]","320 ms");label.id="jaVerseDurationLabel";wrap.append(label);
+ anchor.append(wrap);
+ const changed=()=>{
+  const type=mode.value,ms=Number(duration.value);
+  duration.disabled=type==="cut";
+  state.verseTransition={type,durationMs:type==="cut"?0:ms};
+  label.textContent=type==="cut"?"Sin animación":ms+" ms";
+  clearTimeout(transitionSave);
+  transitionSave=setTimeout(()=>run(async()=>{
+    state.verseTransition=await api.saveBibleTransition(state.verseTransition);
+  }),220);
+ };
+ mode.addEventListener("change",changed);
+ duration.addEventListener("input",changed);
+}
+
 function setup(){
  sidebar();
  // Hide all mock-only controls until their real service exists.
@@ -519,6 +556,7 @@ function setup(){
  });
  window.addEventListener("ja:settings:screens-changed",()=>run(refreshScreens));
  window.addEventListener("ja:settings:bible-changed",()=>run(loadBibleStyle));
+ window.addEventListener("ja:settings:transition-changed",()=>run(loadVerseTransition));
  window.addEventListener("ja:settings:folders-changed",e=>run(async()=>{
   if(e.detail?.category==="Fondos Personalizados")await refreshBackgrounds();
   if(["himnario","juveniles","multimedia","fondos"].includes(state.module)){
