@@ -547,6 +547,8 @@ function setup(){
  $("btnFsViewGrid")?.setAttribute("title","Vista real de libros y versículos.");
  document.addEventListener("keydown",e=>{
   if(e.target?.matches?.("input,textarea,select"))return;
+  if(!document.getElementById("jaSettingsRoot")?.hidden)return;
+  if(!$("modalOverlay")?.classList.contains("hidden"))return;
   if(state.module!=="biblia")return;
   if(e.key==="ArrowRight"){e.preventDefault();run(()=>stepVerse(1));}
   if(e.key==="ArrowLeft"){e.preventDefault();run(()=>stepVerse(-1));}
