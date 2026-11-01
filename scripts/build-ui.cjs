@@ -28,7 +28,13 @@ const demos = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>[\s\S]*?<\/script>/
 if (demos.length !== 1) throw Error("El prototipo cambió: se esperaba exactamente un controlador de demostración");
 html = html.replace(demos[0][0], "");
 const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'self' file: data:; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' file: data:; media-src 'self' file:; object-src 'none'; connect-src 'none'">`;
-html = html.replace("</head>", csp + '<link rel="stylesheet" href="../desktop/settings-center.css">\n</head>');
+html = html.replace("</head>", csp + '<link rel="stylesheet" href="../desktop/settings-center.css">\n<link rel="stylesheet" href="../desktop/layout-fixes.css">\n</head>');
+
+// Faux titlebar controls belong to Gemini's mockup, not Electron: Windows
+// already supplies working minimize/maximize/close buttons.
+const fakeTitlebar=/<div class="hidden sm:flex items-center gap-2\\.5 pl-2 ml-1 border-l border-\\[#1e3a6d\\] text-slate-400 text-xs">[\\s\\S]*?<\\/div>/;
+if(!fakeTitlebar.test(html))throw Error("No se pudieron localizar los controles ficticios de la ventana");
+html=html.replace(fakeTitlebar,"");
 
 // Las fuentes web originales son opcionales; con internet mantienen fidelidad visual,
 // y sin internet hay fuentes alternativas para la interfaz.
