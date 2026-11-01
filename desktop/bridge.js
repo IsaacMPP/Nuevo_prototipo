@@ -98,7 +98,7 @@ function renderProgram(){
  if(label)label.textContent=s? s.state+" · "+s.title:"Sin proyección";
  $("programTimeCounter").textContent=s?.duration?timeText(s.position)+" / "+timeText(s.duration):"—";
  const volume=$("programVolumeSlider");if(volume&&s?.volume!=null&&document.activeElement!==volume)volume.value=String(s.volume);
- if(!s){delete el.dataset.media;placeholder(el,"Programa sin señal · No hay contenido proyectándose");return;}
+ if(!s||s.state==="empty"){delete el.dataset.media;placeholder(el,"Programa sin señal · No hay contenido proyectándose");return;}
  if(s.state==="black"){delete el.dataset.media;placeholder(el,"Salida en negro");return;}
  if(known?.kind==="verse"){drawVerse(el,s.state==="background"?"":known.text,s.state==="background"?"":known.reference);return;}
  if(known?.kind==="image"&&known.url){
@@ -140,7 +140,10 @@ async function project(ids,transitionOverride=null){
  await refreshScreens();announce("Enviado a "+ids.length+" pantalla(s) real(es).");
 }
 async function command(action){
- for(const id of chooseDestination())await api.projectionCommand(id,action);
+ for(const id of chooseDestination()){
+  await api.projectionCommand(id,action);
+  if(action==="clear")state.live.delete(id);
+ }
  await refreshScreens();
 }
 async function prepareFile(file){
