@@ -3,12 +3,14 @@
 const frame=document.querySelector("#frame"),black=document.querySelector("#black");
 let media=null,session=0,blacked=false,scripture=null;
 let lastState="empty",stateBeforeBlack="empty",lastTimeSent=0;
+const verseTransitions=window.jaTransitions.createController();
 function status(detail){
   const payload={session,...detail};
   if(media&&media.tagName!=="IMG"){payload.position=Number.isFinite(media.currentTime)?media.currentTime:0;payload.duration=Number.isFinite(media.duration)?media.duration:0;payload.volume=Math.round(media.volume*100);}
   window.jaOutput.status(payload);
 }
 function reset(){
+  verseTransitions.cancel();
   if(media){media.pause?.();media.removeAttribute("src");media.load?.();media.remove();media=null;}
   if(scripture){scripture.remove();scripture=null;}
   frame.querySelector("#scripture")?.remove();
@@ -38,9 +40,30 @@ function timeupdate(){
 window.jaOutput.receive(async command=>{
  if(!command||typeof command!=="object")return;
  if(command.action==="style"){applyBibleStyle(command.style);return;}
+ if(command.action==="verse"){
+   if(!scripture||command.session!==session)return;
+   const content=command.content;
+   if(!content||content.kind!=="verse")return;
+   const verse=scripture.querySelector("#verse"),reference=scripture.querySelector("#reference");
+   if(!verse||!reference)return;
+   if(content.style)applyBibleStyle(content.style);
+   // Preserve the projection window, background, plate, audio and blackout.
+   // Only the scripture text/reference are animated; a rapid sequence cancels
+   // older animations and the latest requested verse wins.
+   stateBeforeBlack="verse";
+   lastState=blacked?"black":"verse";
+   status({state:lastState});
+   void verseTransitions.swap([verse,reference],()=>{
+     verse.textContent=content.text;
+     reference.textContent=content.reference;
+     verse.style.visibility="visible";
+     reference.style.visibility="visible";
+   },content.transition).catch(error=>status({state:"error",message:String(error)}));
+   return;
+ }
  if(command.action==="black"){if(blacked){setBlack(false);lastState=stateBeforeBlack;}else{stateBeforeBlack=lastState;setBlack(true);lastState="black";}status({state:lastState});return;}
  if(command.action==="clear"){reset();setBlack(false);lastState="empty";status({state:"empty"});return;}
- if(command.action==="clear-text"){if(scripture){scripture.querySelector("#verse").style.visibility="hidden";scripture.querySelector("#reference").style.visibility="hidden";lastState="background";status({state:"background"});}return;}
+ if(command.action==="clear-text"){if(scripture){verseTransitions.cancel();scripture.querySelector("#verse").style.visibility="hidden";scripture.querySelector("#reference").style.visibility="hidden";stateBeforeBlack="background";lastState=blacked?"black":"background";status({state:lastState});}return;}
  if(command.action==="volume"){if(media&&media.tagName!=="IMG"){media.volume=Math.max(0,Math.min(100,Number(command.volume)))/100;status({state:lastState});}return;}
  if(command.action==="seek"){if(media&&Number.isFinite(media.duration)){media.currentTime=Math.max(0,Math.min(media.duration,Number(command.position)));status({state:lastState});}return;}
  if(command.action==="pause"){media?.pause?.();lastState=media?"paused":lastState;status({state:lastState});return;}
