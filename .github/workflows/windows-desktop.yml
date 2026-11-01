@@ -1,4 +1,4 @@
-name: JA Prototipo · Windows
+name: JA Proyecciones · motor funcional Windows
 on:
   push:
     branches:
@@ -9,28 +9,42 @@ permissions:
   contents: read
 
 jobs:
-  test-build:
+  shell-regression:
     runs-on: windows-latest
-    timeout-minutes: 40
+    timeout-minutes: 35
     steps:
-      - name: Checkout new prototype only
-        uses: actions/checkout@v4
-      - name: Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Install dependencies
-        run: npm install --no-audit --no-fund
-      - name: Generate offline styles and test native services
-        run: npm run check
-      - name: Package experimental Windows installer
-        run: npm run pack:win
+      - run: npm install --no-audit --no-fund
+      - run: npm run check:legacy
+
+  native-engine:
+    runs-on: windows-latest
+    timeout-minutes: 80
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install FreeShow JA native dependencies
+        run: npm install --prefix engine --no-audit --no-fund
+      - name: Test native contracts
+        run: npm --prefix engine run test:unit
+      - name: Check Svelte
+        run: npm --prefix engine run test:svelte
+      - name: Build FreeShow JA output engine
+        run: npm --prefix engine run build
+      - name: Package JA unsigned Windows application
+        working-directory: engine
+        run: npx electron-builder --config config/building/ja-windows.yml --win nsis --x64 --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-      - name: Upload unsigned prototype installer
+      - name: Upload unsigned JA functional installer
         uses: actions/upload-artifact@v4
         with:
-          name: JA-Nuevo-Prototipo-Experimental-Windows
-          path: dist/*.exe
+          name: JA-Proyecciones-Funcional-Windows
+          path: engine/dist/*.exe
           if-no-files-found: error
           retention-days: 14
