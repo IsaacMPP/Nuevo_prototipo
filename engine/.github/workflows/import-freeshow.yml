@@ -1,0 +1,53 @@
+name: Importar FreeShow 1.6.7 limpio
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  import-base:
+    if: "!contains(github.event.head_commit.message, '[base-importada]')"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout de JA Proyecciones 2
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Obtener versión etiquetada de FreeShow
+        uses: actions/checkout@v4
+        with:
+          repository: ChurchApps/FreeShow
+          ref: v1.6.7
+          path: _freeshow_source
+          persist-credentials: false
+      - name: Verificar fuente y copiar sin sobrescribir documentación
+        shell: bash
+        run: |
+          set -euo pipefail
+          node -e 'const p=require("./_freeshow_source/package.json");if(p.version!=="1.6.7"||p.license!=="GPL-3.0")process.exit(1)'
+          rsync -a --exclude=.git --exclude=.github --exclude=README.md --exclude=docs --exclude=design --exclude=CONTRIBUTING.md _freeshow_source/ ./
+          rm -rf _freeshow_source
+          python3 scripts/ja/apply-ja-theme.py
+      - name: Recuperar recursos JA originales
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 -o public/ja-logo.png https://raw.githubusercontent.com/IsaacMPP/Ja_Proyeccion/0bced037389bfe78b14163e9436863aa9d98c265/public/ja-logo.png
+          curl --fail --location --retry 3 -o public/ja-hero.jpg https://raw.githubusercontent.com/IsaacMPP/Ja_Proyeccion/0bced037389bfe78b14163e9436863aa9d98c265/public/ja-hero.jpg
+          file public/ja-logo.png public/ja-hero.jpg
+      - name: Confirmar cambios e integridad
+        shell: bash
+        run: |
+          test -f src/frontend/components/main/Top.svelte
+          test -f src/frontend/components/settings/Settings.svelte
+          test -f public/ja-logo.png
+          test -f public/ja-hero.jpg
+          git status --short | head -30
+      - name: Commit de fuente base sin alterar main
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "feat(base): incorporar FreeShow 1.6.7 y marca JA [base-importada]"
+          git push origin HEAD:feature/base-freeshow-diseno-ja

@@ -1,0 +1,33 @@
+name: JA · Auditar fuente RV1909
+on:
+  push:
+    branches:
+      - feature/base-freeshow-diseno-ja
+    paths:
+      - '.github/workflows/ja-rv1909-source-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Examinar envoltorio y datos VPL de eBible sin construir ni publicar
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib, io, urllib.request, zipfile
+          url = 'https://ebible.org/Scriptures/spaRV1909_vpl.zip'
+          request = urllib.request.Request(url, headers={'User-Agent': 'JA-Proyeccion-Build/1.0'})
+          with urllib.request.urlopen(request, timeout=90) as reply:
+              data = reply.read(20 * 1024 * 1024 + 1)
+          assert len(data) <= 20 * 1024 * 1024, 'Descarga demasiado grande'
+          print('ZIP SHA256:', hashlib.sha256(data).hexdigest())
+          with zipfile.ZipFile(io.BytesIO(data)) as z:
+              entries = [x for x in z.infolist() if not x.is_dir() and x.filename.lower().endswith(('.txt','.vpl')) and x.file_size < 14_000_000]
+              assert entries, 'Sin texto VPL'
+              for x in entries:
+                  payload = z.read(x)
+                  print('ENTRY:', repr(x.filename), 'bytes:', len(payload), 'sha256:', hashlib.sha256(payload).hexdigest(), 'lines:', len(payload.splitlines()))
+                  print('MUESTRA DE REFERENCIA:', repr(payload[:130]))
+          PY

@@ -1,0 +1,63 @@
+name: Validar base FreeShow JA
+on:
+  push:
+    branches:
+      - feature/base-freeshow-diseno-ja
+    paths-ignore:
+      - "docs/**"
+      - "design/README.md"
+      - "**/*.md"
+  workflow_dispatch:
+concurrency:
+  group: ja-windows-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  verificar:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Instalar dependencias
+        run: npm ci
+      - name: Probar migración segura de videos juveniles
+        run: npx vitest run --config config/testing/vitest.config.ts src/electron/data/jaYouthOnlineMigration.test.ts src/frontend/components/drawer/player/youtubeAudio.test.ts src/frontend/utils/jaOnlinePreviewOutput.test.ts src/frontend/components/drawer/player/youtubeTransport.test.ts src/frontend/utils/jaPresentationNavigation.test.ts src/frontend/utils/jaControlledOutput.test.ts
+      - name: Preparar Biblia española offline de dominio público
+        run: python scripts/ja/build_rv1909.py
+      - name: Comprobar integridad de Biblia RV1909
+        shell: bash
+        run: |
+          python -c "import json; d=json.load(open('public/ja-bibles/rv1909.fsb',encoding='utf-8')); assert d[0]=='ja-rv1909' and len(d[1]['books'])==66"
+      - name: Compilar FreeShow con marca JA
+        run: npm run build
+      - name: Verificar archivo gráfico y componente
+        shell: bash
+        run: |
+          test -s public/ja-logo.png
+          test -s public/ja-hero.jpg
+          grep -q 'class="ja-brand"' src/frontend/components/main/Top.svelte
+      - name: Crear imágenes JA para el instalador
+        shell: pwsh
+        run: |
+          python -m pip install --disable-pip-version-check Pillow
+          python scripts/ja/create-installer-art.py
+      - name: Preparar versión única del instalador
+        run: node scripts/ja/prepare-version.cjs
+      - name: Construir instalador Windows sin firma de FreeShow
+        run: npx electron-builder --config config/building/ja-windows.generated.yaml --win nsis --x64 --publish never
+      - name: Publicar instalador y manifiesto
+        uses: actions/upload-artifact@v4
+        with:
+          name: JA-Proyecciones-Windows-build-${{ github.run_number }}-intento-${{ github.run_attempt }}
+          path: |
+            dist/*.exe
+            release/*.exe
+            ja-build-info.json
+          if-no-files-found: error
+          retention-days: 30

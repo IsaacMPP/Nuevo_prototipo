@@ -1,0 +1,27 @@
+/* Visual identity extracted from the previously approved JA Proyección header.
+   Presentation only: no output detection or player state. */
+:root {
+  --ja-navy-900: #071b32;
+  --ja-navy-800: #0b2a49;
+  --ja-navy-700: #1a496c;
+  --ja-blue-border: #396a91;
+  --ja-white: #f7fbff;
+  --ja-radius: 7px;
+}
+.ja-app-header {
+  display:flex; align-items:center; justify-content:space-between;
+  height:58px; min-height:58px;
+  background:linear-gradient(100deg,var(--ja-navy-800) 0%,var(--ja-navy-900) 70%,#081a30 100%);
+  border-bottom:1px solid var(--ja-navy-700);
+  box-shadow:0 2px 12px rgb(0 0 0 / .18);
+  padding:0 12px; gap:12px;
+}
+.ja-app-brand { display:flex; align-items:center; gap:9px; white-space:nowrap; }
+.ja-app-brand img {width:70px;height:51px;object-fit:cover;}
+.ja-app-brand-name {font-size:1.5em;font-weight:750;letter-spacing:-.035em;color:var(--ja-white);}
+.ja-app-brand-name strong {color:var(--secondary,#6eb9f5);}
+.ja-app-toolbar {display:flex; align-items:center; gap:6px;}
+.ja-app-toolbar button {color:var(--ja-white); min-height:38px; padding:6px 12px; border:1px solid var(--ja-blue-border);border-radius:var(--ja-radius); background:rgba(32,96,146,.2);cursor:pointer;}
+.ja-app-toolbar button:hover {background:rgba(32,96,146,.4);border-color:var(--secondary,#6eb9f5);}
+.ja-app-toolbar button:focus-visible {outline:2px solid var(--ja-white);outline-offset:2px;}
+@media(max-width:940px){.ja-app-brand-name{font-size:1.08em}.ja-app-brand img{width:57px;height:42px}.ja-app-toolbar button{padding-inline:7px}}
