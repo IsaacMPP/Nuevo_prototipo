@@ -32,6 +32,6 @@ html = html.replace("</head>", csp + '<link rel="stylesheet" href="../desktop/se
 
 // Las fuentes web originales son opcionales; con internet mantienen fidelidad visual,
 // y sin internet hay fuentes alternativas para la interfaz.
-html = html.replace("</body>", '<script src="../desktop/bridge.js"></script>\n<script src="../desktop/settings-center.js"></script>\n</body>');
+html = html.replace("</body>", '<script src="../desktop/bible-navigation.js"></script>\n<script src="../desktop/bridge.js"></script>\n<script src="../desktop/settings-center.js"></script>\n</body>');
 fs.writeFileSync(path.join(out, "index.html"), html, "utf8");
 console.log("Interfaz offline generada: build/index.html");
