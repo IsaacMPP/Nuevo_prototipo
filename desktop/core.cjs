@@ -2,6 +2,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
+const bibleStyle=require("./bible-style.cjs");
 
 const FOLDERS = Object.freeze([
     "Biblias", "Himnario Adventista", "Cantos Juveniles",
@@ -41,7 +42,7 @@ function readJson(file, fallback) {
 function settingsFile(root) { return path.join(root, "Configuracion", "ajustes.json"); }
 function loadSettings(root) {
     const obj = readJson(settingsFile(root), {});
-    return {linkedFolders: obj && typeof obj.linkedFolders === "object" && !Array.isArray(obj.linkedFolders) ? obj.linkedFolders : {}, operatorDisplayId: String(obj.operatorDisplayId || ""), mainDisplayId:String(obj.mainDisplayId || "")};
+    return {linkedFolders: obj && typeof obj.linkedFolders === "object" && !Array.isArray(obj.linkedFolders) ? obj.linkedFolders : {}, operatorDisplayId: String(obj.operatorDisplayId || ""), mainDisplayId:String(obj.mainDisplayId || ""),bibleStyle:bibleStyle.normalize(obj.bibleStyle)};
 }
 function saveSettings(root, settings) { atomicJson(settingsFile(root),settings); }
 function linkFolder(root, category, folder) {
