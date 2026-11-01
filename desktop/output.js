@@ -2,7 +2,7 @@
 (() => {
 const frame=document.querySelector("#frame"),black=document.querySelector("#black");
 let media=null,session=0,blacked=false,scripture=null;
-let lastState="empty",lastTimeSent=0;
+let lastState="empty",stateBeforeBlack="empty",lastTimeSent=0;
 function status(detail){
   const payload={session,...detail};
   if(media&&media.tagName!=="IMG"){payload.position=Number.isFinite(media.currentTime)?media.currentTime:0;payload.duration=Number.isFinite(media.duration)?media.duration:0;payload.volume=Math.round(media.volume*100);}
@@ -38,7 +38,7 @@ function timeupdate(){
 window.jaOutput.receive(async command=>{
  if(!command||typeof command!=="object")return;
  if(command.action==="style"){applyBibleStyle(command.style);return;}
- if(command.action==="black"){setBlack(true);lastState="black";status({state:"black"});return;}
+ if(command.action==="black"){if(blacked){setBlack(false);lastState=stateBeforeBlack;}else{stateBeforeBlack=lastState;setBlack(true);lastState="black";}status({state:lastState});return;}
  if(command.action==="clear"){reset();setBlack(false);lastState="empty";status({state:"empty"});return;}
  if(command.action==="clear-text"){if(scripture){scripture.querySelector("#verse").style.visibility="hidden";scripture.querySelector("#reference").style.visibility="hidden";lastState="background";status({state:"background"});}return;}
  if(command.action==="volume"){if(media&&media.tagName!=="IMG"){media.volume=Math.max(0,Math.min(100,Number(command.volume)))/100;status({state:lastState});}return;}
@@ -47,7 +47,7 @@ window.jaOutput.receive(async command=>{
  if(command.action==="play"){
    setBlack(false);
    if(media){try{await media.play();lastState="playing";status({state:lastState});}catch(err){lastState="error";status({state:"error",message:String(err.message||err)});}}
-   else status({state:lastState==="black"?"verse":lastState});
+   else {lastState=stateBeforeBlack==="black"?"verse":stateBeforeBlack;status({state:lastState});}
    return;
  }
  if(command.action==="restart"){if(media){media.currentTime=0;try{await media.play();lastState="playing";status({state:lastState});}catch(err){lastState="error";status({state:"error",message:String(err.message||err)});}}return;}
