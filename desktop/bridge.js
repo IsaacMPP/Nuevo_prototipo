@@ -447,7 +447,6 @@ function setup(){
   ["btnFsPillVersionBtn",()=>{$("jaBibleTranslation")?.focus();}],
   ["btnToggleBibleInspector",()=>{$("fsBibleSearchAndInspector")?.classList.toggle("hidden");}],
   ["fsPillSearchBtn",()=>{$("fsBibleSearchAndInspector")?.classList.toggle("hidden");}],
-  ["btnOpenSettingsModal",()=>window.jaSettingsCenter.open("pantallas")]
  ]){const element=$(id);if(element)element.addEventListener("click",()=>run(click));}
  $("jaBibleTranslation")?.addEventListener("change",()=>run(selectBible));
  $("btnLargeTextToggle")?.addEventListener("click",()=>document.body.classList.toggle("large-text-mode"));
