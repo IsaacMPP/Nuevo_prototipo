@@ -3,6 +3,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const bibleStyle=require("./bible-style.cjs");
+const transitions=require("./transition-engine.cjs");
 
 const FOLDERS = Object.freeze([
     "Biblias", "Himnario Adventista", "Cantos Juveniles",
@@ -65,7 +66,7 @@ function loadSettings(root) {
     }
     return {configVersion:1,revision:Number.isSafeInteger(obj.revision)&&obj.revision>=0?obj.revision:0,
         linkedFolders:folders,operatorDisplayId:String(obj.operatorDisplayId||""),
-        mainDisplayId:String(obj.mainDisplayId||""),bibleStyle:bibleStyle.normalize(obj.bibleStyle)};
+        mainDisplayId:String(obj.mainDisplayId||""),bibleStyle:bibleStyle.normalize(obj.bibleStyle),verseTransition:transitions.normalize(obj.verseTransition)};
 }
 function saveSettings(root,settings){
     if(settingsHealth(root).status==="corrupt")throw Error("El archivo de ajustes está dañado. Abre Configuración > Diagnóstico para recuperar el respaldo antes de guardar.");
@@ -75,7 +76,8 @@ function saveSettings(root,settings){
         linkedFolders:settings.linkedFolders,
         operatorDisplayId:String(settings.operatorDisplayId||""),
         mainDisplayId:String(settings.mainDisplayId||""),
-        bibleStyle:bibleStyle.normalize(settings.bibleStyle)
+        bibleStyle:bibleStyle.normalize(settings.bibleStyle),
+        verseTransition:transitions.normalize(settings.verseTransition)
     };
     const file=settingsFile(root);
     if(fs.existsSync(file))fs.copyFileSync(file,backupSettingsFile(root));
