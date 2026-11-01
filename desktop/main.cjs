@@ -86,7 +86,7 @@ function currentDisplays() {
     return {displays:displays(),operatorDisplayId:settings.operatorDisplayId || String(screen.getPrimaryDisplay().id),mainDisplayId:settings.mainDisplayId};
 }
 function createWindow() {
-    const file=path.join(__dirname,"console.html");
+    const file=path.join(__dirname,"..","build","index.html");
     if(!fs.existsSync(file)){
         dialog.showErrorBox("Falta compilar interfaz", "Ejecuta npm run build:ui antes de iniciar el escritorio");
         app.quit();return;
