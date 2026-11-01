@@ -4,13 +4,13 @@ import { join } from "node:path"
 
 // User-owned media belongs outside Program Files and remains after upgrades.
 export function getJAContentFolders(): { base: string; folders: Record<string, string> } {
-    const base = join(app.getPath("documents"), "JA Proyecciones 2")
+    const base = join(app.getPath("documents"), "JA Proyecciones 2 - Prototipo")
     const folders = ["Biblias", "Himnario Adventista", "Cantos Juveniles", "Fondos Personalizados", "Audio", "Imagenes", "Videos", "Importaciones", "Presentaciones", "Cache", "Configuracion"]
     return { base, folders: Object.fromEntries(folders.map(name => [name, join(base, name)])) }
 }
 
 export function ensureJAContentFolders(): void {
-    const base = join(app.getPath("documents"), "JA Proyecciones 2")
+    const base = join(app.getPath("documents"), "JA Proyecciones 2 - Prototipo")
     const folders = [
         "Biblias", "Himnario Adventista", "Cantos Juveniles",
         "Fondos Personalizados", "Audio", "Imagenes", "Videos",
