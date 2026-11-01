@@ -2,6 +2,16 @@
 
 **Objetivo:** utilizar una consola de proyección real, ligera y autónoma, sin el motor FreeShow ni sus dependencias nativas. Esta rama inicia desde la última versión funcional del shell (a9790c27), conserva el prototipo HTML original y crea el motor propio en `desktop/`. No se modifica `main`, la rama FreeShow ni `JA_Proyecciones2`.
 
+## Plan formal de entregas y calidad (P0 — 2026-11-01)
+
+Antes de ampliar el motor, se ha definido una ruta de desarrollo con **una sola etapa activa**, revisión de fallos bloqueantes, tests de regresión y aceptación real en Windows:
+
+- [Plan maestro: etapas, contratos y pruebas](docs/PLAN_MAESTRO_DESARROLLO.md)
+- [Inventario de funciones del proyecto anterior y motor propio](docs/INVENTARIO_FUNCIONES_JA.md)
+- [Especificación C1: Configuración, conexiones, pantallas, audio y bibliotecas](docs/C1_CONFIGURACION_ESPECIFICACION.md)
+
+**Estado:** P0 documentado; siguiente C1 Centro de Configuración, pendiente de aprobación de alcance. Documentación no habilita ninguna función nueva ni implica validación de hardware. Para el software vigente, la última versión comprobada de código sigue siendo 0.4.0, CI Windows 41342172359 (23 tests aprobados; test físico pendiente).
+
 ## Restauración del diseño Gemini (v0.3.1)
 La pantalla principal ahora usa **exactamente el HTML de estructura original** de `prototype/index.html`: encabezado JA, Vista previa ámbar, puente de controles, Programa verde, Multipantalla y panel inferior con Biblia cuadriculada, Himnario, Multimedia, etc. No se utiliza `desktop/console.html` para iniciar.
 
