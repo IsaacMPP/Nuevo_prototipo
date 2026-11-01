@@ -356,7 +356,7 @@ export function getDefaultDataFolderRoot() {
     const documentsPath = getMediaFolderPath("documents")
     if (!documentsPath) return appDataPath
 
-    const appFolderName = "FreeShow"
+    const appFolderName = "JA Proyecciones 2 - Prototipo"
     const fullPath = path.join(documentsPath, appFolderName)
 
     try {
