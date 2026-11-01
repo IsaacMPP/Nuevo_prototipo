@@ -40,11 +40,72 @@ function readJson(file, fallback) {
     try { return JSON.parse(fs.readFileSync(file,"utf8")); } catch { return fallback; }
 }
 function settingsFile(root) { return path.join(root, "Configuracion", "ajustes.json"); }
-function loadSettings(root) {
-    const obj = readJson(settingsFile(root), {});
-    return {linkedFolders: obj && typeof obj.linkedFolders === "object" && !Array.isArray(obj.linkedFolders) ? obj.linkedFolders : {}, operatorDisplayId: String(obj.operatorDisplayId || ""), mainDisplayId:String(obj.mainDisplayId || ""),bibleStyle:bibleStyle.normalize(obj.bibleStyle)};
+function backupSettingsFile(root){return path.join(root,"Configuracion","ajustes.backup.json");}
+function parseSettings(file){
+    if(!fs.existsSync(file))return null;
+    const value=JSON.parse(fs.readFileSync(file,"utf8"));
+    if(!value||typeof value!=="object"||Array.isArray(value))throw Error("Configuración sin estructura válida");
+    return value;
 }
-function saveSettings(root, settings) { atomicJson(settingsFile(root),settings); }
+function settingsHealth(root){
+    const file=settingsFile(root);
+    if(!fs.existsSync(file))return {status:"new",backupAvailable:fs.existsSync(backupSettingsFile(root))};
+    try{parseSettings(file);return {status:"ok",backupAvailable:fs.existsSync(backupSettingsFile(root))};}
+    catch{return {status:"corrupt",backupAvailable:fs.existsSync(backupSettingsFile(root))};}
+}
+function loadSettings(root) {
+    let obj={};
+    try{obj=parseSettings(settingsFile(root))||{};}
+    catch{try{obj=parseSettings(backupSettingsFile(root))||{};}catch{obj={};}}
+    const folders={};
+    if(obj.linkedFolders&&typeof obj.linkedFolders==="object"&&!Array.isArray(obj.linkedFolders)){
+        for(const [key,paths] of Object.entries(obj.linkedFolders)){
+            if(validCategory(key)&&Array.isArray(paths))folders[key]=paths.filter(p=>typeof p==="string"&&p.length>0).slice(0,100);
+        }
+    }
+    return {configVersion:1,revision:Number.isSafeInteger(obj.revision)&&obj.revision>=0?obj.revision:0,
+        linkedFolders:folders,operatorDisplayId:String(obj.operatorDisplayId||""),
+        mainDisplayId:String(obj.mainDisplayId||""),bibleStyle:bibleStyle.normalize(obj.bibleStyle)};
+}
+function saveSettings(root,settings){
+    if(settingsHealth(root).status==="corrupt")throw Error("El archivo de ajustes está dañado. Abre Configuración > Diagnóstico para recuperar el respaldo antes de guardar.");
+    const normalized={
+        configVersion:1,
+        revision:loadSettings(root).revision+1,
+        linkedFolders:settings.linkedFolders,
+        operatorDisplayId:String(settings.operatorDisplayId||""),
+        mainDisplayId:String(settings.mainDisplayId||""),
+        bibleStyle:bibleStyle.normalize(settings.bibleStyle)
+    };
+    const file=settingsFile(root);
+    if(fs.existsSync(file))fs.copyFileSync(file,backupSettingsFile(root));
+    atomicJson(file,normalized);
+    return normalized;
+}
+function recoverSettings(root){
+    if(settingsHealth(root).status!=="corrupt")throw Error("No se requiere reparación");
+    let backup;
+    try{backup=parseSettings(backupSettingsFile(root));}
+    catch{throw Error("No existe una copia válida. No se reemplazará la configuración dañada.");}
+    if(!backup)throw Error("No existe una copia válida");
+    const file=settingsFile(root);
+    const damaged=file+".corrupt-"+crypto.randomUUID()+".json";
+    fs.copyFileSync(file,damaged);
+    atomicJson(file,backup);
+    return {recovered:true,damagedFile:damaged};
+}
+function unlinkFolder(root,category,folder){
+    if(!validCategory(category))throw Error("Categoría inválida");
+    if(typeof folder!=="string"||!folder)throw Error("Carpeta externa inválida");
+    const settings=loadSettings(root);
+    const original=Array.isArray(settings.linkedFolders[category])?settings.linkedFolders[category]:[];
+    const target=path.normalize(path.resolve(folder)).toLowerCase();
+    const filtered=original.filter(p=>path.normalize(path.resolve(p)).toLowerCase()!==target);
+    if(filtered.length===original.length)throw Error("La carpeta no está vinculada en esa categoría");
+    settings.linkedFolders[category]=filtered;
+    saveSettings(root,settings);
+    return filtered;
+}
 function linkFolder(root, category, folder) {
     if (!validCategory(category)) throw Error("Categoría inválida");
     const full=path.resolve(folder);
@@ -138,4 +199,4 @@ function findAllowedFile(root,candidate) {
     if(!allowed)throw Error("Archivo no autorizado");
     return realTarget;
 }
-module.exports={FOLDERS,ACCEPTED,dataRoot,ensureStructure,validCategory,atomicJson,readJson,loadSettings,saveSettings,linkFolder,listLibrary,createProject,saveProject,listProjects,findAllowedFile};
+module.exports={FOLDERS,ACCEPTED,dataRoot,ensureStructure,validCategory,atomicJson,readJson,loadSettings,saveSettings,settingsHealth,recoverSettings,unlinkFolder,linkFolder,listLibrary,createProject,saveProject,listProjects,findAllowedFile};
