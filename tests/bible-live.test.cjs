@@ -97,3 +97,9 @@ test("el modo Fundido funciona aunque Corte esté guardado y Limpiar elimina el 
  assert.ok(bridge.includes('if(action==="clear")state.live.delete(id)'),"Programa no debe conservar un versículo después de Limpiar");
  assert.ok(bridge.includes('s.state==="empty"'),"Programa no debe dibujar texto de una sesión vacía");
 });
+
+test("transición de versículo no vuelve a cargar el fondo si su estilo sigue igual",()=>{
+ const output=fs.readFileSync(path.join(__dirname,"../desktop/output.js"),"utf8");
+ assert.ok(output.includes("lastScriptureStyleKey===key"));
+ assert.ok(output.includes("lastScriptureStyleKey=\"\""));
+});
