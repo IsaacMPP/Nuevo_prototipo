@@ -28,10 +28,10 @@ const demos = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>[\s\S]*?<\/script>/
 if (demos.length !== 1) throw Error("El prototipo cambió: se esperaba exactamente un controlador de demostración");
 html = html.replace(demos[0][0], "");
 const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'self' file: data:; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' file: data:; media-src 'self' file:; object-src 'none'; connect-src 'none'">`;
-html = html.replace("</head>", csp + "\n</head>");
+html = html.replace("</head>", csp + '<link rel="stylesheet" href="../desktop/settings-center.css">\n</head>');
 
 // Las fuentes web originales son opcionales; con internet mantienen fidelidad visual,
 // y sin internet hay fuentes alternativas para la interfaz.
-html = html.replace("</body>", '<script src="../desktop/bridge.js"></script>\n</body>');
+html = html.replace("</body>", '<script src="../desktop/bridge.js"></script>\n<script src="../desktop/settings-center.js"></script>\n</body>');
 fs.writeFileSync(path.join(out, "index.html"), html, "utf8");
 console.log("Interfaz offline generada: build/index.html");
