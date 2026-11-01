@@ -72,3 +72,11 @@ El botón **Fondo / Opciones** de Biblia ahora permite modificar y guardar tama�
 La pestaña **Vista Cuadrícula** ya no deja texto oscuro sobre el fondo oscuro cuando está inactiva; los números y los libros tienen colores legibles. **Limpiar texto** conserva la escena bíblica de fondo.
 Para multimedia MP4/WebM, MP3/WAV/OGG/M4A, la Vista previa dispone de transporte y Programa tiene volumen independiente por salida real. Los videos deben usar codecs compatibles con Chromium (MP4 H.264/AAC recomendado); AVI/MKV aún no compatibles. Los archivos se leen desde las carpetas vinculadas reales, no son ejemplos precargados.
 **Importante:** si Windows detecta solo un monitor (como en la captura del usuario), el programa no proyectará sobre el monitor del operador. Para la salida real conectar una segunda pantalla en modo Extender, abrir ⚙️ Pantallas y asignar operador/principal. Las pruebas de compilación no sustituyen pruebas físicas de GPU, HDMI, códecs y audio.
+
+
+## Biblia en vivo y transiciones reales — v0.6.0
+El sistema conserva la interfaz aprobada, pero las flechas de Biblia **pueden cambiar el versículo en las salidas reales seleccionadas** cuando ya muestran la misma versión bíblica. No se crea una proyección ni se altera un video si sólo estás preparando contenido en Vista previa. Los cambios cruzan capítulos/libros y respetan la independencia de cada monitor.
+
+Desde la barra de Biblia o **Configuración → Biblia**, selecciona **Fundido** (120–1200 ms) o **Corte**; la preferencia se guarda con los demás ajustes. El fundido animará únicamente letras y referencia, conservando fondo y placa; otras funciones del motor audiovisual siguen por etapas. **Negro** permite seguir preparando cambios bajo la cortina, y **Proyectar** vuelve a mostrar el versículo. Las flechas no actúan mientras Configuración o un diálogo están abiertos.
+
+Consulta [plan de aceptación y pruebas B1](docs/B1_BIBLIA_PROYECCION_TRANSICIONES.md). CI y pruebas Windows con dos pantallas deben completarse antes de declarar B1 aceptado. El fundido general de video/imágenes no está habilitado todavía; continuará en la etapa L1.
