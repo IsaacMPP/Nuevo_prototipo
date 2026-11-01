@@ -80,3 +80,11 @@ El sistema conserva la interfaz aprobada, pero las flechas de Biblia **pueden ca
 Desde la barra de Biblia o **Configuración → Biblia**, selecciona **Fundido** (120–1200 ms) o **Corte**; la preferencia se guarda con los demás ajustes. El fundido animará únicamente letras y referencia, conservando fondo y placa; otras funciones del motor audiovisual siguen por etapas. **Negro** permite seguir preparando cambios bajo la cortina, y **Proyectar** vuelve a mostrar el versículo. Las flechas no actúan mientras Configuración o un diálogo están abiertos.
 
 Consulta [plan de aceptación y pruebas B1](docs/B1_BIBLIA_PROYECCION_TRANSICIONES.md). CI y pruebas Windows con dos pantallas deben completarse antes de declarar B1 aceptado. El fundido general de video/imágenes no está habilitado todavía; continuará en la etapa L1.
+
+
+## Estabilización JA 0.6.1 — pantalla, Biblia, Himnario y multimedia
+Esta revisión corrige cierre de proyectores al salir, limpieza completa, escalado de Biblia en Programa, gradiente de fondos proyectados, separación de tarjetas multipantalla, controles falsos de ventana, scroll de bibliotecas y controles HTML5 duplicados en Vista previa. El Himnario utiliza miniaturas reales MP4/WebM generadas bajo demanda (máximo 2 decodificadores), caché persistente dentro de Configuración, y carga lotes de 96 videos mediante “Mostrar más”. La posición de reproducción se informa más frecuentemente; Preview y Programa pueden seguir mostrando ligeras diferencias de fotograma al usar decodificadores distintos, y Spacedesk agrega su propia latencia de red.
+
+**CI verificado:** [Windows run 41357085284](https://github.com/IsaacMPP/Nuevo_prototipo/actions/runs/41357085284), 47/47 tests, instalador [artifact 13104125758](https://github.com/IsaacMPP/Nuevo_prototipo/actions/runs/41357085284/artifacts/13104125758).
+
+**No declarar estable sin ensayo Windows:** [incidencias y aceptación requerida](docs/INCIDENCIAS_ESTABILIZACION_061.md). La generación de miniaturas depende de códecs aceptados por Chromium (MP4 H.264 recomendado); archivos no decodificables conservan el ícono, sin fingir una miniatura. El cierre, limpieza, audio y scroll requieren verificación real en el equipo del operador.
