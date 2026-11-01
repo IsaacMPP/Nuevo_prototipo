@@ -47,6 +47,7 @@ window.jaOutput.receive(async command=>{
    const verse=scripture.querySelector("#verse"),reference=scripture.querySelector("#reference");
    if(!verse||!reference)return;
    if(content.style)applyBibleStyle(content.style);
+   if(command.reveal)setBlack(false);
    // Preserve the projection window, background, plate, audio and blackout.
    // Only the scripture text/reference are animated; a rapid sequence cancels
    // older animations and the latest requested verse wins.
