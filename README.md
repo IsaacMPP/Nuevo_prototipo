@@ -55,3 +55,10 @@ npm run pack:win
 Se conservó `engine/` (copia anterior de FreeShow GPL-3.0) como referencia histórica aislada. **No se instala, ejecuta ni empaqueta desde esta rama.** No borrar ni cambiar sus licencias. El motor nuevo de `desktop/` no importa código FreeShow; se debe revisar la distribución/licencia del repositorio completo antes de publicar una versión comercial.
 
 Ver `docs/MOTOR_PROPIO_V1.md` y `docs/CONTINUIDAD_CHATGPT.md`. PR #1 anterior sigue borrador; esta versión lleva su propia rama y PR borrador.
+
+
+## Novedades operativas 0.4.0
+El botón **Fondo / Opciones** de Biblia ahora permite modificar y guardar tamaño, fuente, colores, alineación, placa y fondo. **Vincular fondos** permite seleccionar carpetas externas y elegir imágenes reales JPG/PNG/WebP. `Fondos` también tiene biblioteca independiente para preparar/proyectar imágenes y video.
+La pestaña **Vista Cuadrícula** ya no deja texto oscuro sobre el fondo oscuro cuando está inactiva; los números y los libros tienen colores legibles. **Limpiar texto** conserva la escena bíblica de fondo.
+Para multimedia MP4/WebM, MP3/WAV/OGG/M4A, la Vista previa dispone de transporte y Programa tiene volumen independiente por salida real. Los videos deben usar codecs compatibles con Chromium (MP4 H.264/AAC recomendado); AVI/MKV aún no compatibles. Los archivos se leen desde las carpetas vinculadas reales, no son ejemplos precargados.
+**Importante:** si Windows detecta solo un monitor (como en la captura del usuario), el programa no proyectará sobre el monitor del operador. Para la salida real conectar una segunda pantalla en modo Extender, abrir ⚙️ Pantallas y asignar operador/principal. Las pruebas de compilación no sustituyen pruebas físicas de GPU, HDMI, códecs y audio.
