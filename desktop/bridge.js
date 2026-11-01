@@ -177,7 +177,16 @@ async function prepareFile(file){
 }
 function fileCard(file){
  const item=button("","bg-[#0a1938] border border-[#1a3768] hover:border-cyan-400 rounded-xl p-2 text-left flex flex-col gap-1 min-w-0",()=>prepareFile(file));
- item.append(node("div","rounded-lg bg-[#06132a] border border-[#203a69] aspect-video flex justify-center items-center text-xl text-sky-400",file.extension===".mp4"||file.extension===".webm"?"▶":file.extension===".mp3"?"♫":"▣"));
+ const visual=node("div","rounded-lg bg-[#06132a] border border-[#203a69] aspect-video flex justify-center items-center text-xl text-sky-400 overflow-hidden",
+ [".mp4",".webm"].includes(file.extension)?"▶":[".mp3",".wav",".ogg",".m4a"].includes(file.extension)?"♫":"▣");
+ item.append(visual);
+ if([".mp4",".webm"].includes(file.extension))window.jaThumbs?.observe(visual,file);
+ else if([".png",".jpg",".jpeg",".webp",".gif"].includes(file.extension))
+  void api.mediaUrl(file.path).then(url=>{
+   if(visual.isConnected){
+    const image=node("img","ja-thumb");image.src=url;image.alt=file.name;visual.replaceChildren(image);
+   }
+  }).catch(()=>{});
  item.append(node("div","font-semibold text-xs truncate",file.name));
  item.append(node("div","text-[10px] text-slate-400",file.extension+" · "+Math.round(file.size/1024)+" KB"));
  return item;
@@ -186,9 +195,23 @@ function renderFiles(){
  const q=state.module==="fondos"?$("jaBackgroundSearch")?.value||"":state.module==="himnario"||state.module==="juveniles"?$("hymnModuleSearch")?.value||"":$("multimediaSearchInput")?.value||"";
  const list=state.files.filter(f=>f.name.toLocaleLowerCase("es").includes(q.trim().toLocaleLowerCase("es")));
  const el=state.module==="fondos"?$("jaBackgroundGrid"):state.module==="himnario"||state.module==="juveniles"?$("hymnModuleGrid"):$("multimediaCardsGrid");
- if(!el)return;el.replaceChildren();
- if(!list.length)el.append(node("div","col-span-full rounded-xl border border-[#284674] p-6 text-slate-300 text-xs","No hay archivos aquí. Pulsa «Vincular carpeta» para utilizar tu biblioteca real."));
- for(const f of list.slice(0,220))el.append(fileCard(f));
+ if(!el)return;
+ el.replaceChildren();
+ if(!list.length){el.append(node("div","col-span-full rounded-xl border border-[#284674] p-6 text-slate-300 text-xs","No hay archivos aquí. Pulsa «Vincular carpeta» para utilizar tu biblioteca real."));return;}
+ // Incremental batches avoid adding 613 video elements or decoders on startup.
+ let visible=0;
+ function appendBatch(){
+  const from=visible;
+  visible=Math.min(list.length,visible+96);
+  for(const file of list.slice(from,visible))el.append(fileCard(file));
+  if(visible<list.length){
+   const more=button("Mostrar más ("+(list.length-visible)+" restantes)","col-span-full p-3 rounded-lg border border-[#335785] bg-[#102b50] text-sky-100 text-xs font-semibold",()=>{
+    more.remove();appendBatch();
+   });
+   el.append(more);
+  }
+ }
+ appendBatch();
 }
 function category(){return state.module==="himnario"?"Himnario Adventista":state.module==="juveniles"?"Cantos Juveniles":state.module==="fondos"?"Fondos Personalizados":state.type;}
 async function loadFiles(){
