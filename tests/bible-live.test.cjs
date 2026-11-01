@@ -90,3 +90,10 @@ test("el renderer de operador carga navegación compartida antes del bridge",()=
  assert.ok(bridge.includes("jaBibleNavigation.move("));
  assert.ok(bridge.includes("verseNavigation=verseNavigation.catch(()=>{}).then("));
 });
+
+test("el modo Fundido funciona aunque Corte esté guardado y Limpiar elimina el espejo anterior",()=>{
+ const bridge=fs.readFileSync(path.join(__dirname,"../desktop/bridge.js"),"utf8");
+ assert.ok(bridge.includes('state.verseTransition.durationMs||320'),"Fundido no puede reutilizar 0 ms de Corte");
+ assert.ok(bridge.includes('if(action==="clear")state.live.delete(id)'),"Programa no debe conservar un versículo después de Limpiar");
+ assert.ok(bridge.includes('s.state==="empty"'),"Programa no debe dibujar texto de una sesión vacía");
+});
