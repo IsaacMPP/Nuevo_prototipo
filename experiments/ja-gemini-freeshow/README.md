@@ -53,3 +53,26 @@ su frontend y main. Se entrega CI separado; no ejecutar el workflow oficial.
    fuentes correctamente, antes de habilitar multipantalla.
 7. Auditar cierre, audio principal, Spacedesk y permisos; añadir tests de UI
    end-to-end y gate físico, no solo asserts de strings.
+
+
+## Entrega experimental Windows validada por CI (2026-11-01)
+- Último commit de código/paquete: 1b31bd4c5f5c231f87b3a2d43065030b6ddfb93a.
+- GitHub Actions https://github.com/IsaacMPP/Nuevo_prototipo/actions/runs/41363147336 : SUCCESS.
+- Pruebas básicas de puente/diseño: 3/3. Compilación Svelte y TypeScript Electron: SUCCESS.
+- Dependencias nativas, RV1909, servidores FreeShow, postBuild e instalador NSIS x64: SUCCESS.
+- Artefacto Windows verificado: https://github.com/IsaacMPP/Nuevo_prototipo/actions/runs/41363147336/artifacts/13106352015
+- ZIP de 137012942 bytes; nombre JA-Gemini-FreeShow-Experimental-Windows.
+- appId experimental distinto al de JA2; hacer respaldo de datos y usar otra carpeta de instalación. Aislamiento de ajustes no probado.
+- ACEPTACIÓN FÍSICA WINDOWS/HDMI/SPACEDESK PENDIENTE. CI verde no valida audio ni controles funcionales.
+- No se modificaron main, feature/motor-propio-v1 ni JA_Proyecciones2.
+
+### Continuidad para nuevo chat
+Continuar JA Gemini + FreeShow en IsaacMPP/Nuevo_prototipo, rama experiment/gemini-freeshow.
+Último código empacado 1b31bd4, workflow 41363147336 SUCCESS, 3/3 pruebas, artifact 13106352015.
+La rama oficial feature/motor-propio-v1, versión 0.6.1 y PR #2 draft permanecen intactos.
+Objetivo inmediato: probar físicamente en Windows el diseño Gemini versus HTML aprobado,
+importar carpeta vía FreeShow clásico, preparar MP4, enviar a una sola salida, Play/Pausa,
+seek, mute y limpiar Programa preservando Vista previa. Registrar resultados/reproducir
+incidencias, corregir raíz y repetir CI. Multipantalla, audio por dispositivo, Biblia,
+Himnario JA y miniaturas aún no aceptados. No fusionar ni tocar main/JA_Proyecciones2.
+Entregar prompt autocontenido después de cada cambio.
