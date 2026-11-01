@@ -19,6 +19,8 @@
     let programRenderer: PreviewOutput | null = null
     let renderedOutput = ""
     let playingPath = ""
+    let listeningOutput = ""
+    let programMute: HTMLButtonElement | null = null
     let stopVideoState: (() => void) | null = null
     let cleanup: Array<() => void> = []
     let programSeek: HTMLInputElement | null = null
@@ -105,10 +107,11 @@
         }
         const path = output?.out?.background?.path || output?.out?.background?.id || ""
         const valid = !!path && (getMediaType(getExtension(path)) === "video" || output?.out?.background?.type === "player")
-        if (playingPath !== path || (stopVideoState && (!selectedId || !valid))) {
+        if (playingPath !== path || listeningOutput !== selectedId || (stopVideoState && (!selectedId || !valid))) {
             stopVideoState?.()
             stopVideoState = null
             playingPath = path
+            listeningOutput = selectedId
             videoState = { paused: true, muted: false, currentTime: 0, duration: 0 }
             if (valid) stopVideoState = videoSync(path, selectedId, (next) => {
                 videoState = {
@@ -134,6 +137,11 @@
             pause.title = videoState.paused ? "Reproducir en Programa" : "Pausar Programa"
             pause.setAttribute("aria-label", pause.title)
             pause.textContent = videoState.paused ? "▶" : "Ⅱ"
+        }
+        if (programMute) {
+            programMute.disabled = !playingPath || get(outLocked)
+            programMute.textContent = videoState.muted ? "🔇" : "🔊"
+            programMute.title = videoState.muted ? "Reactivar audio de Programa" : "Silenciar Programa"
         }
         const counter = el("programTimeCounter")
         if (counter) counter.textContent = playingPath ? time(videoState.currentTime) + " / " + time(videoState.duration) : "—"
@@ -333,10 +341,11 @@
             programButtons.append(clear)
             cleanup.push(() => clear.remove())
             const mute = document.createElement("button")
-            mute.type = "button"; mute.textContent = "🔇"
+            mute.type = "button"; mute.textContent = "🔊"
             mute.title = "Silenciar/reactivar vídeo de Programa"
             mute.className = clear.className
             mute.onclick = muteProgram
+            programMute = mute
             programButtons.append(mute)
             cleanup.push(() => mute.remove())
         }
