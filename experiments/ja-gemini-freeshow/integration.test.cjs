@@ -178,17 +178,16 @@ test("Reglas de emisión: al publicar multimedia desaparece escritura temporal s
 test("Consola: transiciones, negro y logo usan capas de FreeShow; sincronización de vídeo es opt-in y silenciada",()=>{
  const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
  for(const fragment of [
-   'bind("btnBridgeCut",()=>publishPreparedMedia("cut"))',
-   'bind("btnBridgeFade",()=>publishPreparedMedia("fade"))',
+   'bind("btnBridgeCut",publishPreparedMedia)',
+   'el("btnBridgeFade")?.remove()',
    'bind("btnBridgeBlack",()=>setOperatorEffect(JA_BLACK))',
    'bind("btnBridgeLogo",()=>setOperatorEffect(JA_LOGO))',
    'setOutput("effects",next,false,selectedId)',
-   'transitionData.update(data=>',
    'normalizeJAContentPath(prepared)===normalizeJAContentPath(playingPath)',
    'previewMedia.muted=true',
    'syncLinkedPreview()'
  ]) assert.ok(shell.includes(fragment),"No está enlazado "+fragment)
- assert.ok(!shell.includes('disable("btnBridgeFade"'),"Fundido no debe estar bloqueado")
+ assert.ok(shell.includes('el("btnBridgeFade")?.remove()'),"No se debe mostrar Fundido sin validar")
  assert.ok(!shell.includes('disable("btnBridgeBlack"'),"Negro no debe estar bloqueado")
 })
 
@@ -220,9 +219,10 @@ test("S0: el envío de una salida no exige campo screen ni primaryId de JA",()=>
 });
 test("Transiciones y controles visibles cumplen un contrato mínimo sin efectos simulados",()=>{
  const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
- assert.ok(shell.includes('function project() {publishPreparedMedia("cut")}'))
- assert.ok(shell.includes('bind("btnBridgeCut",()=>publishPreparedMedia("cut"))'))
- assert.ok(shell.includes('bind("btnBridgeFade",()=>publishPreparedMedia("fade"))'))
+ assert.ok(shell.includes('function project() {publishPreparedMedia()}'))
+ assert.ok(shell.includes('bind("btnBridgeCut",publishPreparedMedia)'))
+ assert.ok(shell.includes('el("btnBridgeFade")?.remove()'))
+ assert.ok(!shell.includes('transitionData.update('),"La emisión no debe cambiar transiciones globales")
  assert.ok(!shell.includes('"blur" | "scale" | "slide"'),"No ofrecer efectos sin validación física")
  assert.ok(!shell.includes("showTransitionOptions"),"No ofrecer menú ficticio de efectos")
  for (const id of ["btnProgramToAll","btnPreviewToAll"])assert.ok(shell.includes('el("'+id+'")?.remove()'),"Ocultar botón no implementado: "+id)

@@ -18,7 +18,7 @@
     import Scripture from "../drawer/bible/Scripture.svelte"
     import { get } from "svelte/store"
     import { geminiHtml, geminiBodyClasses } from "./gemini-fragment.generated"
-    import { activeScripture, effects, mediaFolders, outputs, outLocked, playingVideos, saved, scriptures, scriptureMode, scriptureSettings, templates, transitionData, drawerTabsData } from "../../stores"
+    import { activeScripture, effects, mediaFolders, outputs, outLocked, playingVideos, saved, scriptures, scriptureMode, scriptureSettings, templates, drawerTabsData } from "../../stores"
     import { encodeFilePath, getExtension, getMediaType } from "../helpers/media"
     import { clearBackground, clearSlide } from "../output/clear"
     import { setOutput } from "../helpers/output"
@@ -33,8 +33,7 @@
     let settingsStartSection: "general" | "screens" | "libraries" | "playback" | "shortcuts" = "general"
     let previewAutoplay = true
     let followProgram = false
-    // Solo transición inmediata y fundido nativo: otras opciones no fueron verificadas en Windows.
-    let transitionChoice: "cut" | "fade" = "cut"
+    // La fase S0 mantiene solo envío directo: transiciones no validadas se ocultan.
     const JA_BLACK = "ja_gemini_blackout_effect"
     const JA_LOGO = "ja_gemini_logo_effect"
     let compactUi = false
@@ -155,7 +154,7 @@
     // El validador JA de múltiples destinos exige asignación física de monitor
     // y primario persistido; ese requisito NO debe bloquear la salida única
     // que FreeShow ya podía controlar. No usar este método para fan-out.
-    function publishPreparedMedia(choice: "cut"|"fade" = transitionChoice) {
+    function publishPreparedMedia() {
         if(mode==="biblia") {
             const button=el("moduleView_biblia")?.querySelector<HTMLButtonElement>(".ja-bible-project")
             if(button)button.click()
@@ -170,11 +169,8 @@
             return notice("La salida seleccionada está inactiva o bloqueada.")
         const mediaPath=prepared
         const kind=getMediaType(getExtension(mediaPath))
-        // TransitionData es nativo de FreeShow. Otros tipos permanecen ocultos
-        // hasta que una prueba física demuestre su ejecución real.
-        transitionData.update(data=>({
-            ...data,media:{type:choice==="fade"?"fade":"none",duration:choice==="fade"?650:0,easing:"sine"}
-        }))
+        // No sobreescribir transiciones globales ni estilos: restaurar exactamente
+        // la ruta nativa que sí publicaba archivos antes de la regresión.
         try {
             const previous=get(outputs)[selectedId]
             // Una nueva imagen o vídeo principal REEMPLAZA el pasaje bíblico.
@@ -1083,7 +1079,7 @@
         if (label) label.textContent = fileName(path)
         updatePreviewProgress()
     }
-    function project() {publishPreparedMedia("cut")}
+    function project() {publishPreparedMedia()}
     function clearProgram() {
         if (chooseOutput().length !== 1 || !selectedId) return notice("Limpieza de múltiples salidas no habilitada en esta prueba")
         if (get(outLocked)) return notice("La salida está bloqueada")
@@ -1165,8 +1161,9 @@
             updatePreviewProgress()
         }
         bind("btnBridgeQuickPlay",project)
-        bind("btnBridgeCut",()=>publishPreparedMedia("cut"))
-        bind("btnBridgeFade",()=>publishPreparedMedia("fade"))
+        bind("btnBridgeCut",publishPreparedMedia)
+        // Fundido y los demás efectos no validados se retiran temporalmente.
+        el("btnBridgeFade")?.remove()
         bind("btnBridgeBlack",()=>setOperatorEffect(JA_BLACK))
         bind("btnBridgeLogo",()=>setOperatorEffect(JA_LOGO))
         bind("btnProgramPause", pauseProgram)
@@ -1207,8 +1204,7 @@
             programButtons.append(mute)
             cleanup.push(() => mute.remove())
         }
-        const fadeButton=el("btnBridgeFade") as HTMLButtonElement|null
-        if(fadeButton){fadeButton.disabled=false;fadeButton.removeAttribute("aria-disabled");fadeButton.title="Enviar el archivo preparado con fundido nativo (pendiente de prueba física)"}
+
         // En esta versión existe UNA sola vista de preparación y UNA salida JA.
         // «Vista previa a todas» nunca tuvo un buffer de preview por destino;
         // «Programa a todas» exige asignar y verificar previamente los monitores.
