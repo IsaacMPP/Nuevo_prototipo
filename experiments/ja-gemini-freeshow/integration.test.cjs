@@ -14,7 +14,7 @@ test("El diseño Gemini se conserva sin el controlador demostrativo",()=>{
 });
 test("El adaptador usa salidas reales de FreeShow, nunca los vídeos ficticios",()=>{
  const s=read("engine/src/frontend/components/ja/JaGeminiShell.svelte");
- for(const expected of ["setOutput(","PreviewOutput","videoSync(","VideoPlayer.pause(","VideoPlayer.play(","VideoPlayer.seekTo(","clearBackground(selectedId)","get(outputs)","get(media)","dispatch(\"classic\")"]){
+ for(const expected of ["setOutput(","PreviewOutput","videoSync(","VideoPlayer.pause(","VideoPlayer.play(","VideoPlayer.seekTo(","clearBackground(selectedId)","get(outputs)","Main.READ_FOLDER","hymnVideos","dispatch(\"classic\")"]){
   assert.ok(s.includes(expected), "Falta cableado real: "+expected);
  }
  assert.ok(s.includes("ids.length !== 1"),"No se ha protegido la etapa de salida única");

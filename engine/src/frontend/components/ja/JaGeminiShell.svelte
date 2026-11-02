@@ -464,7 +464,11 @@
             versions.className="bg-[#08172f] text-white border border-[#355681] rounded px-2 py-1"
             versions.setAttribute("aria-label","Seleccionar traducción bíblica instalada")
             versions.dataset.role="ja-bibles"
-            versions.onchange=()=>{activeBibleId=versions.value;scriptureView?.$set({active:activeBibleId})}
+            versions.onchange=()=>{
+                activeBibleId=versions.value
+                drawerTabsData.update(data => ({...data,scripture:{...data.scripture,activeSubTab:activeBibleId}}))
+                scriptureView?.$set({active:activeBibleId})
+            }
             bar.append(versions)
             for (const [label,which] of [["Vista cuadriculada","grid"],["Vista de lista","list"]] as const) {
                 const button=document.createElement("button")
@@ -475,7 +479,7 @@
             }
             const project=document.createElement("button")
             project.type="button"
-            project.textContent="▶ Proyectar versículo"
+            project.textContent="▶ Proyectar en principal"
             project.onclick=()=>{if(get(outLocked)) return notice("Las salidas están bloqueadas");void playScripture()}
             bar.append(project)
             area.append(bar)
