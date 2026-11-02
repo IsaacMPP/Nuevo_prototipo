@@ -111,3 +111,14 @@ Revisión del código y cambios del siguiente lote:
 - Las cuatro acciones exigen ensayos Windows con el instalador del commit nuevo; las pruebas automatizadas deben comprobar la función y el origen del control, no solo la presencia de cadenas.
 
 **Mantener pendiente S0:** Windows tiene 3 pantallas (laptop, HDMI y spacedesk) pero Gemini refleja una sola salida FreeShow. No cambiar creación/ruteo de salidas durante esta fase. **No modificar lógica de Biblia**; continuar exclusivamente Interfaz/Configuración.
+
+## Incidencias de interfaz reportadas después de e06d233 — lote operacional
+**Evidencia física:** vídeo MP4 conserva un versículo bíblico anterior encima; controles QuickPlay/Cortar/Fundido/Negro/Logo confusos o inertes; «Vista previa a todas» y «Programa a todas» deshabilitados; volumen desorienta; etiqueta «Modo: prueba con archivos locales» parece un modo falso. Windows tiene tres monitores, JA solo una salida configurada.
+
+**Nueva regla:** preparar no proyecta. Al publicar multimedia en Programa, `sendToJAOutputs("background",payload,[selectedId],{replaceScripture:true})` retira diapositiva temporal previa **solo en destino** mediante rutina nativa; no borra un fondo ni el audio de otras pantallas. `Cortar` fuerza transición nativa none, `Fundido` permite seleccionar corte/fade/blur/scale/slide sobre el motor nativo, `Quick Play` aplica la transición seleccionada. Con una sola salida configurada se evita afectar estados compartidos de otras salidas. Negro y Logo implementados como capas de efectos reversibles por salida (no sustituyen programa ni detienen audio). Logo inicial usa imagen instalada `./ja-logo.png`; personalización pendiente.
+
+**Sincronización del mismo vídeo:** publicación enlaza Vista previa silenciada al nuevo Programa; después se puede activar/desactivar «Vincular». La reproducción vinculada sigue el reloj y pausa de Programa; pulsar Play/Pausa en la vista vinculada controla Programa. Seleccionar un contenido diferente desvincula la vista para impedir cambios involuntarios. Vista previa nunca es una fuente extra de audio en el modo enlazado. Validar con medios reales y comprobar demoras/latencia en Windows.
+
+**Multipantalla:** todavía S0. Los 3 monitores Windows no están representados por 3 salidas configuradas; **no se activa un envío real a todas** hasta validar la asignación HDMI/spacedesk, audio y estado por salida. Los dos botones deben explicar exactamente qué configuración falta y permitir acceder al panel, pero no confirmar emisiones inexistentes.
+
+**CI no sustituye pruebas físicas:** comprobar que Fundido afecta la salida física, Negro cubre toda la composición, Logo aparece en la posición esperada, no se pierde audio y cambiar a vídeo elimina Biblia; de lo contrario mantener S1 y corregir la causa.

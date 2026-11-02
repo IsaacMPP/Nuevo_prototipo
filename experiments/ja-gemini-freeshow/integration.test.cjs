@@ -162,3 +162,28 @@ test("Regresiones físicas de cuatro botones: Restablecer, Ampliar, Agregar y Li
  assert.ok(clear.includes("clearSlide(true, selectedId)"),"Debe limpiar solo la diapositiva del destino")
  assert.ok(!clear.includes("clearBackground(") && !clear.includes("setOutput("),"No borrar fondos ni interferir audio al limpiar texto")
 })
+
+test("Reglas de emisión: al publicar multimedia desaparece escritura temporal sin cortar audio de otros destinos",()=>{
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ assert.ok(shell.includes('sendToJAOutputs("background",'),"Debe publicar desde enrutador JA")
+ assert.ok(shell.includes('{replaceScripture:true}'),"Enviar vídeo debe retirar capa temporal anterior")
+ assert.ok(shell.includes('clearBlackBeforePublishing([selectedId])'),"Cortina negra no puede ocultar contenido recién enviado")
+ const router=read("engine/src/frontend/components/helpers/output.ts")
+ assert.ok(router.includes('if (type === "background" && options.replaceScripture && data) clearTemporaryScriptureOnJAOutputs(valid)'))
+})
+test("Consola: transiciones, negro y logo usan capas de FreeShow; sincronización de vídeo es opt-in y silenciada",()=>{
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ for(const fragment of [
+   'bind("btnBridgeCut",()=>publishPreparedMedia("cut"))',
+   'bind("btnBridgeFade",showTransitionOptions)',
+   'bind("btnBridgeBlack",()=>setOperatorEffect(JA_BLACK))',
+   'bind("btnBridgeLogo",()=>setOperatorEffect(JA_LOGO))',
+   'setOutput("effects",next,false,selectedId)',
+   'transitionData.update(data=>',
+   'normalizeJAContentPath(prepared)===normalizeJAContentPath(playingPath)',
+   'previewMedia.muted=true',
+   'syncLinkedPreview()'
+ ]) assert.ok(shell.includes(fragment),"No está enlazado "+fragment)
+ assert.ok(!shell.includes('disable("btnBridgeFade"'),"Fundido no debe estar bloqueado")
+ assert.ok(!shell.includes('disable("btnBridgeBlack"'),"Negro no debe estar bloqueado")
+})

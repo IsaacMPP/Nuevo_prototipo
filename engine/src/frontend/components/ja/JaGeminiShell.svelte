@@ -17,10 +17,10 @@
     import Scripture from "../drawer/bible/Scripture.svelte"
     import { get } from "svelte/store"
     import { geminiHtml, geminiBodyClasses } from "./gemini-fragment.generated"
-    import { activeScripture, mediaFolders, outputs, outLocked, playingVideos, saved, scriptures, scriptureMode, scriptureSettings, templates, drawerTabsData } from "../../stores"
+    import { activeScripture, effects, mediaFolders, outputs, outLocked, playingVideos, saved, scriptures, scriptureMode, scriptureSettings, templates, transitionData, drawerTabsData } from "../../stores"
     import { encodeFilePath, getExtension, getMediaType } from "../helpers/media"
     import { clearBackground, clearSlide } from "../output/clear"
-    import { setOutput } from "../helpers/output"
+    import { clearTemporaryScriptureOnJAOutputs, sendToJAOutputs, setOutput } from "../helpers/output"
     import { VideoPlayer } from "../media/video/videoPlayer"
     import { videoSync } from "../media/video/videoSync"
     import PreviewOutput from "../output/preview/PreviewOutput.svelte"
@@ -31,6 +31,11 @@
     let settingsOpen = false
     let settingsStartSection: "general" | "screens" | "libraries" | "playback" | "shortcuts" = "general"
     let previewAutoplay = true
+    let followProgram = false
+    let transitionChoice: "cut" | "fade" | "blur" | "scale" | "slide" = "cut"
+    let transitionMenu: HTMLDivElement | null = null
+    const JA_BLACK = "ja_gemini_blackout_effect"
+    const JA_LOGO = "ja_gemini_logo_effect"
     let compactUi = false
     let largeUi = false
     let prepared = ""
@@ -59,6 +64,7 @@
     let playingPath = ""
     let listeningOutput = ""
     let programMute: HTMLButtonElement | null = null
+    let previewLinkButton: HTMLButtonElement | null = null
     let stopVideoState: (() => void) | null = null
     let cleanup: Array<() => void> = []
     let programSeek: HTMLInputElement | null = null
@@ -117,6 +123,117 @@
     }
     // Restablecer nunca limpia Programa ni reubica salidas físicas.
     // El botón original restablecía solo la selección (invisible con una salida).
+    function ensureJAOutputEffects() {
+        effects.update(current => ({
+            ...current,
+            [JA_BLACK]: {name:"JA · Cortina negra",color:null,placeUnderSlide:false,style:"width:100%;height:100%;",background:"#000000",opacity:1,items:[]},
+            [JA_LOGO]: {name:"JA · Logotipo",color:null,placeUnderSlide:false,style:"width:100%;height:100%;",background:"transparent",opacity:1,
+                items:[{type:"asset",path:"./ja-logo.png",size:1.35,x:0.5,y:0.5}]}
+        }))
+    }
+    function setOperatorEffect(id: string) {
+        if (get(outLocked)) return notice("La salida está bloqueada")
+        const output = selectedId ? get(outputs)[selectedId] : null
+        if (!output?.active || !output.enabled) return notice("Selecciona una salida activa")
+        const active = output.out?.effects || []
+        const next = active.includes(id) ? active.filter(effectId=>effectId!==id) : [...active,id]
+        setOutput("effects",next,false,selectedId)
+        const button = el(id===JA_BLACK?"btnBridgeBlack":"btnBridgeLogo")
+        button?.setAttribute("aria-pressed",String(next.includes(id)))
+        notice((id===JA_BLACK?"Cortina negra":"Logo")+(next.includes(id)?" activado":" desactivado")+" en "+(output.name||selectedId))
+    }
+    function clearBlackBeforePublishing(outputIds: string[]) {
+        const current=get(outputs)
+        for(const id of outputIds) {
+            const enabledEffects=current[id]?.out?.effects || []
+            if(enabledEffects.includes(JA_BLACK))
+                setOutput("effects",enabledEffects.filter(effect=>effect!==JA_BLACK),false,id)
+        }
+    }
+    function chooseTransition(next: "cut"|"fade"|"blur"|"scale"|"slide") {
+        transitionChoice=next
+        transitionMenu?.remove()
+        transitionMenu=null
+        const b=el("btnBridgeFade")
+        if (b) { b.textContent="🪄 "+({cut:"Cortar",fade:"Fundido",blur:"Desenfoque",scale:"Escala",slide:"Deslizamiento"}[next]); b.setAttribute("aria-expanded","false") }
+        notice("Transición seleccionada: "+next+". Se aplicará al próximo contenido multimedia.")
+    }
+    function showTransitionOptions() {
+        if (transitionMenu) {transitionMenu.remove();transitionMenu=null;return}
+        const target=el("btnBridgeFade")
+        if(!target)return
+        const menu=document.createElement("div")
+        menu.className="ja-gemini-transition-menu"
+        menu.setAttribute("role","group")
+        menu.setAttribute("aria-label","Elegir transición de multimedia")
+        for(const [id,label] of [["cut","Corte inmediato"],["fade","Fundido"],["blur","Desenfoque"],["scale","Escala"],["slide","Deslizamiento"]] as const){
+            const b=document.createElement("button")
+            b.type="button";b.textContent=label
+            b.setAttribute("aria-pressed",String(id===transitionChoice))
+            b.onclick=()=>chooseTransition(id)
+            menu.append(b)
+        }
+        host.append(menu);transitionMenu=menu
+        const r=target.getBoundingClientRect(),h=host.getBoundingClientRect()
+        menu.style.left=Math.max(4,Math.min(host.clientWidth-menu.offsetWidth-8,r.left-h.left))+"px"
+        menu.style.top=Math.max(4,Math.min(host.clientHeight-menu.offsetHeight-8,r.bottom-h.top+3))+"px"
+        target.setAttribute("aria-expanded","true")
+    }
+    function publishPreparedMedia(choice: "cut"|"fade"|"blur"|"scale"|"slide" = transitionChoice) {
+        if(mode==="biblia") {
+            const button=el("moduleView_biblia")?.querySelector<HTMLButtonElement>(".ja-bible-project")
+            if(button)button.click()
+            else notice("Prepara un versículo antes de proyectar")
+            return
+        }
+        if(!prepared)return notice("Selecciona un archivo antes de proyectarlo")
+        const available=chooseOutput()
+        if(available.length!==1 || !selectedId || !available.includes(selectedId))
+            return notice("El envío de esta versión está limitado a UNA salida configurada; primero debemos identificar las demás pantallas.")
+        if(get(outLocked))return notice("La salida de Programa está bloqueada")
+        // Las transiciones nativas aplican al motor actualmente supervisado.
+        // No cambiar transición global cuando hay más de una salida.
+        const nativeType=choice==="cut"?"none":choice
+        transitionData.update(data=>({...data,media:{type:nativeType,duration:choice==="cut"?0:650,easing:"sine"}}))
+        clearBlackBeforePublishing([selectedId])
+        const kind=getMediaType(getExtension(prepared))
+        // La misma API nativa se encarga de quitar una diapositiva temporal
+        // (Biblia) antes de activar otro vídeo/fondo, solo en el destino.
+        const sent=sendToJAOutputs("background",{path:prepared,type:kind,loop:false,muted:false,startAt:0},[selectedId],{replaceScripture:true})
+        if(!sent.includes(selectedId))return notice("No se confirmó el envío a Programa")
+        // La vista se prepara con el vídeo a cero y queda sincronizable,
+        // sin emitir una segunda fuente de audio.
+        if(previewMedia && (kind==="video"||kind==="audio")){
+            previewMedia.pause()
+            try{previewMedia.currentTime=0}catch{}
+            previewMedia.muted=true
+            followProgram=true
+        } else followProgram=false
+        updatePreviewProgress()
+        notice("Programa: "+fileName(prepared)+" · "+(choice==="cut"?"Corte":choice)+". Vista previa "+(followProgram?"vinculada (silenciada)":"independiente")+".")
+    }
+    function toggleFollowProgram() {
+        if(!previewMedia || !playingPath || normalizeJAContentPath(prepared)!==normalizeJAContentPath(playingPath))
+            return notice("Para vincular, prepara el mismo vídeo que está en Programa")
+        followProgram=!followProgram
+        if(followProgram) previewMedia.muted=true
+        syncLinkedPreview()
+        updatePreviewProgress()
+        notice(followProgram?"Vista previa sigue a Programa (silenciada)":"Vista previa independiente")
+    }
+    function isLinkedVideo() {
+        return !!(followProgram && previewMedia && playingPath && prepared &&
+            normalizeJAContentPath(prepared)===normalizeJAContentPath(playingPath))
+    }
+    function syncLinkedPreview() {
+        if(!isLinkedVideo() || !previewMedia)return
+        previewMedia.muted=true
+        if(Number.isFinite(videoState.currentTime) && Math.abs(previewMedia.currentTime-videoState.currentTime)>0.65)
+            try{previewMedia.currentTime=videoState.currentTime}catch{}
+        if(videoState.paused && !previewMedia.paused)previewMedia.pause()
+        else if(!videoState.paused && previewMedia.paused)
+            void previewMedia.play().catch(()=>notice("Vista previa no pudo seguir el vídeo de Programa"))
+    }
     function resetTargetSelection() {
         closeLocalExpanded()
         closeAddMediaMenu()
@@ -129,6 +246,7 @@
         biblePreviewReady = false
         biblePreviewReference = ""
         prepared = ""
+        followProgram = false
         const preview = el("previewCanvasContent")
         if (preview) {
             preview.replaceChildren()
@@ -351,6 +469,7 @@
                     duration: Number(next.duration) || 0
                 }
                 updateTransport()
+                syncLinkedPreview()
             })
         }
         const label = el("programStateLabel")
@@ -381,6 +500,7 @@
             // Do not enable it with multiple outputs until per-output audio is tested.
             const session = playingPath && selectedId ? VideoPlayer.getPlaying(playingPath, [selectedId]) : null
             programVolume.disabled = !session || get(outLocked) || chooseOutput().length !== 1
+            programVolume.title = session ? "Volumen real de Programa: "+Math.round(VideoPlayer.getVolume(playingPath,[selectedId])*100)+"%" : "Sin sesión de vídeo con audio controlable en Programa"
             if (session && document.activeElement !== programVolume)
                 programVolume.value = String(Math.round(Math.max(0, Math.min(1, VideoPlayer.getVolume(playingPath, [selectedId]))) * 100))
         }
@@ -780,7 +900,7 @@
             else if (/Guardado/i.test(original)) entry.node.nodeValue = get(saved) ? "Guardado" : "Cambios pendientes"
             else if (/Estado:\s*En vivo|^En vivo$/i.test(original))
                 entry.node.nodeValue = active.length ? "Salida activa" : "Sin salida activa"
-            else if (/Modo:\s*Servicio/i.test(original)) entry.node.nodeValue = "Modo: prueba con archivos locales"
+            else if (/Modo:\s*Servicio/i.test(original)) entry.node.nodeValue = "Biblioteca: archivos locales"
         }
         // El mock incluía medidores sin conexión al audio real.
         const fakeMeter = el("audioMeterBars")
@@ -805,7 +925,7 @@
                 cleanup.push(()=>button.removeEventListener("click",handler))
                 button.title = "Vincula una carpeta real de Windows para indexar sus archivos"
             }
-            if (/^(Restablecer|Logo|Negro|Fundido)$/i.test(button.textContent?.trim() || "")) {
+            if (/^Restablecer preferencias de prueba$/i.test(button.textContent?.trim() || "")) {
                 button.disabled = true
                 button.title = "Pendiente: no es un control operativo todavía"
             }
@@ -853,7 +973,7 @@
         el("projectDropdownMenu")?.remove()
         const fauxWindows=el("btnOpenDiagModal")?.nextElementSibling
         if (fauxWindows?.textContent?.includes("✕")) fauxWindows.remove()
-        for (const id of ["btnOpenDiagModal","btnBridgeBlack","btnBridgeLogo"])
+        for (const id of ["btnOpenDiagModal"])
             disable(id,"Función pendiente; no se ejecutan controles de demostración")
         const sort=el("multimediaSortSelect") as HTMLSelectElement | null
         if (sort) {
@@ -908,6 +1028,7 @@
             if (isScriptureDraft) muteButton.title = "La Biblia no tiene audio en Vista previa"
         }
         if (seek && isScriptureDraft) seek.disabled = true
+        if(previewLinkButton){previewLinkButton.disabled=!previewMedia || !playingPath || normalizeJAContentPath(prepared)!==normalizeJAContentPath(playingPath);previewLinkButton.setAttribute("aria-pressed",String(isLinkedVideo()));previewLinkButton.textContent=isLinkedVideo()?"🔗 Vinculada":"🔗 Vincular"}
         const counter = el("previewTimeCounter")
         if (counter && previewMedia) counter.textContent = time(previewMedia.currentTime) + " / " + time(previewMedia.duration)
         const slider = el("previewSeekSlider") as HTMLInputElement | null
@@ -931,6 +1052,7 @@
         biblePreviewRenderer = null
         biblePreviewReady = false
         prepared = path
+        followProgram=false
         previewMedia?.pause()
         previewMedia = null
         const target = el("previewCanvasContent")
@@ -969,21 +1091,7 @@
         if (label) label.textContent = fileName(path)
         updatePreviewProgress()
     }
-    function project() {
-        if (mode === "biblia") {
-            const button = el("moduleView_biblia")?.querySelector<HTMLButtonElement>(".ja-bible-project")
-            if (button) button.click()
-            else notice("Prepara un versículo antes de proyectar")
-            return
-        }
-        if (!prepared) return notice("Selecciona primero un archivo real de la biblioteca")
-        const ids = chooseOutput()
-        if (ids.length !== 1 || !selectedId || !ids.includes(selectedId))
-            return notice("Esta prueba aislada solo admite UNA salida habilitada para proteger las demás.")
-        if (get(outLocked)) return notice("La salida de Programa está bloqueada.")
-        setOutput("background", { path: prepared, type: getMediaType(getExtension(prepared)), loop: false, muted: false, startAt: 0 }, false, selectedId)
-        notice("Contenido enviado a Programa: " + fileName(prepared))
-    }
+    function project() {publishPreparedMedia(transitionChoice)}
     function clearProgram() {
         if (chooseOutput().length !== 1 || !selectedId) return notice("Limpieza de múltiples salidas no habilitada en esta prueba")
         if (get(outLocked)) return notice("La salida está bloqueada")
@@ -1029,6 +1137,7 @@
         removeInertGeminiControls()
         connectMediaTypeFilters()
         installFolderPicker()
+        ensureJAOutputEffects()
         showModule("multimedia")
         void registerJAMediaFolders().then(() => scanMediaFolders()).catch(err => notice("Error al preparar carpetas: "+String(err)))
         const program = el("programCanvasContent")
@@ -1040,10 +1149,29 @@
             slider.disabled = true
             slider.addEventListener("input", () => { if (previewMedia) previewMedia.currentTime = Number(slider.value) || 0 })
         }
-        bind("btnPreviewPlay", () => { if (previewMedia) { if (previewMedia.paused) void previewMedia.play().catch(() => notice("No se pudo iniciar Vista previa")); else previewMedia.pause() } })
-        bind("btnPreviewMute", () => { if (previewMedia) { previewMedia.muted = !previewMedia.muted; updatePreviewProgress() } })
-        bind("btnBridgeQuickPlay", project)
-        bind("btnBridgeCut", project)
+        bind("btnPreviewPlay", () => {
+            if(!previewMedia)return
+            if(isLinkedVideo()){
+                if(videoState.paused)VideoPlayer.play(playingPath,selectedId)
+                else VideoPlayer.pause(playingPath,selectedId)
+            }else if(previewMedia.paused)void previewMedia.play().catch(()=>notice("No se pudo iniciar Vista previa"))
+            else previewMedia.pause()
+        })
+        bind("btnPreviewMute",()=>{if(previewMedia){if(isLinkedVideo()){previewMedia.muted=true;notice("Vista previa vinculada permanece silenciada para evitar audio duplicado")}else previewMedia.muted=!previewMedia.muted;updatePreviewProgress()}})
+        const previewControls=el("btnPreviewPlay")?.parentElement
+        if(previewControls){
+            const link=document.createElement("button")
+            link.type="button";link.className="ja-video-link-button";link.title="Vincular o desvincular reproducción local con el mismo vídeo de Programa"
+            link.onclick=toggleFollowProgram
+            previewControls.append(link);previewLinkButton=link
+            cleanup.push(()=>link.remove())
+            updatePreviewProgress()
+        }
+        bind("btnBridgeQuickPlay",project)
+        bind("btnBridgeCut",()=>publishPreparedMedia("cut"))
+        bind("btnBridgeFade",showTransitionOptions)
+        bind("btnBridgeBlack",()=>setOperatorEffect(JA_BLACK))
+        bind("btnBridgeLogo",()=>setOperatorEffect(JA_LOGO))
         bind("btnProgramPause", pauseProgram)
         bind("btnBridgeClearText", clearSelectedTextLayer)
         // Negro, Logo y Fundido siguen bloqueados hasta comprobar su efecto real por salida.
@@ -1082,7 +1210,8 @@
             programButtons.append(mute)
             cleanup.push(() => mute.remove())
         }
-        disable("btnBridgeFade", "Fundido de multimedia pendiente de validación")
+        const fadeButton=el("btnBridgeFade") as HTMLButtonElement|null
+        if(fadeButton){fadeButton.disabled=false;fadeButton.removeAttribute("aria-disabled");fadeButton.title="Elegir transición de salida nativa: Corte, Fundido, Desenfoque, Escala o Deslizamiento"}
         disable("btnProgramToAll", "Envío múltiple pendiente de aislamiento")
         disable("btnPreviewToAll", "Envío múltiple pendiente de aislamiento")
         disable("btnProjectSelectedVerse", "Biblia todavía no integrada en esta prueba")
@@ -1139,6 +1268,7 @@
         rebuildOutputs()
         return () => {
             if (timer) clearTimeout(timer)
+            transitionMenu?.remove()
             closeLocalExpanded()
             closeAddMediaMenu()
             scanGeneration++
