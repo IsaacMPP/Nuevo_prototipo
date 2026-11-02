@@ -1,9 +1,22 @@
 <script lang="ts">
     // Puente real Gemini -> servicios FreeShow. No ejecuta los scripts del mock.
     import { createEventDispatcher, onMount } from "svelte"
+    import { uid } from "uid"
+    import type { FileFolder } from "../../../types/Main"
+    import { Main } from "../../../types/IPC/Main"
+    import { ToMain } from "../../../types/IPC/ToMain"
+    import { requestMain, sendMain, receiveToMain, destroyMain } from "../../IPC/main"
+    import { geminiCounts, geminiLocalFiles, geminiSearch, type GeminiFile, type GeminiMediaType } from "../../utils/jaGeminiLibrary"
+    import { isPathInJACollection, normalizeJAContentPath } from "../../utils/jaHymnPaths"
+    import { hymnVideos, hymnCollectionPaths, hymnSourcePaths, hymnLinks, hymnSourceStatus, linkHymnFolder, unlinkHymnFolder, refreshJAHymnLibrary } from "../../utils/jaHymnLibrary"
+    import { registerJAMediaFolders } from "../../utils/jaMediaFolders"
+    import { queuedHymnThumbnail } from "../../utils/jaHymnThumbnailQueue"
+    import { registerJARV1909 } from "../drawer/bible/jaBundledBible"
+    import { playScripture } from "../drawer/bible/scripture"
+    import Scripture from "../drawer/bible/Scripture.svelte"
     import { get } from "svelte/store"
     import { geminiHtml, geminiBodyClasses } from "./gemini-fragment.generated"
-    import { media, mediaFolders, outputs, outLocked } from "../../stores"
+    import { mediaFolders, outputs, outLocked, saved, scriptures, scriptureMode, drawerTabsData } from "../../stores"
     import { encodeFilePath, getExtension, getMediaType } from "../helpers/media"
     import { clearBackground } from "../output/clear"
     import { setOutput } from "../helpers/output"
@@ -15,7 +28,21 @@
     let host: HTMLDivElement
     let prepared = ""
     let selectedId = ""
-    let mode: "multimedia" | "himnario" = "multimedia"
+    let mode: "multimedia" | "himnario" | "biblia" = "multimedia"
+    let scriptureView: Scripture | null = null
+    let scriptureTarget: HTMLElement | null = null
+    let activeBibleId = ""
+    let screenRenderers: PreviewOutput[] = []
+    let screenStructure = ""
+    let collection = "Himnario Adventista"
+    let typeFilter: GeminiMediaType | "all" = "video"
+    let indexedMedia: GeminiFile[] = []
+    let scanErrors: string[] = []
+    let scanning = false
+    let scanGeneration = 0
+    let thumbObserver: IntersectionObserver | null = null
+    let libraryToolbar: HTMLDivElement | null = null
+    const mockNodes: Array<{node: Text; original: string}> = []
     let programRenderer: PreviewOutput | null = null
     let renderedOutput = ""
     let playingPath = ""
@@ -69,26 +96,67 @@
         const available = chooseOutput()
         const list = el("multiscreenCardsList")
         const targets = el("quickTargetButtons")
-        list?.replaceChildren()
-        targets?.replaceChildren()
-        if (!available.length) {
-            if (list) list.textContent = "Configura una salida en FreeShow antes de proyectar."
-            if (targets) targets.textContent = "Sin salida configurada"
+        const outputMap = get(outputs)
+        // Reconstruct only when monitors/active flags change, not every playback tick.
+        const structure = available.map(id=>id+":"+!!outputMap[id]?.active).join("|")
+        if (structure !== screenStructure) {
+            screenStructure = structure
+            for (const component of screenRenderers) component.$destroy()
+            screenRenderers = []
+            list?.replaceChildren()
+            targets?.replaceChildren()
+            if (!available.length) {
+                if (list) list.textContent = "No hay salidas configuradas en FreeShow."
+                if (targets) targets.textContent = "Sin salida configurada"
+            }
+            for (const id of available) {
+                const value = outputMap[id]
+                const card = document.createElement("button")
+                card.type = "button"
+                card.dataset.output = id
+                card.className = "ja-screen-card w-full rounded-xl border p-2 text-left flex items-center gap-3"
+                const thumb = document.createElement("div")
+                thumb.className = "ja-screen-preview"
+                thumb.setAttribute("aria-label", "Vista de salida " + (value.name || id))
+                try {
+                    screenRenderers.push(new PreviewOutput({ target:thumb,props:{outputId:id,disableTransitions:true} }))
+                } catch (error) {
+                    console.warn("Salida sin vista previa renderizable:",id,error)
+                    thumb.textContent = "Vista no disponible"
+                }
+                const info = document.createElement("div")
+                info.className = "min-w-0 flex-1"
+                const header = document.createElement("strong")
+                header.className = "text-xs block truncate"
+                header.textContent = value.name || "Salida " + id
+                const state = document.createElement("span")
+                state.className = "ja-screen-state block text-[10px] text-slate-300 truncate"
+                info.append(header,state)
+                const badge = document.createElement("span")
+                badge.className = "ja-screen-badge text-[10px] px-2 py-1 rounded-xl whitespace-nowrap"
+                info.append(badge)
+                card.append(thumb,info)
+                card.onclick = () => { selectedId=id; rebuildOutputs() }
+                list?.append(card)
+                const target = document.createElement("button")
+                target.type = "button";target.dataset.output = id
+                target.className = "ja-target rounded-lg border px-2 py-1 text-xs"
+                target.textContent = value.name || "Salida " + id
+                target.onclick = card.onclick
+                targets?.append(target)
+            }
         }
         for (const id of available) {
-            const value = get(outputs)[id]
-            const name = value.name || "Salida " + id
-            const button = document.createElement("button")
-            button.type = "button"
-            button.className = "text-left w-full p-3 rounded-lg border text-xs " + (id === selectedId ? "border-amber-400 bg-[#102d53] text-white" : "border-[#27446e] bg-[#091a38] text-slate-200")
-            const background = value.out?.background
-            button.textContent = name + (background ? " · " + fileName(background.path || background.id || "") : " · Libre")
-            button.onclick = () => { selectedId = id; rebuildOutputs(); syncProgram() }
-            list?.appendChild(button)
-            const target = button.cloneNode(true) as HTMLButtonElement
-            target.className = "px-3 py-1 rounded-lg border text-xs " + (id === selectedId ? "pill-amber-target" : "border-[#27446e]")
-            target.onclick = button.onclick
-            targets?.appendChild(target)
+            const output = outputMap[id]
+            const state = list?.querySelector<HTMLElement>('[data-output="' + CSS.escape(id) + '"]')
+            state?.classList.toggle("ja-selected",id===selectedId)
+            const file = output?.out?.background?.path || output?.out?.background?.id || ""
+            const label = state?.querySelector(".ja-screen-state")
+            if (label) label.textContent = file ? fileName(file) : "Salida libre"
+            const badge = state?.querySelector(".ja-screen-badge")
+            if (badge) badge.textContent = output.active ? "Activa" : "Inactiva"
+            const target = targets?.querySelector<HTMLElement>('[data-output="' + CSS.escape(id) + '"]')
+            target?.classList.toggle("ja-selected",id===selectedId)
         }
         syncProgram()
     }
@@ -151,80 +219,317 @@
             if (document.activeElement !== programSeek) programSeek.value = String(videoState.currentTime)
         }
     }
-    function sourceFiles() {
-        const folders = Object.values(get(mediaFolders)).filter(Boolean)
-        const hymnFolders = folders.filter((f) => /himnario|himnos|hymns|cantos/i.test(f.name || "")).map((f) => (f.path || "").toLowerCase())
-        return Object.keys(get(media))
-            .filter((path) => {
-                const type = getMediaType(getExtension(path))
-                if (type !== "video" && type !== "image" && type !== "audio") return false
-                if (path.startsWith("http:") || path.startsWith("https:")) return false
-                return mode !== "himnario" || hymnFolders.some((f) => path.toLowerCase().startsWith(f))
-            }).sort((a, b) => fileName(a).localeCompare(fileName(b), "es"))
+    function sourceFiles(): GeminiFile[] {
+        if (mode === "multimedia") return indexedMedia
+        if (mode === "biblia") return []
+        const roots = get(hymnCollectionPaths)[collection] || []
+        return geminiLocalFiles(get(hymnVideos).filter(file =>
+            roots.some(root => isPathInJACollection(file.path, root))
+        ) as FileFolder[])
+            .filter(file => file.kind === "video")
+    }
+    async function scanMediaFolders() {
+        const generation = ++scanGeneration
+        const roots = [...new Set(Object.values(get(mediaFolders)).map(f => f?.path || "").filter(Boolean))]
+        const hymnRoots = get(hymnSourcePaths)
+        scanning = true
+        scanErrors = []
+        renderToolbar()
+        const entries: FileFolder[] = []
+        const failures: string[] = []
+        // Sequential reads keep the native file scanner predictable on slow disks.
+        for (const root of roots) {
+            try {
+                const list = await requestMain(Main.READ_FOLDER, { path: root, depth: 5 }, undefined, 60000)
+                if (generation !== scanGeneration) return
+                if (!list) { failures.push(root); continue }
+                entries.push(...Object.values(list))
+            } catch (error) {
+                if (generation !== scanGeneration) return
+                failures.push(root)
+                console.warn("[JA Gemini] No se pudo escanear", root, error)
+            }
+        }
+        if (generation !== scanGeneration) return
+        indexedMedia = geminiLocalFiles(entries, hymnRoots)
+        scanErrors = failures
+        scanning = false
+        renderLibrary()
+    }
+    function showCounts() {
+        if (!host) return
+        const all = mode === "multimedia" ? indexedMedia : sourceFiles()
+        const counts = geminiCounts(all)
+        const multimedia = el("moduleView_multimedia")
+        for (const btn of multimedia?.querySelectorAll<HTMLButtonElement>("button") || []) {
+            const value = btn.textContent?.trim() || ""
+            const m = value.match(/(Vídeos?|Videos?|Imágenes|Imagenes|Audio)\s*\(\d+\)/i)
+            if (!m) continue
+            const type = /v[ií]deo/i.test(m[1]) ? "video" : /im[aá]gen/i.test(m[1]) ? "image" : "audio"
+            const textWalker = document.createTreeWalker(btn, NodeFilter.SHOW_TEXT)
+            let n: Node | null
+            while ((n = textWalker.nextNode())) {
+                const current = n.nodeValue || ""
+                if (new RegExp(m[1] + "\\s*\\(\\d+\\)", "i").test(current))
+                    n.nodeValue = current.replace(/\(\d+\)/, "(" + counts[type] + ")")
+            }
+            btn.setAttribute("aria-pressed", String(typeFilter === type))
+            btn.style.backgroundColor = typeFilter === type ? "#2169a5" : ""
+            btn.style.borderColor = typeFilter === type ? "#4cd1fd" : ""
+        }
+    }
+    function renderToolbar() {
+        if (!host) return
+        const area = el(mode === "multimedia" ? "multimediaCardsGrid" : "hymnModuleGrid")
+        if (!area || !area.parentElement) return
+        if (!libraryToolbar || libraryToolbar.parentElement !== area.parentElement) {
+            libraryToolbar?.remove()
+            libraryToolbar = document.createElement("div")
+            libraryToolbar.className = "ja-library-toolbar"
+            area.parentElement.insertBefore(libraryToolbar, area)
+        }
+        libraryToolbar.replaceChildren()
+        const info = document.createElement("span")
+        const count = sourceFiles().length
+        info.textContent = mode === "multimedia"
+            ? (scanning ? "Leyendo carpetas reales…" : count + " archivos reales · " + Object.values(get(mediaFolders)).filter(f=>!!f?.path).length + " carpetas")
+            : (count + " vídeos reales · " + collection)
+        libraryToolbar.append(info)
+        if (mode === "himnario") {
+            for (const name of ["Himnario Adventista", "Cantos Juveniles"]) {
+                const tab = document.createElement("button")
+                tab.type = "button"
+                tab.textContent = name
+                tab.setAttribute("aria-pressed", String(collection === name))
+                tab.style.backgroundColor = collection === name ? "#195c97" : ""
+                tab.onclick = () => { collection = name; renderLibrary() }
+                libraryToolbar.append(tab)
+            }
+        }
+        const add = document.createElement("button")
+        add.type = "button"
+        add.textContent = "+ Vincular carpeta"
+        add.title = "Elegir una carpeta real de Windows, sin copiar ni mover archivos"
+        add.onclick = () => sendMain(Main.OPEN_FOLDER, {
+            channel: mode === "multimedia" ? "JA_GEMINI_MEDIA_FOLDER" : "JA_GEMINI_HYMN_FOLDER",
+            title: mode === "multimedia" ? "Vincular Multimedia" : "Vincular " + collection
+        })
+        libraryToolbar.append(add)
+        const refresh = document.createElement("button")
+        refresh.type = "button"
+        refresh.textContent = "↻ Actualizar"
+        refresh.onclick = () => mode === "multimedia" ? void scanMediaFolders() : void refreshJAHymnLibrary()
+        libraryToolbar.append(refresh)
+        const extras = mode === "multimedia"
+            ? Object.entries(get(mediaFolders)).filter(([key,f])=>key.startsWith("ja_gemini_") && !!f?.path).map(([key,f])=>({label:f.name || f.path || key,path:f.path || "",key}))
+            : (get(hymnLinks)[collection] || []).map(path=>({label:path.split(/[\/\\]/).pop()||path,path,key:""}))
+        if (extras.length) {
+            const select = document.createElement("select")
+            select.className = "bg-[#08172f] text-slate-100 rounded px-2 py-1 max-w-[180px]"
+            select.setAttribute("aria-label", "Carpeta vinculada para desvincular")
+            for (const f of extras) { const opt=document.createElement("option");opt.value=f.path;opt.textContent=f.label;select.append(opt) }
+            libraryToolbar.append(select)
+            const remove = document.createElement("button")
+            remove.type = "button"; remove.textContent = "Desvincular"
+            remove.title = "Quitar solo el enlace, sin borrar archivos del disco"
+            remove.onclick = () => {
+                const item = extras.find(f=>f.path===select.value)
+                if (!item) return
+                if (mode === "himnario") unlinkHymnFolder(collection, item.path)
+                else mediaFolders.update(folders => {
+                    const current = { ...folders }
+                    if (item.key.startsWith("ja_gemini_")) delete current[item.key]
+                    return current
+                })
+                notice("Enlace retirado. Los archivos del disco permanecen intactos.")
+                renderToolbar()
+            }
+            libraryToolbar.append(remove)
+        }
+        const label = document.createElement("span")
+        label.className = "ja-source-label"
+        const errors = mode === "multimedia" ? scanErrors : Object.entries(get(hymnSourceStatus)).filter(([,s])=>s==="unavailable").map(([p])=>p)
+        if (errors.length) { label.textContent = "No accesibles: " + errors.length + " · " + errors[0]; label.title=errors.join("\n"); label.style.color="#fcd34d" }
+        else label.textContent = "Sin datos demostrativos"
+        libraryToolbar.append(label)
+    }
+    function showNativeThumbnail(container: HTMLDivElement, file: GeminiFile) {
+        if (file.kind === "audio") { container.textContent = "♫"; return }
+        const make = (src: string) => {
+            if (!container.isConnected) return
+            const image = document.createElement("img")
+            image.className = "ja-media-thumb"
+            image.loading = "lazy"
+            image.alt = ""
+            image.src = encodeFilePath(src)
+            image.onerror = () => { if (image.isConnected) image.replaceWith(document.createTextNode("Sin miniatura")) }
+            container.replaceChildren(image)
+        }
+        if (file.kind === "image") { make(file.path); return }
+        container.textContent = "▶"
+        if (!thumbObserver) {
+            thumbObserver = new IntersectionObserver((changes) => {
+                for (const change of changes) {
+                    if (!change.isIntersecting) continue
+                    const box = change.target as HTMLDivElement
+                    thumbObserver?.unobserve(box)
+                    const mediaPath = box.dataset.mediaPath
+                    if (!mediaPath) continue
+                    void queuedHymnThumbnail(mediaPath).then(path=>{
+                        if (path && box.isConnected && box.dataset.mediaPath === mediaPath) makeThumbnail(box, path)
+                    }).catch(()=>{})
+                }
+            }, { root: el(mode === "himnario" ? "hymnModuleGrid" : "multimediaCardsGrid"), rootMargin: "200px" })
+        }
+        container.dataset.mediaPath = file.path
+        thumbObserver.observe(container)
+    }
+    function makeThumbnail(container: HTMLDivElement, path: string) {
+        const img = document.createElement("img")
+        img.className="ja-media-thumb"; img.loading="lazy"; img.alt=""
+        img.src=encodeFilePath(path)
+        img.onerror=()=>{ if(img.isConnected) img.replaceWith(document.createTextNode("▶")) }
+        container.replaceChildren(img)
     }
     function renderLibrary() {
         if (!host) return
+        if (thumbObserver) { thumbObserver.disconnect(); thumbObserver = null }
         const area = el(mode === "himnario" ? "hymnModuleGrid" : "multimediaCardsGrid")
         if (!area) return
         const files = sourceFiles()
+        const searchInput = el(mode === "himnario" ? "hymnModuleSearch" : "multimediaSearchInput") as HTMLInputElement | null
+        const shown = geminiSearch(files, searchInput?.value || "", mode === "himnario" ? "video" : typeFilter)
         area.replaceChildren()
-        if (!files.length) {
+        if (!shown.length) {
             const msg = document.createElement("p")
             msg.className = "col-span-full p-5 text-sm text-slate-300"
-            msg.textContent = "Sin archivos indexados. Abre Biblioteca FreeShow para vincular la carpeta real; después regresa a Gemini."
+            msg.textContent = scanning && mode==="multimedia" ? "Leyendo archivos del disco…" :
+                mode==="himnario" ? "Sin vídeos encontrados en esta colección. Vincula tu carpeta de himnos o pulsa Actualizar." :
+                files.length ? "No se encontraron archivos para este filtro." : "Sin archivos reales encontrados. Pulsa «Vincular carpeta» para elegir tus vídeos, imágenes o audio."
             area.append(msg)
-            return
         }
-        const term = ((el(mode === "himnario" ? "hymnModuleSearch" : "multimediaSearchInput") as HTMLInputElement | null)?.value || "").toLocaleLowerCase("es")
-        for (const path of files.filter((f) => fileName(f).toLocaleLowerCase("es").includes(term)).slice(0, 160)) {
+        for (const file of shown.slice(0, 160)) {
             const item = document.createElement("button")
-            item.type = "button"
-            item.className = "p-2 min-w-0 rounded-lg bg-[#0a1938] border border-[#24446f] text-left hover:border-cyan-400"
-            const img = document.createElement("div")
-            img.className = "aspect-video rounded-md bg-[#06132a] flex items-center justify-center text-sky-300"
-            img.textContent = getMediaType(getExtension(path)) === "video" ? "▶" : "▣"
-            const title = document.createElement("p")
-            title.className = "text-xs text-slate-200 truncate mt-2"
-            title.textContent = fileName(path)
-            item.append(img, title)
-            item.onclick = () => prepare(path)
+            item.type = "button";item.title=file.path
+            item.className = "ja-media-card p-2 min-w-0 rounded-lg bg-[#0a1938] border border-[#24446f] text-left hover:border-cyan-400"
+            const visual = document.createElement("div")
+            visual.className = "aspect-video rounded-md bg-[#06132a] flex items-center justify-center text-sky-300 overflow-hidden"
+            const label = document.createElement("p")
+            label.className = "text-xs text-slate-200 truncate mt-2"
+            label.textContent = file.name
+            item.append(visual,label)
+            item.onclick=()=>prepare(file.path)
             area.append(item)
+            showNativeThumbnail(visual,file)
         }
-        if (files.length > 160) {
-            const info = document.createElement("p")
-            info.textContent = "Mostrando 160 archivos. Usa el filtro para localizar otros."
-            info.className = "col-span-full text-xs text-slate-300 p-2"
+        if (shown.length>160) {
+            const info=document.createElement("p")
+            info.className="col-span-full text-xs text-slate-300 p-2"
+            info.textContent="Mostrando 160 de "+shown.length+" archivos reales. Filtra por nombre para ver otros."
             area.append(info)
         }
+        showCounts()
+        renderToolbar()
     }
-    function showModule(next: "multimedia" | "himnario") {
-        mode = next
-        for (const [module, section] of [["multimedia", "moduleView_multimedia"], ["himnario", "moduleView_himnario"], ["biblia", "moduleView_biblia"], ["other", "moduleView_other"]]) {
-            const element = el(section)
-            if (element) {
-                element.classList.toggle("hidden", module !== next)
-                element.classList.toggle("flex", module === next)
-            }
+    function showModule(next: "multimedia" | "himnario" | "biblia") {
+        if (mode === "biblia" && next !== "biblia") {
+            scriptureView?.$destroy();scriptureView=null
+            scriptureTarget=null
+            el("moduleView_biblia")?.replaceChildren()
         }
-        renderLibrary()
+        mode=next
+        for(const [module,section] of [["multimedia","moduleView_multimedia"],["himnario","moduleView_himnario"],["biblia","moduleView_biblia"],["other","moduleView_other"]]) {
+            const node=el(section)
+            if(node) {node.classList.toggle("hidden",module!==next);node.classList.toggle("flex",module===next)}
+        }
+        setupNavigation()
+        if(next==="biblia") {void registerJARV1909().then(()=>updateBibleUI());updateBibleUI()}
+        else {renderLibrary();if(next==="himnario")void refreshJAHymnLibrary()}
+    }
+    function updateBibleUI() {
+        if (mode !== "biblia") return
+        const area = el("moduleView_biblia")
+        if (!area) return
+        if (!scriptureTarget) {
+            area.replaceChildren()
+            area.classList.remove("hidden")
+            area.classList.add("flex")
+            area.style.flexDirection="column"
+            const bar = document.createElement("div")
+            bar.className="ja-library-toolbar"
+            const title=document.createElement("strong")
+            title.textContent="Escrituras reales"
+            bar.append(title)
+            const versions=document.createElement("select")
+            versions.className="bg-[#08172f] text-white border border-[#355681] rounded px-2 py-1"
+            versions.setAttribute("aria-label","Seleccionar traducción bíblica instalada")
+            versions.dataset.role="ja-bibles"
+            versions.onchange=()=>{activeBibleId=versions.value;scriptureView?.$set({active:activeBibleId})}
+            bar.append(versions)
+            for (const [label,which] of [["Vista cuadriculada","grid"],["Vista de lista","list"]] as const) {
+                const button=document.createElement("button")
+                button.type="button";button.textContent=label
+                button.setAttribute("aria-pressed",String(get(scriptureMode)===which))
+                button.onclick=()=>{scriptureMode.set(which);updateBibleUI()}
+                bar.append(button)
+            }
+            const project=document.createElement("button")
+            project.type="button"
+            project.textContent="▶ Proyectar versículo"
+            project.onclick=()=>{if(get(outLocked)) return notice("Las salidas están bloqueadas");void playScripture()}
+            bar.append(project)
+            area.append(bar)
+            scriptureTarget=document.createElement("div")
+            scriptureTarget.className="ja-bible-content"
+            area.append(scriptureTarget)
+        }
+        const select=area.querySelector<HTMLSelectElement>('select[data-role="ja-bibles"]')
+        if (!select) return
+        const bibles=get(scriptures)
+        const keys=Object.keys(bibles).filter(id=>!!bibles[id]&&!bibles[id].api)
+        if (!keys.includes(activeBibleId)) activeBibleId=(get(drawerTabsData).scripture?.activeSubTab || "")
+        if (!keys.includes(activeBibleId)) activeBibleId=keys[0] || ""
+        select.replaceChildren()
+        for (const id of keys) {
+            const opt=document.createElement("option")
+            opt.value=id;opt.textContent=bibles[id].name || id
+            select.append(opt)
+        }
+        select.value=activeBibleId
+        for(const b of area.querySelectorAll<HTMLButtonElement>(".ja-library-toolbar button")){
+            if (b.textContent?.includes("cuadriculada")) b.setAttribute("aria-pressed",String(get(scriptureMode)==="grid"))
+            if (b.textContent?.includes("lista")) b.setAttribute("aria-pressed",String(get(scriptureMode)==="list"))
+        }
+        if (activeBibleId && scriptureTarget) {
+            if (!scriptureView) scriptureView=new Scripture({target:scriptureTarget,props:{active:activeBibleId,searchValue:""}})
+            else scriptureView.$set({active:activeBibleId})
+        } else {
+            scriptureTarget.textContent="Todavía no hay una Biblia local válida. Verifica RV1909 en Biblioteca FreeShow."
+        }
     }
     function setupNavigation() {
-        const menu = el("leftModuleSidebar")
-        if (!menu) return
+        const menu=el("leftModuleSidebar")
+        if(!menu)return
         menu.replaceChildren()
-        for (const [name, text] of [
-            ["multimedia", "▶ Multimedia"], ["himnario", "♫ Himnario"],
-            ["biblia", "📖 Biblia · pendiente"], ["youtube", "▶ YouTube · pendiente"],
-            ["presentaciones", "▣ Presentaciones · pendiente"], ["classic", "↗ Biblioteca FreeShow"]
+        for(const [id,label] of [
+            ["biblia","▣ Biblia"],
+            ["himnario","♫ Himnario"],
+            ["multimedia","▶ Multimedia"],
+            ["youtube","▶ YouTube"],
+            ["presentaciones","▣ Presentaciones"],
+            ["fondos","▧ Fondos"],
+            ["listas","☰ Listas"],
+            ["classic","↗ Administrar bibliotecas / FreeShow"]
         ]) {
-            const button = document.createElement("button")
-            button.type = "button"
-            button.className = "w-full px-3 py-2 text-left text-xs text-slate-200 hover:bg-[#142c54] rounded-md"
-            button.textContent = text
-            if (name === "multimedia" || name === "himnario")
-                button.onclick = () => showModule(name)
-            else if (name === "classic") button.onclick = () => dispatch("classic")
-            else { button.disabled = true; button.title = "Pendiente de integración con el motor real" }
+            const button=document.createElement("button")
+            button.type="button"
+            button.className="ja-nav-button w-full px-3 py-3 text-left text-sm text-slate-200 hover:bg-[#142c54] rounded-md"
+            button.textContent=label
+            button.setAttribute("aria-current",String(id===mode))
+            if(id==="biblia"||id==="multimedia"||id==="himnario")
+                button.onclick=()=>showModule(id)
+            else if(id==="classic")button.onclick=()=>dispatch("classic")
+            else {button.disabled=true;button.title="Módulo pendiente de integración; disponible desde FreeShow clásico cuando corresponda"}
             menu.append(button)
         }
     }
@@ -300,7 +605,11 @@
     }
     onMount(() => {
         setupNavigation()
+        collectMockText()
+        connectMediaTypeFilters()
+        installFolderPicker()
         showModule("multimedia")
+        void registerJAMediaFolders().then(() => scanMediaFolders()).catch(err => notice("Error al preparar carpetas: "+String(err)))
         const program = el("programCanvasContent")
         if (program) program.replaceChildren()
         const preview = el("previewCanvasContent")
@@ -361,13 +670,26 @@
         hymnSearch?.addEventListener("input", renderLibrary)
         mediaSearch?.addEventListener("input", renderLibrary)
         cleanup.push(() => hymnSearch?.removeEventListener("input", renderLibrary), () => mediaSearch?.removeEventListener("input", renderLibrary))
-        const uOutputs = outputs.subscribe(() => rebuildOutputs())
-        const uMedia = media.subscribe(() => renderLibrary())
-        const uFolders = mediaFolders.subscribe(() => renderLibrary())
-        cleanup.push(uOutputs, uMedia, uFolders)
+        const uOutputs = outputs.subscribe(() => { rebuildOutputs(); renderRealHeader() })
+        const uSaved = saved.subscribe(() => renderRealHeader())
+        const uFolders = mediaFolders.subscribe(() => { void scanMediaFolders() })
+        const uBibles = scriptures.subscribe(() => { if(mode==="biblia")updateBibleUI() })
+        const uHymn = hymnVideos.subscribe(() => { if(mode==="himnario")renderLibrary() })
+        const uCollections = hymnCollectionPaths.subscribe(() => { if(mode==="himnario")renderLibrary() })
+        const uRoots = hymnSourcePaths.subscribe(() => { void scanMediaFolders() })
+        const uStatuses = hymnSourceStatus.subscribe(() => { if(mode==="himnario")renderToolbar() })
+        cleanup.push(uOutputs, uSaved, uFolders, uBibles, uHymn, uCollections, uRoots, uStatuses)
         rebuildOutputs()
         return () => {
             if (timer) clearTimeout(timer)
+            scanGeneration++
+            thumbObserver?.disconnect()
+            thumbObserver = null
+            scriptureView?.$destroy()
+            scriptureView=null
+            for (const renderer of screenRenderers) renderer.$destroy()
+            screenRenderers=[]
+            libraryToolbar?.remove()
             previewMedia?.pause()
             stopVideoState?.()
             programRenderer?.$destroy()
@@ -377,7 +699,7 @@
     })
 </script>
 
-<svelte:head><link rel="stylesheet" href="ja-gemini.css" /></svelte:head>
+<svelte:head><link rel="stylesheet" href="ja-gemini.css" /><link rel="stylesheet" href="ja-gemini-layout.css" /></svelte:head>
 <div class={"ja-gemini-host " + geminiBodyClasses} bind:this={host}>
     {@html geminiHtml}
 </div>

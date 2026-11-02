@@ -30,6 +30,9 @@ jobs:
       - name: Preparar configuraciones productivas TypeScript de FreeShow
         run: npm run prebuild
         working-directory: engine
+      - name: Pruebas de clasificación de carpetas e Himnario real
+        run: npx vitest run --config config/testing/vitest.config.ts src/frontend/utils/jaGeminiLibrary.test.ts
+        working-directory: engine
       - name: Compilar UI real Svelte contra el motor de FreeShow
         run: npm run build:frontend:prod
         working-directory: engine
