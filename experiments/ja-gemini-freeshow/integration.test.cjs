@@ -17,7 +17,7 @@ test("El adaptador usa salidas reales de FreeShow, nunca los vídeos ficticios",
  for(const expected of ["setOutput(","PreviewOutput","videoSync(","VideoPlayer.pause(","VideoPlayer.play(","VideoPlayer.seekTo(","clearBackground(selectedId)","get(outputs)","Main.READ_FOLDER","hymnVideos"]){
   assert.ok(s.includes(expected), "Falta cableado real: "+expected);
  }
- assert.ok(s.includes("available.length!==1"),"No se ha protegido la etapa de salida única");
+ assert.ok(s.includes("!selectedId || !available.includes(selectedId)"),"No se ha protegido el destino explícito");
 });
 test("El arranque no deja llamadas a auxiliares desaparecidos",()=>{
  const source=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
@@ -214,7 +214,7 @@ test("S0: el envío de una salida no exige campo screen ni primaryId de JA",()=>
  assert.ok(f.includes("setOutput(\"background\""),"El envío único debe volver a FreeShow")
  assert.ok(!f.includes("sendToJAOutputs("),"Nunca bloquear la única salida con el router multipantalla")
  assert.ok(f.includes("get(outputs)[selectedId]?.active"),"No proyectar en salida inactiva")
- assert.ok(f.includes("available.length!==1"),"No permitir difusión insegura")
+ assert.ok(f.includes("!selectedId || !available.includes(selectedId)"),"No permitir difusión sin destino explícito")
  assert.ok(router.includes("!primaryId"),"El router de múltiples destinos exige primario; no reutilizarlo para la salida única")
 });
 test("Transiciones y controles visibles cumplen un contrato mínimo sin efectos simulados",()=>{
@@ -253,4 +253,32 @@ test("Regresar al mismo vídeo puede revincular Vista previa sin reiniciar Progr
  assert.ok(body.includes("followProgram=samePlayingVideo"),"Falta recuperar el vínculo del mismo medio")
  assert.ok(body.includes('if (samePlayingVideo && type==="video")'),"No reiniciar desde cero si el vídeo ya está en Programa")
  assert.ok(body.includes("syncLinkedPreview()"),"Debe obtener el tiempo y pausa del vídeo real")
+});
+
+test("Pantallas Windows: detección física, identificación y salidas únicamente creadas con confirmación",()=>{
+ const settings=read("engine/src/frontend/components/ja/JaGeminiSettings.svelte")
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ assert.ok(settings.includes("requestMain(Main.GET_DISPLAYS)"),"Se deben leer monitores reales desde Electron")
+ assert.ok(settings.includes('send(OUTPUT,["IDENTIFY_SCREENS"],physicalDisplays)'),"Identificar debe usar FreeShow")
+ assert.ok(settings.includes('dispatch("createDisplayOutput"'),"Creación de salidas debe ser explícita")
+ assert.ok(settings.includes('dispatch("assignDisplay"'),"Asignación de monitor debe requerir selección")
+ assert.ok(settings.includes("window.confirm("),"Evitar movimientos físicos sin confirmación")
+ assert.ok(shell.includes('addOutput(false,"",false,name)'),"Primero registrar una salida deshabilitada")
+ assert.ok(shell.includes('send(OUTPUT,["CREATE"],{...outputSnapshot,id:outputId})'),"Abrir ventana nativa asignada")
+ assert.ok(shell.includes('send(OUTPUT,["UPDATE_BOUNDS"],{id:outputId,bounds})'),"Reubicar mediante motor nativo")
+});
+test("Logo personalizado reconstruye clave del renderizador y no conserva imagen antigua",()=>{
+ const s=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ assert.ok(s.includes('activeLogoEffectId = JA_LOGO + "_" + uid()'),"El renderizador debe remontar la imagen activa")
+ assert.ok(s.includes("ids.some(isJaLogoEffect)"),"Hay que actualizar las salidas que muestran el logo")
+ assert.ok(s.includes('setOutput("effects",[...remaining,nextId],false,outputId)'),"Remontaje de efecto en Programa faltante")
+ assert.ok(s.includes('active.some(isJaLogoEffect)'),"Interruptor debe reconocer el logo renovado")
+});
+test("Salida seleccionada mantiene control único; las secundarias empiezan sin audio",()=>{
+ const s=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const pub=s.split("function publishPreparedMedia()")[1].split("function toggleFollowProgram()")[0]
+ assert.ok(pub.includes("!selectedId || !available.includes(selectedId)"),"Se requiere salida seleccionada")
+ assert.ok(!pub.includes("available.length!==1"),"No bloquear Programa al configurar más salidas")
+ assert.ok(pub.includes("muted:available.length>1 && selectedId!==mainId"),"Secundarias deben empezar silenciadas")
+ assert.ok(pub.includes('},false,selectedId)'),"Nunca hacer broadcast por omisión")
 });

@@ -38,6 +38,8 @@
     // La fase S0 mantiene solo envío directo: transiciones no validadas se ocultan.
     const JA_BLACK = "ja_gemini_blackout_effect"
     const JA_LOGO = "ja_gemini_logo_effect"
+    let activeLogoEffectId = JA_LOGO
+    const isJaLogoEffect = (id:string) => id === JA_LOGO || id.startsWith(JA_LOGO+"_")
     let customLogoPath = ""
     let logoScale = 1.35
     let logoPosition: "center" | "top-left" | "top-right" | "bottom-left" | "bottom-right" = "center"
@@ -140,11 +142,24 @@
             size:logoScale,x:point.x,y:point.y}
     }
     function updateLogoEffect() {
-        effects.update(current => ({
-            ...current,
-            [JA_LOGO]:{name:"JA · Logotipo",color:null,placeUnderSlide:false,
+        // The canvas renderer caches its Image instance by effect item. Changing
+        // settings while active must remount the effect with a different Svelte
+        // {#each} key, otherwise the old default logo may stay on screen.
+        activeLogoEffectId = JA_LOGO + "_" + uid()
+        const nextId=activeLogoEffectId
+        effects.update(current=>{
+            const next={...current}
+            for(const id of Object.keys(next))if(isJaLogoEffect(id))delete next[id]
+            next[nextId]={name:"JA · Logotipo",color:null,placeUnderSlide:false,
                 style:"width:100%;height:100%;",background:"transparent",opacity:1,items:[logoEffectItem()]}
-        }))
+            return next
+        })
+        for(const [outputId,out] of Object.entries(get(outputs))){
+            const ids=out.out?.effects||[]
+            if(!ids.some(isJaLogoEffect))continue
+            const remaining=ids.filter(id=>!isJaLogoEffect(id))
+            setOutput("effects",[...remaining,nextId],false,outputId)
+        }
     }
     function persistLogoSettings() {
         try {
@@ -187,23 +202,35 @@
         notice("Logo predeterminado restaurado. Programa no cambia hasta activar/desactivar Logo.")
     }
     function ensureJAOutputEffects() {
+        activeLogoEffectId=JA_LOGO
         effects.update(current => ({
             ...current,
             [JA_BLACK]: {name:"JA · Cortina negra",color:null,placeUnderSlide:false,style:"width:100%;height:100%;",background:"#000000",opacity:1,items:[]},
             [JA_LOGO]: {name:"JA · Logotipo",color:null,placeUnderSlide:false,style:"width:100%;height:100%;",background:"transparent",opacity:1,
                 items:[logoEffectItem()]}
         }))
+        // Reconcile any JA logo keyed by a prior app session.
+        for(const [outputId,out] of Object.entries(get(outputs))){
+            const ids=out.out?.effects||[]
+            if(ids.some(id=>isJaLogoEffect(id) && id!==activeLogoEffectId))
+                setOutput("effects",[...ids.filter(id=>!isJaLogoEffect(id)),activeLogoEffectId],false,outputId)
+        }
     }
     function setOperatorEffect(id: string) {
         if (get(outLocked)) return notice("La salida está bloqueada")
         const output = selectedId ? get(outputs)[selectedId] : null
         if (!output?.active || !output.enabled) return notice("Selecciona una salida activa")
         const active = output.out?.effects || []
-        const next = active.includes(id) ? active.filter(effectId=>effectId!==id) : [...active,id]
+        const logoRequested = id===JA_LOGO
+        const hadEffect = logoRequested ? active.some(isJaLogoEffect) : active.includes(id)
+        const next = logoRequested
+            ? (hadEffect ? active.filter(effectId=>!isJaLogoEffect(effectId))
+                : [...active.filter(effectId=>!isJaLogoEffect(effectId)),activeLogoEffectId])
+            : (hadEffect ? active.filter(effectId=>effectId!==id) : [...active,id])
         setOutput("effects",next,false,selectedId)
         const button = el(id===JA_BLACK?"btnBridgeBlack":"btnBridgeLogo")
-        button?.setAttribute("aria-pressed",String(next.includes(id)))
-        notice((id===JA_BLACK?"Cortina negra":"Logo")+(next.includes(id)?" activado":" desactivado")+" en "+(output.name||selectedId))
+        button?.setAttribute("aria-pressed",String(!hadEffect))
+        notice((id===JA_BLACK?"Cortina negra":"Logo")+(hadEffect?" desactivado":" activado")+" en "+(output.name||selectedId))
     }
     function clearBlackBeforePublishing(outputIds: string[]) {
         const current=get(outputs)
@@ -226,8 +253,8 @@
         }
         if(!prepared)return notice("Selecciona un archivo antes de proyectarlo")
         const available=chooseOutput()
-        if(available.length!==1 || !selectedId || !available.includes(selectedId))
-            return notice("Configura una única salida de JA antes de enviar multimedia. La distribución múltiple sigue pendiente.")
+        if(!selectedId || !available.includes(selectedId))
+            return notice("Selecciona una salida JA configurada antes de enviar contenido.")
         if(get(outLocked) || !get(outputs)[selectedId]?.active)
             return notice("La salida seleccionada está inactiva o bloqueada.")
         const mediaPath=prepared
@@ -244,8 +271,12 @@
             clearBlackBeforePublishing([selectedId])
             // Ruta nativa que operaba en la primera prueba física de Windows.
             // El ID explícito impide difundir a otras salidas no configuradas.
+            const mainId=localStorage.getItem("ja-main-projector") || (available.length===1?selectedId:"")
+            if(available.length>1 && !mainId)
+                return notice("Selecciona la salida principal en Configuración JA antes de emitir con varios monitores.")
+            // Secondary screens cannot emit duplicated audio by default.
             setOutput("background",{
-                path:mediaPath,type:kind,loop:false,muted:false,startAt:0
+                path:mediaPath,type:kind,loop:false,muted:available.length>1 && selectedId!==mainId,startAt:0
             },false,selectedId)
             const actual=get(outputs)[selectedId]?.out?.background
             // La actualización del store indica recepción interna, NO que
@@ -437,6 +468,9 @@
         if (!Number.isFinite(displayId) || get(outLocked))return notice("No se puede crear una salida mientras esté bloqueada.")
         if(Object.values(get(outputs)).some(o=>o.enabled && o.screen===String(displayId)))
             return notice("Este monitor ya tiene una salida JA.")
+        const previousMain=chooseOutput()[0] || ""
+        if(previousMain && !localStorage.getItem("ja-main-projector"))
+            localStorage.setItem("ja-main-projector",previousMain)
         const outputId=addOutput(false,"",false,name)
         if(!outputId)return notice("FreeShow no pudo registrar la nueva salida")
         let outputSnapshot: any = null
@@ -590,7 +624,8 @@
             // The experimental slider changes only the one supervised session.
             // Do not enable it with multiple outputs until per-output audio is tested.
             const session = playingPath && selectedId ? VideoPlayer.getPlaying(playingPath, [selectedId]) : null
-            programVolume.disabled = !session || get(outLocked) || chooseOutput().length !== 1
+            programVolume.disabled = !session || get(outLocked) ||
+                (chooseOutput().length>1 && selectedId!==localStorage.getItem("ja-main-projector"))
             programVolume.title = session ? "Volumen real de Programa: "+Math.round(VideoPlayer.getVolume(playingPath,[selectedId])*100)+"%" : "Sin sesión de vídeo con audio controlable en Programa"
             if (session && document.activeElement !== programVolume)
                 programVolume.value = String(Math.round(Math.max(0, Math.min(1, VideoPlayer.getVolume(playingPath, [selectedId]))) * 100))
@@ -1191,7 +1226,7 @@
     }
     function project() {publishPreparedMedia()}
     function clearProgram() {
-        if (chooseOutput().length !== 1 || !selectedId) return notice("Limpieza de múltiples salidas no habilitada en esta prueba")
+        if (!selectedId || !get(outputs)[selectedId]?.active) return notice("Selecciona una salida activa para limpiar")
         if (get(outLocked)) return notice("La salida está bloqueada")
         clearBackground(selectedId)
         // No modificar previewMedia ni prepared.
@@ -1204,10 +1239,13 @@
     }
     function muteProgram() {
         if (!playingPath || !selectedId) return notice("Programa no tiene vídeo activo")
+        if(chooseOutput().length>1 && selectedId!==localStorage.getItem("ja-main-projector"))
+            return notice("El audio de las salidas secundarias permanece silenciado por seguridad.")
         VideoPlayer.toggleMute(playingPath, selectedId)
     }
     function setProgramVolume() {
-        if (!programVolume || !playingPath || !selectedId || get(outLocked) || chooseOutput().length !== 1) return
+        if (!programVolume || !playingPath || !selectedId || get(outLocked)) return
+        if(chooseOutput().length>1 && selectedId!==localStorage.getItem("ja-main-projector")) return
         const session = VideoPlayer.getPlaying(playingPath, [selectedId])
         if (!session) return
         const next = Number(programVolume.value)
