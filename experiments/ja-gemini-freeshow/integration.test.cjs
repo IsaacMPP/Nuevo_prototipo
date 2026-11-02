@@ -110,3 +110,24 @@ test("Doble clic y búsqueda bíblica no pueden emitir desde Gemini",()=>{
  assert.ok(navigator.includes("if (playWhenLoaded && !geminiPreviewOnly)"),"La búsqueda puede publicar sin pulsar Proyectar")
  assert.ok(navigator.includes("geminiPreviewOnly || (hasLiveScripture && !e.ctrlKey"),"El doble clic puede publicar accidentalmente")
 })
+
+test("Controles generales: restablecimiento seguro, ampliar monitor y limpiar solo texto bíblico",()=>{
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const settings=read("engine/src/frontend/components/ja/JaGeminiSettings.svelte")
+ for(const command of [
+   'bind("btnResetTargets", resetTargetSelection)',
+   'bind("btnPreviewFullscreen"',
+   'bind("btnProgramFullscreen"',
+   'bind("btnMultiScreenMenu", openScreenSettings)',
+   'bind("btnBridgeClearText", clearSelectedTextLayer)'
+ ]) assert.ok(shell.includes(command),"Falta acción real: "+command)
+ assert.ok(shell.includes('slide?.id !== "temp" || !slide.categoryId'),"No limpiar presentaciones ni texto no bíblico")
+ assert.ok(shell.includes('clearSlide(true, selectedId)'),"La limpieza no está dirigida a una salida específica")
+ const resets=shell.split("function resetTargetSelection()")[1]?.split("function toggleLocalFullscreen")[0] || ""
+ assert.ok(!resets.includes('setOutput(') && !resets.includes('clearBackground(') && !resets.includes('clearSlide('),"Restablecer selección no debe alterar Programa")
+ assert.ok(settings.includes('window.confirm('),"Restablecer preferencias debe solicitar confirmación")
+ assert.ok(settings.includes('dispatch("previewAutoplayChange"') && shell.includes("if (previewAutoplay) void m.play()"),"Preferencia de autoplay no conectada al reproductor")
+ assert.ok(settings.includes('dispatch("compactUiChange"') && shell.includes('ja-compact-ui'),"Densidad de interfaz no conectada")
+ assert.ok(!shell.includes('bind("btnBridgeBlack"'),"No simular cortina negra")
+ assert.ok(!shell.includes('bind("btnBridgeLogo"'),"No simular logo")
+})

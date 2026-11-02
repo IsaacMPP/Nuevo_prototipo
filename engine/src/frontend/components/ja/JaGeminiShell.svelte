@@ -18,7 +18,7 @@
     import { geminiHtml, geminiBodyClasses } from "./gemini-fragment.generated"
     import { activeScripture, mediaFolders, outputs, outLocked, playingVideos, saved, scriptures, scriptureMode, scriptureSettings, templates, drawerTabsData } from "../../stores"
     import { encodeFilePath, getExtension, getMediaType } from "../helpers/media"
-    import { clearBackground } from "../output/clear"
+    import { clearBackground, clearSlide } from "../output/clear"
     import { setOutput } from "../helpers/output"
     import { VideoPlayer } from "../media/video/videoPlayer"
     import { videoSync } from "../media/video/videoSync"
@@ -28,6 +28,9 @@
 
     let host: HTMLDivElement
     let settingsOpen = false
+    let settingsStartSection: "general" | "screens" | "libraries" | "playback" | "shortcuts" = "general"
+    let previewAutoplay = true
+    let compactUi = false
     let prepared = ""
     let selectedId = ""
     let mode: "multimedia" | "himnario" | "biblia" = "multimedia"
@@ -91,6 +94,61 @@
         element.disabled = true
         element.setAttribute("aria-disabled", "true")
         element.title = reason
+    }
+    function saveOperatorPreferences() {
+        try {
+            localStorage.setItem("ja-gemini-preview-autoplay", String(previewAutoplay))
+            localStorage.setItem("ja-gemini-compact-ui", String(compactUi))
+        } catch (error) { notice("No se pudieron guardar las preferencias de esta consola: " + String(error)) }
+    }
+    function resetOperatorPreferences() {
+        previewAutoplay = true
+        compactUi = false
+        saveOperatorPreferences()
+        notice("Preferencias visuales y de Vista previa restauradas. Programa permanece intacto.")
+    }
+    function resetTargetSelection() {
+        const choices = chooseOutput()
+        if (!choices.length) return notice("No hay salidas configuradas para seleccionar")
+        // No se modifican ventanas, rutas ni el contenido enviado a ninguna salida.
+        const remembered = (() => { try { return localStorage.getItem("ja-main-projector") || "" } catch { return "" } })()
+        selectedId = choices.includes(remembered) ? remembered : choices[0]
+        rebuildOutputs()
+        notice("Selección de salida restaurada: " + (get(outputs)[selectedId]?.name || selectedId) + ". Programa no se modificó.")
+    }
+    async function toggleLocalFullscreen(targetId: string) {
+        const target = el(targetId)
+        if (!target) return notice("No existe el monitor solicitado en la interfaz")
+        try {
+            if (document.fullscreenElement) await document.exitFullscreen()
+            else await target.requestFullscreen()
+        } catch (error) {
+            notice("Windows no pudo ampliar la vista local: " + String(error))
+        }
+    }
+    function clearSelectedTextLayer() {
+        if (get(outLocked)) return notice("La salida está bloqueada")
+        const output = get(outputs)[selectedId]
+        if (!selectedId || !output?.active) return notice("Selecciona una salida activa")
+        const slide = output?.out?.slide
+        // Solo limpiar texto bíblico temporal. No eliminar diapositivas,
+        // medios o capas distintas por confundir sus tipos.
+        if (slide?.id !== "temp" || !slide.categoryId)
+            return notice("La salida seleccionada no tiene texto bíblico para limpiar")
+        clearSlide(true, selectedId)
+        notice("Texto bíblico retirado de " + (output.name || selectedId) + "; fondo y audio conservados.")
+    }
+    function openScreenSettings() {
+        settingsStartSection = "screens"
+        settingsOpen = true
+    }
+    function operatorShortcuts(e: KeyboardEvent) {
+        if (!(e.ctrlKey || e.metaKey) || e.key !== ",") return
+        if (e.altKey || e.shiftKey) return
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        settingsStartSection = "general"
+        settingsOpen = !settingsOpen
     }
     function chooseOutput() {
         const available = Object.entries(get(outputs))
@@ -685,7 +743,7 @@
         el("projectDropdownMenu")?.remove()
         const fauxWindows=el("btnOpenDiagModal")?.nextElementSibling
         if (fauxWindows?.textContent?.includes("✕")) fauxWindows.remove()
-        for (const id of ["btnLargeTextToggle","btnOpenDiagModal","btnBridgeBlack","btnBridgeClearText"])
+        for (const id of ["btnLargeTextToggle","btnOpenDiagModal","btnBridgeBlack","btnBridgeLogo"])
             disable(id,"Función pendiente; no se ejecutan controles de demostración")
         const sort=el("multimediaSortSelect") as HTMLSelectElement | null
         if (sort) {
@@ -783,7 +841,7 @@
             // Mute prevents a second, unsupervised audio source from reaching speakers.
             m.addEventListener("loadeddata", () => {
                 if (previewMedia !== m || !m.isConnected) return
-                void m.play().catch(() => notice("Vista previa no pudo iniciar. Comprueba formato/códec y pulsa Play."))
+                if (previewAutoplay) void m.play().catch(() => notice("Vista previa no pudo iniciar. Comprueba formato/códec y pulsa Play."))
             }, {once:true})
             m.addEventListener("play", updatePreviewProgress)
             m.addEventListener("pause", updatePreviewProgress)
@@ -849,6 +907,10 @@
         programVolume.title = "Volumen de Programa: " + Math.round(level * 100) + "%"
     }
     onMount(() => {
+        try {
+            previewAutoplay = localStorage.getItem("ja-gemini-preview-autoplay") !== "false"
+            compactUi = localStorage.getItem("ja-gemini-compact-ui") === "true"
+        } catch {}
         setupNavigation()
         collectMockText()
         removeInertGeminiControls()
@@ -870,8 +932,9 @@
         bind("btnBridgeQuickPlay", project)
         bind("btnBridgeCut", project)
         bind("btnProgramPause", pauseProgram)
-        bind("btnBridgeClearText", () => notice("Limpiar texto se habilitará al integrar Biblia"))
-        bind("btnBridgeBlack", () => notice("Cortina negra: todavía no integrada"))
+        bind("btnBridgeClearText", clearSelectedTextLayer)
+        // Negro, Logo y Fundido siguen bloqueados hasta comprobar su efecto real por salida.
+        // Nunca ejecutar un aviso de éxito como sustituto de proyección.
         const programStatus = el("programTimeCounter")?.parentElement
         if (programStatus) {
             programStatus.parentElement?.classList.add("ja-program-transport")
@@ -910,6 +973,12 @@
         disable("btnProgramToAll", "Envío múltiple pendiente de aislamiento")
         disable("btnPreviewToAll", "Envío múltiple pendiente de aislamiento")
         disable("btnProjectSelectedVerse", "Biblia todavía no integrada en esta prueba")
+        bind("btnResetTargets", resetTargetSelection)
+        bind("btnPreviewFullscreen", () => { void toggleLocalFullscreen("previewCanvasContent") })
+        bind("btnProgramFullscreen", () => { void toggleLocalFullscreen("programCanvasContent") })
+        bind("btnMultiScreenMenu", openScreenSettings)
+        window.addEventListener("keydown", operatorShortcuts, true)
+        cleanup.push(() => window.removeEventListener("keydown", operatorShortcuts, true))
         bind("btnOpenSettingsModal", () => { settingsOpen = true })
         programVolume = el("programVolumeSlider") as HTMLInputElement | null
         if (programVolume) {
@@ -966,11 +1035,21 @@
 </script>
 
 <svelte:head><link rel="stylesheet" href="ja-gemini.css" /><link rel="stylesheet" href="ja-gemini-layout.css" /></svelte:head>
-<div class={"ja-gemini-host " + geminiBodyClasses} bind:this={host}>
+<div class={"ja-gemini-host " + geminiBodyClasses + (compactUi ? " ja-compact-ui" : "")} bind:this={host}>
     {@html geminiHtml}
     {#if settingsOpen}
         <JaGeminiSettings
             selectedOutputId={selectedId}
+            {previewAutoplay}
+            {compactUi}
+            startSection={settingsStartSection}
+            on:previewAutoplayChange={(event) => {
+                previewAutoplay = event.detail.enabled
+                if (!previewAutoplay) previewMedia?.pause()
+                saveOperatorPreferences()
+            }}
+            on:compactUiChange={(event) => { compactUi = event.detail.enabled; saveOperatorPreferences() }}
+            on:resetPreferences={resetOperatorPreferences}
             on:close={() => { settingsOpen = false }}
             on:selectOutput={(event) => { selectedId = event.detail.id; rebuildOutputs() }}
             on:linkMedia={() => sendMain(Main.OPEN_FOLDER, {channel:"JA_GEMINI_MEDIA_FOLDER",title:"Vincular carpeta Multimedia"})}

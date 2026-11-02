@@ -124,3 +124,13 @@ html, body, #app { height: 100%; min-height: 0; overflow: hidden; }
    no el estado de la salida en vivo ni un texto simulado. */
 .ja-gemini-host #previewCanvasContent .ja-gemini-bible-preview {height:100%;width:100%;overflow:hidden}
 .ja-gemini-host #previewCanvasContent .ja-gemini-bible-preview .main {pointer-events:none}
+
+/* Interfaz compacta: afecta solamente a la consola del operador, no a la
+   composición del proyector o las plantillas de diapositivas. */
+.ja-gemini-host.ja-compact-ui .ja-nav-button{padding-top:7px!important;padding-bottom:7px!important}
+.ja-gemini-host.ja-compact-ui .ja-library-toolbar{padding:4px 7px!important;margin:3px 0!important}
+.ja-gemini-host.ja-compact-ui .ja-screen-card{min-height:60px!important;padding:5px!important}
+.ja-gemini-host #previewCanvasContent:fullscreen,
+.ja-gemini-host #programCanvasContent:fullscreen {width:100vw!important;height:100vh!important;background:#020715!important;padding:10px!important;display:flex!important;align-items:center!important;justify-content:center!important}
+.ja-gemini-host #previewCanvasContent:fullscreen > *,
+.ja-gemini-host #programCanvasContent:fullscreen > * {max-width:100%;max-height:100%}
