@@ -73,3 +73,8 @@ Continuar JA Proyecciones, repositorio `IsaacMPP/Nuevo_prototipo`, rama `experim
 
 ## Registro de avance P0 — auditoría de controles compilados
 Se añadió `audit-controls.cjs` con prueba `audit-controls.test.cjs`. GitHub Actions lo ejecuta **después** de generar el HTML Gemini real, identifica controles en DOM (incluidos sin ID), clasifica manejadores explícitos frente a deshabilitados/sin verificar y publica `controles.json`, `controles.csv` y `RESUMEN.md`. Los controles creados en runtime tienen inventario declarado aparte. El informe no es un verificador E2E ni asigna estado «funcional» sin prueba; obliga a reconocer deuda. Futuro: complementar con instrumentación E2E de la app, inventario del menú superior y cobertura automática de flujos; falla ya cuando faltan IDs estructurales o reaparece cambio de consola.
+
+## Registro de avance P2 — primera ruta bíblica de Vista previa nativa
+Se inició un `prepareGeminiScriptureDraft()` **sin operaciones de salida**, usando `getActiveScripturesContent`, `getScriptureSlidesNew` y `TemplateHelper`, que son los mismos recursos nativos utilizados por el proyector. Se renderiza mediante `Output.svelte` con `outOverride`, sin sustituir `outputs[outputId].out`. El navegador Scripture opera con `geminiPreviewOnly` para no actualizar Programa al seleccionar versículos y expone una navegación privada para flechas; el botón de emitir queda en la consola Gemini.
+
+**No declarar Biblia terminada:** falta editor gráfico integral de plantillas, modo de seguimiento en vivo, guardado/restauración de estilos, limpieza de capas y pruebas HDMI/visual de fidelidad. El gate de Vista previa impide emitir una referencia aún no preparada; la prueba E2E debe confirmar que no se producen dobles actualizaciones ni fugas de audio.

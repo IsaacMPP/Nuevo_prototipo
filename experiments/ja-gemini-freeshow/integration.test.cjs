@@ -80,3 +80,19 @@ test("El operador dispone de una sola consola JA y configuración propia operati
  }
  assert.ok(settings.includes("scriptureMode.set("),"Cambio de vista bíblica sin implementar")
 })
+
+test("Biblia Gemini prepara en un renderizador FreeShow aislado y no actualiza Programa al navegar",()=>{
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const navigator=read("engine/src/frontend/components/drawer/bible/Scripture.svelte")
+ const scripture=read("engine/src/frontend/components/drawer/bible/scripture.ts")
+ const preview=read("engine/src/frontend/components/ja/JaGeminiBiblePreview.svelte")
+ assert.ok(shell.includes("prepareGeminiScriptureDraft()"),"Falta preparación bíblica")
+ assert.ok(shell.includes("keyboardGeminiBible"),"Faltan flechas Gemini")
+ assert.ok(shell.includes("geminiPreviewOnly:true"),"Navegador no está aislado de Programa")
+ assert.ok(navigator.includes("!geminiPreviewOnly && hasLiveScriptureOutput"),"Selección puede actualizar Programa sin autorizar")
+ assert.ok(navigator.includes("export async function navigatePreparedVerse"),"Falta navegación privada")
+ assert.ok(scripture.includes("export async function prepareGeminiScriptureDraft()"),"Falta composición de plantilla real")
+ const factory=scripture.split("export async function prepareGeminiScriptureDraft()")[1].split("// Ordinary")[0]
+ assert.ok(!factory.includes("setOutput(") && !factory.includes("sendToJAOutputs("),"El borrador nunca debe emitir")
+ assert.ok(preview.includes("outOverride={prepared}"),"Vista previa debe aislar contenido sin escribir en outputs")
+})

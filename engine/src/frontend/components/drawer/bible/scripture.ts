@@ -389,6 +389,42 @@ export async function refreshLiveScripture() {
     }
 }
 
+
+// Build an independent Scripture draft with the SAME native template and slide
+// constructor used by live projection, but without modifying outputs or audio.
+export async function prepareGeminiScriptureDraft() {
+    const categoryId = get(drawerTabsData).scripture?.activeSubTab || ""
+    const reference = clone(get(activeScripture).reference) as ScriptureReference
+    if (!categoryId || !reference?.verses?.[0]?.length) return null
+    const biblesContent = await getActiveScripturesContent()
+    if (!biblesContent?.[0]) return null
+    const selectedChapters = biblesContent[0].chapters || []
+    const selectedVerses = biblesContent[0].activeVerses || []
+    const { slides, attributions, slideDynamicValues } = await getScriptureSlidesNew(
+        { biblesContent, selectedChapters, selectedVerses }, true
+    )
+    const helper = new TemplateHelper(getScriptureTemplateId())
+    const backgroundPath = helper.getSetting("backgroundPath") || ""
+    const main = getJAMainOutput()
+    const currentStyle = get(styles)[main?.style || ""] || {}
+    const mediaStyle = backgroundPath ? getMediaStyle(get(media)[backgroundPath], currentStyle) : {}
+    const slide = {
+        id: "temp", categoryId, scriptureReference: reference,
+        tempItems: slides[0] || [], attributionString: getMergedAttribution(biblesContent, attributions),
+        translations: biblesContent.length,
+        settings: { backgroundColor: helper.getSetting("backgroundColor") },
+        customDynamicValues: slideDynamicValues[0]
+    }
+    return {
+        kind: "scripture" as const, categoryId, reference,
+        out: {
+            slide, background: backgroundPath
+                ? { path: backgroundPath, loop: true, muted: true, ...mediaStyle }
+                : null
+        }
+    }
+}
+
 // Ordinary "Proyectar" remains primary-only.
 export async function playScripture() {
     const mainOutput = getJAMainOutput()
@@ -2155,7 +2191,7 @@ function fixHTMLTags(items: Item[]) {
     return items
 }
 
-function getScriptureTemplateId() {
+export function getScriptureTemplateId() {
     const scriptureTemplate = get(scriptureSettings).template || "scripture"
 
     const onlyOneNormalOutput = getAllNormalOutputs().length === 1

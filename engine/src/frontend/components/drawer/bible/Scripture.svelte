@@ -56,6 +56,8 @@
 
     export let active: string | null
     export let searchValue: string
+    // En la consola Gemini, seleccionar un versículo prepara contenido privado.
+    export let geminiPreviewOnly = false
 
     $: activeScriptureId = active || ""
     $: activeScriptures = [activeScriptureId]
@@ -194,7 +196,7 @@
     }
 
     $: isActiveInOutput = outputIsScripture([$outputs, $jaControlledOutputId])
-    $: hasLiveScripture = hasLiveScriptureOutput([$outputs, $jaControlledOutputId])
+    $: hasLiveScripture = !geminiPreviewOnly && hasLiveScriptureOutput([$outputs, $jaControlledOutputId])
     $: liveScriptureDestinations = getLiveScriptureOutputIds([$outputs, $jaControlledOutputId]).map((id) => $outputs[id]?.name || id).join(" + ")
 
     // Rehydrate the existing Bible navigator when Controlar changes screens.
@@ -909,6 +911,8 @@
     }
 
     function keydown(e: KeyboardEvent) {
+        // Gemini tiene su propio router de flechas; no ejecutar atajos clásicos.
+        if (geminiPreviewOnly) return
         const scriptureModuleActive = get(activePage) === "show" && get(activeDrawerTab) === "scripture"
         if (e.key === "Escape") {
             resetContentSearch()
@@ -1009,6 +1013,11 @@
     let chapterLengths: { [key: number]: number } = {}
     $: if ($activeTriggerFunction === "scripture_next") _moveSelection(false)
     $: if ($activeTriggerFunction === "scripture_previous") _moveSelection(true)
+    // API explícita para mover el borrador desde Gemini sin emitir en Programa.
+    export async function navigatePreparedVerse(moveLeft: boolean) {
+        if (!geminiPreviewOnly) return
+        await _moveSelection(moveLeft)
+    }
     async function _moveSelection(moveLeft: boolean) {
         if (!activeReference.book) return
 
@@ -1346,11 +1355,13 @@
             </MaterialButton>
         {/if}
 
+        {#if !geminiPreviewOnly}
         <MaterialButton disabled={$outLocked} title={isActiveInOutput ? "preview._update [Ctrl+R]" : "menu._title_display"} on:click={playScripture}>
             <Icon size={isActiveInOutput ? 1.1 : 1.3} id={isActiveInOutput ? "refresh" : "play"} white={!isActiveInOutput} />
         </MaterialButton>
         {#if !$outLocked}
             <JADestinationChooser label="Enviar pasaje bíblico a…" onSend={(ids) => { void sendScriptureToJAOutputs(ids) }} />
+        {/if}
         {/if}
 
         <div class="divider" />

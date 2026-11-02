@@ -12,17 +12,18 @@
     import { registerJAMediaFolders } from "../../utils/jaMediaFolders"
     import { queuedHymnThumbnail } from "../../utils/jaHymnThumbnailQueue"
     import { registerJARV1909 } from "../drawer/bible/jaBundledBible"
-    import { playScripture } from "../drawer/bible/scripture"
+    import { playScripture, prepareGeminiScriptureDraft } from "../drawer/bible/scripture"
     import Scripture from "../drawer/bible/Scripture.svelte"
     import { get } from "svelte/store"
     import { geminiHtml, geminiBodyClasses } from "./gemini-fragment.generated"
-    import { activeScripture, mediaFolders, outputs, outLocked, playingVideos, saved, scriptures, scriptureMode, drawerTabsData } from "../../stores"
+    import { activeScripture, mediaFolders, outputs, outLocked, playingVideos, saved, scriptures, scriptureMode, scriptureSettings, templates, drawerTabsData } from "../../stores"
     import { encodeFilePath, getExtension, getMediaType } from "../helpers/media"
     import { clearBackground } from "../output/clear"
     import { setOutput } from "../helpers/output"
     import { VideoPlayer } from "../media/video/videoPlayer"
     import { videoSync } from "../media/video/videoSync"
     import PreviewOutput from "../output/preview/PreviewOutput.svelte"
+    import JaGeminiBiblePreview from "./JaGeminiBiblePreview.svelte"
     import JaGeminiSettings from "./JaGeminiSettings.svelte"
 
     let host: HTMLDivElement
@@ -54,6 +55,11 @@
     let programSeek: HTMLInputElement | null = null
     let programVolume: HTMLInputElement | null = null
     let previewMedia: HTMLMediaElement | null = null
+    let biblePreviewRenderer: JaGeminiBiblePreview | null = null
+    let biblePreviewTimer: ReturnType<typeof setTimeout> | null = null
+    let biblePreviewGeneration = 0
+    let biblePreviewReady = false
+    let biblePreviewReference = ""
     let timer: ReturnType<typeof setTimeout> | null = null
     let videoState = { paused: true, muted: false, currentTime: 0, duration: 0 }
 
@@ -161,6 +167,7 @@
             target?.classList.toggle("ja-selected",id===selectedId)
         }
         syncProgram()
+        if (mode === "biblia" && biblePreviewReady && biblePreviewRenderer) biblePreviewRenderer.$set({outputId: selectedId})
     }
     function syncProgram() {
         if (!host) return
@@ -452,8 +459,64 @@
             if(node) {node.classList.toggle("hidden",module!==next);node.classList.toggle("flex",module===next)}
         }
         setupNavigation()
-        if(next==="biblia") {void registerJARV1909().then(()=>updateBibleUI());updateBibleUI()}
+        if(next==="biblia") {void registerJARV1909().then(()=>{updateBibleUI();scheduleBiblePreview()});updateBibleUI();scheduleBiblePreview()}
         else {renderLibrary();if(next==="himnario")void refreshJAHymnLibrary()}
+    }
+    // Render the private next Scripture with FreeShow's actual slide compositor.
+    // No calls to setOutput, VideoPlayer or remote output windows occur here.
+    function scheduleBiblePreview() {
+        if (mode !== "biblia") return
+        const generation = ++biblePreviewGeneration
+        biblePreviewReady = false
+        if (biblePreviewTimer) clearTimeout(biblePreviewTimer)
+        biblePreviewTimer = setTimeout(() => { void renderBiblePreview(generation) }, 90)
+    }
+    async function renderBiblePreview(generation: number) {
+        const before = JSON.stringify(get(activeScripture).reference || null)
+        const bibleId = activeBibleId
+        try {
+            const draft = await prepareGeminiScriptureDraft()
+            if (generation !== biblePreviewGeneration || mode !== "biblia" ||
+                bibleId !== activeBibleId || before !== JSON.stringify(get(activeScripture).reference || null)) return
+            const target = el("previewCanvasContent")
+            if (!target) return
+            biblePreviewRenderer?.$destroy()
+            biblePreviewRenderer = null
+            previewMedia?.pause()
+            previewMedia = null
+            prepared = ""
+            target.replaceChildren()
+            if (!draft || !selectedId) {
+                target.textContent = "Selecciona un versículo para preparar Vista previa"
+                return
+            }
+            biblePreviewRenderer = new JaGeminiBiblePreview({
+                target, props: { outputId: selectedId, prepared: draft.out }
+            })
+            biblePreviewReference = before
+            biblePreviewReady = true
+            const counter = el("previewTimeCounter")
+            if (counter) counter.textContent = "Biblia · Vista previa"
+            const slider = el("previewSeekSlider") as HTMLInputElement | null
+            if (slider) slider.disabled = true
+            updatePreviewProgress()
+        } catch (error) {
+            if (generation !== biblePreviewGeneration) return
+            biblePreviewReady = false
+            notice("No se pudo preparar Vista previa bíblica: " + String(error))
+        }
+    }
+    function keyboardGeminiBible(e: KeyboardEvent) {
+        if (mode !== "biblia" || settingsOpen || !["ArrowLeft","ArrowRight"].includes(e.key)) return
+        if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return
+        const focused = document.activeElement as HTMLElement | null
+        const target = e.target as HTMLElement | null
+        const interactive = "input,textarea,select,button,[contenteditable],[role='textbox'],[role='slider']"
+        if (target?.closest?.(interactive) || focused?.closest?.(interactive)) return
+        if (!scriptureView) return
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        void (scriptureView as any).navigatePreparedVerse(e.key === "ArrowLeft")
     }
     function updateBibleUI() {
         if (mode !== "biblia") return
@@ -477,6 +540,7 @@
                 activeBibleId=versions.value
                 drawerTabsData.update(data => ({...data,scripture:{...data.scripture,activeSubTab:activeBibleId}}))
                 scriptureView?.$set({active:activeBibleId})
+                scheduleBiblePreview()
             }
             bar.append(versions)
             for (const [label,which] of [["Vista cuadriculada","grid"],["Vista de lista","list"]] as const) {
@@ -488,12 +552,15 @@
             }
             const project=document.createElement("button")
             project.type="button"
+            project.className="ja-bible-project"
             project.textContent="▶ Proyectar en principal"
             project.onclick=()=>{
                 if (get(outLocked)) return notice("Las salidas están bloqueadas")
                 const ids = chooseOutput()
                 if (ids.length !== 1 || !selectedId || !get(outputs)[selectedId]?.active)
                     return notice("Para proyectar la Biblia en esta prueba, activa una única salida principal.")
+                if (!biblePreviewReady || biblePreviewReference !== JSON.stringify(get(activeScripture).reference || null))
+                    return notice("Primero prepara el versículo en Vista previa; comprueba que terminó de cargar.")
                 if (!activeBibleId || !get(activeScripture).reference?.verses?.[0]?.length)
                     return notice("Selecciona primero un libro, capítulo y versículo de la Biblia.")
                 void playScripture().then(()=>{
@@ -532,7 +599,7 @@
             if (b.textContent?.includes("lista")) b.setAttribute("aria-pressed",String(get(scriptureMode)==="list"))
         }
         if (activeBibleId && scriptureTarget) {
-            if (!scriptureView) { scriptureTarget.replaceChildren(); scriptureView=new Scripture({target:scriptureTarget,props:{active:activeBibleId,searchValue:""}}) }
+            if (!scriptureView) { scriptureTarget.replaceChildren(); scriptureView=new Scripture({target:scriptureTarget,props:{active:activeBibleId,searchValue:"",geminiPreviewOnly:true}}) }
             else scriptureView.$set({active:activeBibleId})
         } else {
             scriptureTarget.textContent="Todavía no hay una Biblia local válida. Verifica RV1909 en Biblias instaladas."
@@ -677,6 +744,11 @@
         }
     }
     function prepare(path: string) {
+        biblePreviewGeneration++
+        if (biblePreviewTimer) clearTimeout(biblePreviewTimer)
+        biblePreviewRenderer?.$destroy()
+        biblePreviewRenderer = null
+        biblePreviewReady = false
         prepared = path
         previewMedia?.pause()
         previewMedia = null
@@ -717,6 +789,12 @@
         updatePreviewProgress()
     }
     function project() {
+        if (mode === "biblia") {
+            const button = el("moduleView_biblia")?.querySelector<HTMLButtonElement>(".ja-bible-project")
+            if (button) button.click()
+            else notice("Prepara un versículo antes de proyectar")
+            return
+        }
         if (!prepared) return notice("Selecciona primero un archivo real de la biblioteca")
         const ids = chooseOutput()
         if (ids.length !== 1 || !selectedId || !ids.includes(selectedId))
@@ -838,12 +916,18 @@
         const uOutputs = outputs.subscribe(() => { rebuildOutputs(); renderRealHeader() })
         const uSaved = saved.subscribe(() => renderRealHeader())
         const uFolders = mediaFolders.subscribe(() => { void scanMediaFolders() })
-        const uBibles = scriptures.subscribe(() => { if(mode==="biblia")updateBibleUI() })
+        const uBibles = scriptures.subscribe(() => { if(mode==="biblia") {updateBibleUI();scheduleBiblePreview()} })
+        const uScriptureDraft = activeScripture.subscribe(() => { if(mode==="biblia")scheduleBiblePreview() })
+        const uBibleTab = drawerTabsData.subscribe(() => { if(mode==="biblia")scheduleBiblePreview() })
+        const uBibleTemplate = templates.subscribe(() => { if(mode==="biblia")scheduleBiblePreview() })
+        const uBibleSettings = scriptureSettings.subscribe(() => { if(mode==="biblia")scheduleBiblePreview() })
+        window.addEventListener("keydown", keyboardGeminiBible, true)
+        cleanup.push(() => window.removeEventListener("keydown", keyboardGeminiBible, true))
         const uHymn = hymnVideos.subscribe(() => { if(mode==="himnario")renderLibrary() })
         const uCollections = hymnCollectionPaths.subscribe(() => { if(mode==="himnario")renderLibrary() })
         const uRoots = hymnSourcePaths.subscribe(() => { void scanMediaFolders() })
         const uStatuses = hymnSourceStatus.subscribe(() => { if(mode==="himnario")renderToolbar() })
-        cleanup.push(uOutputs, uSaved, uFolders, uBibles, uHymn, uCollections, uRoots, uStatuses)
+        cleanup.push(uOutputs, uSaved, uFolders, uBibles, uScriptureDraft, uBibleTab, uBibleTemplate, uBibleSettings, uHymn, uCollections, uRoots, uStatuses)
         rebuildOutputs()
         return () => {
             if (timer) clearTimeout(timer)
@@ -852,6 +936,10 @@
             thumbObserver = null
             scriptureView?.$destroy()
             scriptureView=null
+            biblePreviewGeneration++
+            if (biblePreviewTimer) clearTimeout(biblePreviewTimer)
+            biblePreviewRenderer?.$destroy()
+            biblePreviewRenderer = null
             for (const renderer of screenRenderers) renderer.$destroy()
             screenRenderers=[]
             libraryToolbar?.remove()
