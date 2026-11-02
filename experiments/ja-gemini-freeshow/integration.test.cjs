@@ -126,7 +126,7 @@ test("Controles generales: restablecimiento seguro, ampliar monitor y limpiar so
  const resets=shell.split("function resetTargetSelection()")[1]?.split("function toggleLocalFullscreen")[0] || ""
  assert.ok(!resets.includes('setOutput(') && !resets.includes('clearBackground(') && !resets.includes('clearSlide('),"Restablecer selección no debe alterar Programa")
  assert.ok(settings.includes('window.confirm('),"Restablecer preferencias debe solicitar confirmación")
- assert.ok(settings.includes('dispatch("previewAutoplayChange"') && shell.includes("if (previewAutoplay) void m.play()"),"Preferencia de autoplay no conectada al reproductor")
+ assert.ok(settings.includes('dispatch("previewAutoplayChange"') && shell.includes("else if (previewAutoplay)") && shell.includes('void m.play().catch('),"Preferencia de autoplay no conectada al reproductor")
  assert.ok(settings.includes('dispatch("compactUiChange"') && shell.includes('ja-compact-ui'),"Densidad de interfaz no conectada")
  assert.ok(shell.includes('bind("btnBridgeBlack",()=>setOperatorEffect(JA_BLACK))'),"Cortina negra debe usar el efecto de salida nativo")
  assert.ok(shell.includes('bind("btnBridgeLogo",()=>setOperatorEffect(JA_LOGO))'),"Logo debe usar el efecto de salida nativo")
