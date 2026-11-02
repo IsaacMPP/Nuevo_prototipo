@@ -3,6 +3,7 @@
     import { onMount } from "svelte"
     import { uid } from "uid"
     import type { FileFolder } from "../../../types/Main"
+    import type { AssetItem } from "../../../types/Effects"
     import { Main } from "../../../types/IPC/Main"
     import { ToMain } from "../../../types/IPC/ToMain"
     import { requestMain, sendMain, receiveToMain, destroyMain } from "../../IPC/main"
@@ -128,7 +129,7 @@
             ...current,
             [JA_BLACK]: {name:"JA · Cortina negra",color:null,placeUnderSlide:false,style:"width:100%;height:100%;",background:"#000000",opacity:1,items:[]},
             [JA_LOGO]: {name:"JA · Logotipo",color:null,placeUnderSlide:false,style:"width:100%;height:100%;",background:"transparent",opacity:1,
-                items:[{type:"asset",path:"./ja-logo.png",size:1.35,x:0.5,y:0.5}]}
+                items:[{type:"asset",path:"./ja-logo.png",size:1.35,x:0.5,y:0.5} as AssetItem]}
         }))
     }
     function setOperatorEffect(id: string) {
