@@ -900,7 +900,7 @@
             else if (/Guardado/i.test(original)) entry.node.nodeValue = get(saved) ? "Guardado" : "Cambios pendientes"
             else if (/Estado:\s*En vivo|^En vivo$/i.test(original))
                 entry.node.nodeValue = active.length ? "Salida activa" : "Sin salida activa"
-            else if (/Modo:\s*Servicio/i.test(original)) entry.node.nodeValue = "Biblioteca: archivos locales"
+            else if (/Modo:\s*Servicio/i.test(original)) entry.node.nodeValue = "Biblioteca local · Archivos reales"
         }
         // El mock incluía medidores sin conexión al audio real.
         const fakeMeter = el("audioMeterBars")
@@ -969,7 +969,13 @@
     }
     function removeInertGeminiControls() {
         const dropdown=el("btnProjectDropdown") as HTMLButtonElement | null
-        if (dropdown) {dropdown.disabled=true;dropdown.title="Gestión de proyectos pendiente; el modo actual utiliza bibliotecas locales reales"}
+        if (dropdown) {
+            const status = document.createElement("span")
+            status.className = "ja-local-source-status"
+            status.textContent = "Biblioteca local · Archivos reales"
+            status.title = "Origen de la biblioteca, no un selector de modo. Gestión de proyectos pendiente."
+            dropdown.replaceWith(status)
+        }
         el("projectDropdownMenu")?.remove()
         const fauxWindows=el("btnOpenDiagModal")?.nextElementSibling
         if (fauxWindows?.textContent?.includes("✕")) fauxWindows.remove()
@@ -1147,7 +1153,12 @@
         const slider = el("previewSeekSlider") as HTMLInputElement | null
         if (slider) {
             slider.disabled = true
-            slider.addEventListener("input", () => { if (previewMedia) previewMedia.currentTime = Number(slider.value) || 0 })
+            slider.addEventListener("input", () => {
+                const seconds=Number(slider.value) || 0
+                if (!previewMedia) return
+                if(isLinkedVideo())VideoPlayer.seekTo(playingPath,selectedId,seconds)
+                else previewMedia.currentTime=seconds
+            })
         }
         bind("btnPreviewPlay", () => {
             if(!previewMedia)return
@@ -1212,8 +1223,8 @@
         }
         const fadeButton=el("btnBridgeFade") as HTMLButtonElement|null
         if(fadeButton){fadeButton.disabled=false;fadeButton.removeAttribute("aria-disabled");fadeButton.title="Elegir transición de salida nativa: Corte, Fundido, Desenfoque, Escala o Deslizamiento"}
-        disable("btnProgramToAll", "Envío múltiple pendiente de aislamiento")
-        disable("btnPreviewToAll", "Envío múltiple pendiente de aislamiento")
+        disable("btnProgramToAll", "Pendiente S0: configurar e identificar las salidas reales para laptop, HDMI y spacedesk. Solo hay una salida JA supervisada.")
+        disable("btnPreviewToAll", "Pendiente S0: no emitir a monitores Windows sin asignar salidas JA ni validar audio independiente.")
         disable("btnProjectSelectedVerse", "Biblia todavía no integrada en esta prueba")
         bind("btnAddMultimedia", toggleAddMediaMenu)
         const addMedia = el("btnAddMultimedia")

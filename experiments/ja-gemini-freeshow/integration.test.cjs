@@ -187,3 +187,12 @@ test("Consola: transiciones, negro y logo usan capas de FreeShow; sincronizació
  assert.ok(!shell.includes('disable("btnBridgeFade"'),"Fundido no debe estar bloqueado")
  assert.ok(!shell.includes('disable("btnBridgeBlack"'),"Negro no debe estar bloqueado")
 })
+
+test("Banner de Biblioteca no aparenta cambiar modo y controles multipantalla declaran su bloqueo real",()=>{
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ assert.ok(shell.includes('dropdown.replaceWith(status)'),"Eliminar selector ficticio de Modo")
+ assert.ok(shell.includes('status.textContent = "Biblioteca local · Archivos reales"'),"Mostrar origen real de datos")
+ assert.ok(shell.includes('disable("btnProgramToAll", "Pendiente S0:'),"Nunca afirmar envío a pantallas no identificadas")
+ assert.ok(shell.includes('disable("btnPreviewToAll", "Pendiente S0:'),"Nunca afirmar envío a pantallas no identificadas")
+ assert.ok(shell.includes('if(isLinkedVideo())VideoPlayer.seekTo(playingPath,selectedId,seconds)'),"La búsqueda vinculada necesita controlar la sesión pública")
+})

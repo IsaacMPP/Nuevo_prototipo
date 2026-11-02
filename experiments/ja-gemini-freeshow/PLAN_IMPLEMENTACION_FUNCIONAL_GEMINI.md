@@ -122,3 +122,5 @@ Revisión del código y cambios del siguiente lote:
 **Multipantalla:** todavía S0. Los 3 monitores Windows no están representados por 3 salidas configuradas; **no se activa un envío real a todas** hasta validar la asignación HDMI/spacedesk, audio y estado por salida. Los dos botones deben explicar exactamente qué configuración falta y permitir acceder al panel, pero no confirmar emisiones inexistentes.
 
 **CI no sustituye pruebas físicas:** comprobar que Fundido afecta la salida física, Negro cubre toda la composición, Logo aparece en la posición esperada, no se pierde audio y cambiar a vídeo elimina Biblia; de lo contrario mantener S1 y corregir la causa.
+
+**Controles y semántica:** el rótulo ficticio «Modo: prueba con archivos locales» se sustituyó por el estado informativo «Biblioteca local · Archivos reales» sin desplegable no funcional. La búsqueda de Vista previa vinculada controla el tiempo del mismo vídeo público, pero navegar a otro medio desvincula ambos monitores. Se publican motivos explícitos S0 en controles de «todas las pantallas» deshabilitados; **su funcionalidad real continúa pendiente** por falta de asignación y prueba de tres monitores.
