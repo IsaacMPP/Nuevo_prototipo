@@ -918,18 +918,8 @@
             btn.addEventListener("click",handler)
             cleanup.push(()=>btn.removeEventListener("click",handler))
         }
-        for (const button of host.querySelectorAll<HTMLButtonElement>("button")) {
-            if (/agregar multimedia/i.test(button.textContent || "")) {
-                const handler = () => sendMain(Main.OPEN_FOLDER, {channel:"JA_GEMINI_MEDIA_FOLDER",title:"Vincular carpeta Multimedia"})
-                button.addEventListener("click",handler)
-                cleanup.push(()=>button.removeEventListener("click",handler))
-                button.title = "Vincula una carpeta real de Windows para indexar sus archivos"
-            }
-            if (/^Restablecer preferencias de prueba$/i.test(button.textContent?.trim() || "")) {
-                button.disabled = true
-                button.title = "Pendiente: no es un control operativo todavía"
-            }
-        }
+        // Los botones de acciones generales se enlazan una sola vez mediante bind().
+        // No instalar un segundo selector de carpeta sobre «Agregar multimedia».
     }
     function installFolderPicker() {
         const fileToken = receiveToMain(ToMain.OPEN_FILE2, ({channel,files}) => {
