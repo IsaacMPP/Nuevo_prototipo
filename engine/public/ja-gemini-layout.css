@@ -143,3 +143,37 @@ html, body, #app { height: 100%; min-height: 0; overflow: hidden; }
 .ja-gemini-host.ja-large-ui .ja-screen-card,
 .ja-gemini-host.ja-large-ui .ja-target {font-size:14px!important}
 .ja-gemini-host.ja-large-ui .ja-media-card p {font-size:13px!important}
+
+/* La ampliación es una vista de la CONSOLA. No usa Fullscreen API de Electron,
+   no mueve la ventana del motor y puede cerrarse mediante Esc o botón propio. */
+.ja-gemini-host #previewCanvasContent.ja-console-expanded,
+.ja-gemini-host #programCanvasContent.ja-console-expanded{
+    position:fixed!important;inset:8px!important;z-index:990!important;
+    width:calc(100% - 16px)!important;height:calc(100% - 16px)!important;
+    min-height:0!important;max-height:none!important;max-width:none!important;
+    background:#060d20!important;border:2px solid #4cd1fd!important;
+    padding:48px 16px 16px!important;box-sizing:border-box!important;
+    display:flex!important;align-items:center!important;justify-content:center!important;
+    border-radius:12px!important;overflow:hidden!important;
+}
+.ja-gemini-host #previewCanvasContent.ja-console-expanded > *,
+.ja-gemini-host #programCanvasContent.ja-console-expanded > *{
+    max-width:100%!important;max-height:100%!important;object-fit:contain!important;
+}
+.ja-gemini-host .ja-expanded-close{
+    position:fixed;top:21px;right:22px;z-index:999;
+    background:#183b66;border:1px solid #4cd1fd;color:white;
+    border-radius:7px;padding:8px 12px;font-size:13px;cursor:pointer;
+}
+.ja-gemini-host .ja-expanded-close:focus-visible{outline:2px solid #ffe000}
+.ja-gemini-host .ja-add-media-menu{
+    position:fixed;z-index:995;min-width:195px;max-width:calc(100% - 16px);
+    border:1px solid #4e769b;border-radius:9px;background:#0b1d39;
+    box-shadow:0 12px 32px rgba(0,0,0,.55);display:flex;flex-direction:column;padding:5px;
+}
+.ja-gemini-host .ja-add-media-menu button{
+    border:0;background:transparent;color:#f5f8ff;cursor:pointer;
+    text-align:left;padding:10px;border-radius:6px;font-size:12px;
+}
+.ja-gemini-host .ja-add-media-menu button:hover,
+.ja-gemini-host .ja-add-media-menu button:focus-visible{background:#235078;outline:none}

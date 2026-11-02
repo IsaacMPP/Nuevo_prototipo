@@ -6,10 +6,11 @@
     import { Main } from "../../../types/IPC/Main"
     import { ToMain } from "../../../types/IPC/ToMain"
     import { requestMain, sendMain, receiveToMain, destroyMain } from "../../IPC/main"
-    import { geminiCounts, geminiLocalFiles, geminiSearch, type GeminiFile, type GeminiMediaType } from "../../utils/jaGeminiLibrary"
+    import { geminiCounts, geminiFileType, geminiLocalFiles, geminiSearch, type GeminiFile, type GeminiMediaType } from "../../utils/jaGeminiLibrary"
     import { isPathInJACollection, normalizeJAContentPath } from "../../utils/jaHymnPaths"
     import { hymnVideos, hymnCollectionPaths, hymnSourcePaths, hymnLinks, hymnSourceStatus, linkHymnFolder, unlinkHymnFolder, refreshJAHymnLibrary } from "../../utils/jaHymnLibrary"
     import { registerJAMediaFolders } from "../../utils/jaMediaFolders"
+    import { videoExtensions, imageExtensions, audioExtensions } from "../../values/extensions"
     import { queuedHymnThumbnail } from "../../utils/jaHymnThumbnailQueue"
     import { registerJARV1909 } from "../drawer/bible/jaBundledBible"
     import { playScripture, prepareGeminiScriptureDraft } from "../drawer/bible/scripture"
@@ -43,6 +44,10 @@
     let collection = "Himnario Adventista"
     let typeFilter: GeminiMediaType | "all" = "video"
     let indexedMedia: GeminiFile[] = []
+    let selectedMediaPaths: string[] = []
+    let addMediaMenu: HTMLElement | null = null
+    let expandedTarget: HTMLElement | null = null
+    let expandedClose: HTMLButtonElement | null = null
     let scanErrors: string[] = []
     let scanning = false
     let scanGeneration = 0
@@ -110,36 +115,124 @@
         saveOperatorPreferences()
         notice("Preferencias visuales y de Vista previa restauradas. Programa permanece intacto.")
     }
+    // Restablecer nunca limpia Programa ni reubica salidas físicas.
+    // El botón original restablecía solo la selección (invisible con una salida).
     function resetTargetSelection() {
-        const choices = chooseOutput()
-        if (!choices.length) return notice("No hay salidas configuradas para seleccionar")
-        // No se modifican ventanas, rutas ni el contenido enviado a ninguna salida.
-        const remembered = (() => { try { return localStorage.getItem("ja-main-projector") || "" } catch { return "" } })()
-        selectedId = choices.includes(remembered) ? remembered : choices[0]
-        rebuildOutputs()
-        notice("Selección de salida restaurada: " + (get(outputs)[selectedId]?.name || selectedId) + ". Programa no se modificó.")
-    }
-    async function toggleLocalFullscreen(targetId: string) {
-        const target = el(targetId)
-        if (!target) return notice("No existe el monitor solicitado en la interfaz")
-        try {
-            if (document.fullscreenElement) await document.exitFullscreen()
-            else await target.requestFullscreen()
-        } catch (error) {
-            notice("Windows no pudo ampliar la vista local: " + String(error))
+        closeLocalExpanded()
+        closeAddMediaMenu()
+        previewMedia?.pause()
+        previewMedia = null
+        biblePreviewGeneration++
+        if (biblePreviewTimer) clearTimeout(biblePreviewTimer)
+        biblePreviewRenderer?.$destroy()
+        biblePreviewRenderer = null
+        biblePreviewReady = false
+        biblePreviewReference = ""
+        prepared = ""
+        const preview = el("previewCanvasContent")
+        if (preview) {
+            preview.replaceChildren()
+            preview.textContent = "Vista previa restablecida. Elige el siguiente contenido."
         }
+        const counter = el("previewTimeCounter")
+        if (counter) counter.textContent = "Sin contenido preparado"
+        const seek = el("previewSeekSlider") as HTMLInputElement | null
+        if (seek) { seek.disabled = true; seek.value = "0" }
+        const remembered = (() => { try { return localStorage.getItem("ja-main-projector") || "" } catch { return "" } })()
+        const choices = chooseOutput()
+        if (choices.length) selectedId = choices.includes(remembered) ? remembered : choices[0]
+        rebuildOutputs()
+        updatePreviewProgress()
+        notice("Vista previa restablecida; Programa y salidas físicas no cambiaron.")
     }
+    function closeLocalExpanded() {
+        expandedTarget?.classList.remove("ja-console-expanded")
+        expandedTarget?.removeAttribute("aria-expanded")
+        expandedTarget = null
+        expandedClose?.remove()
+        expandedClose = null
+    }
+    function toggleLocalFullscreen(targetId: string) {
+        const target = el(targetId)
+        if (!target) { notice("No existe el monitor solicitado en la interfaz"); return }
+        if (expandedTarget === target) { closeLocalExpanded(); return }
+        closeLocalExpanded()
+        expandedTarget = target
+        target.classList.add("ja-console-expanded")
+        target.setAttribute("aria-expanded","true")
+        const close = document.createElement("button")
+        close.type = "button"
+        close.className = "ja-expanded-close"
+        close.textContent = "✕ Cerrar vista ampliada"
+        close.title = "Volver a la consola sin modificar Programa (Esc)"
+        close.setAttribute("aria-label","Cerrar vista ampliada")
+        close.onclick = closeLocalExpanded
+        host.append(close)
+        expandedClose = close
+    }
+    function closeAddMediaMenu() {
+        addMediaMenu?.remove()
+        addMediaMenu = null
+        el("btnAddMultimedia")?.setAttribute("aria-expanded","false")
+    }
+    function openIndividualFiles() {
+        closeAddMediaMenu()
+        sendMain(Main.OPEN_FILE, {
+            id:"ja-gemini-local-media",channel:"JA_GEMINI_MEDIA_FILES",
+            title:"Seleccionar vídeos, imágenes o audio",
+            multiple:true,read:false,
+            filter:{name:"Vídeos, imágenes y audio",extensions:[...new Set([...videoExtensions,...imageExtensions,...audioExtensions])]}
+        })
+    }
+    function openMediaFolder() {
+        closeAddMediaMenu()
+        sendMain(Main.OPEN_FOLDER,{channel:"JA_GEMINI_MEDIA_FOLDER",title:"Vincular carpeta de Multimedia"})
+    }
+    function toggleAddMediaMenu() {
+        if (addMediaMenu) return closeAddMediaMenu()
+        const anchor = el("btnAddMultimedia")
+        if (!anchor) return notice("No se encontró el botón Agregar multimedia")
+        const menu = document.createElement("div")
+        menu.className = "ja-add-media-menu"
+        menu.setAttribute("role","group")
+        menu.setAttribute("aria-label","Formas de agregar multimedia")
+        const fileButton = document.createElement("button")
+        fileButton.type="button";fileButton.textContent="Añadir archivos…"
+        fileButton.onclick=openIndividualFiles
+        const folderButton = document.createElement("button")
+        folderButton.type="button";folderButton.textContent="Vincular carpeta…"
+        folderButton.onclick=openMediaFolder
+        menu.append(fileButton,folderButton)
+        host.append(menu)
+        addMediaMenu=menu
+        anchor.setAttribute("aria-expanded","true")
+        const anchorBounds=anchor.getBoundingClientRect(), hostBounds=host.getBoundingClientRect()
+        const availableX = Math.max(4,host.clientWidth-menu.offsetWidth-8)
+        const availableY = Math.max(4,host.clientHeight-menu.offsetHeight-8)
+        menu.style.left=Math.min(availableX,Math.max(4,anchorBounds.left-hostBounds.left))+"px"
+        menu.style.top=Math.min(availableY,Math.max(4,anchorBounds.bottom-hostBounds.top+4))+"px"
+        fileButton.focus()
+    }
+    function outsideMediaMenu(e: MouseEvent) {
+        if (!addMediaMenu) return
+        const node = e.target as Node | null
+        if (node && (addMediaMenu.contains(node) || el("btnAddMultimedia")?.contains(node))) return
+        closeAddMediaMenu()
+    }
+    function escapeConsole(e: KeyboardEvent) {
+        if (e.key !== "Escape" || settingsOpen) return
+        if (addMediaMenu) { e.preventDefault();closeAddMediaMenu();return }
+        if (expandedTarget) { e.preventDefault();closeLocalExpanded() }
+    }
+    // El botón «Limpiar texto» actúa sobre la capa de diapositiva, no sobre
+    // el archivo de imagen/vídeo que sirve de fondo ni sobre el audio.
     function clearSelectedTextLayer() {
         if (get(outLocked)) return notice("La salida está bloqueada")
         const output = get(outputs)[selectedId]
-        if (!selectedId || !output?.active) return notice("Selecciona una salida activa")
-        const slide = output?.out?.slide
-        // Solo limpiar texto bíblico temporal. No eliminar diapositivas,
-        // medios o capas distintas por confundir sus tipos.
-        if (slide?.id !== "temp" || !slide.categoryId)
-            return notice("La salida seleccionada no tiene texto bíblico para limpiar")
+        if (!selectedId || !output?.enabled || !output.active) return notice("Selecciona una salida activa para limpiar texto")
+        if (!output.out?.slide) return notice("Esta salida no contiene una capa de texto o diapositiva que limpiar")
         clearSlide(true, selectedId)
-        notice("Texto bíblico retirado de " + (output.name || selectedId) + "; fondo y audio conservados.")
+        notice("Capa de diapositiva retirada de " + (output.name || selectedId) + ". Fondo y audio conservados.")
     }
     function openScreenSettings() {
         settingsStartSection = "screens"
@@ -329,7 +422,7 @@
             }
         }
         if (generation !== scanGeneration) return
-        indexedMedia = geminiLocalFiles(entries, hymnRoots)
+        indexedMedia = geminiLocalFiles([...entries, ...selectedMediaPaths.map(path=>({path,name:fileName(path)}))], hymnRoots)
         scanErrors = failures
         scanning = false
         renderLibrary()
@@ -719,6 +812,20 @@
         }
     }
     function installFolderPicker() {
+        const fileToken = receiveToMain(ToMain.OPEN_FILE2, ({channel,files}) => {
+            if(channel !== "JA_GEMINI_MEDIA_FILES" || !Array.isArray(files)) return
+            const newPaths = files.filter(path=>typeof path === "string" && !!geminiFileType(path))
+            const omitted = files.length - newPaths.length
+            if (!newPaths.length) return notice("No se seleccionaron archivos multimedia compatibles")
+            const known = new Map(selectedMediaPaths.map(p=>[normalizeJAContentPath(p),p]))
+            for(const p of newPaths) known.set(normalizeJAContentPath(p),p)
+            selectedMediaPaths = [...known.values()]
+            try { localStorage.setItem("ja-gemini-selected-media-files",JSON.stringify(selectedMediaPaths)) }
+            catch(error) { notice("Archivos añadidos, pero no pudieron guardarse las rutas para el próximo inicio: "+String(error)) }
+            void scanMediaFolders()
+            notice(newPaths.length+" archivo(s) multimedia seleccionado(s)"+(omitted ? "; "+omitted+" incompatibles omitidos" : "")+".")
+        })
+        cleanup.push(()=>destroyMain(fileToken))
         const token = receiveToMain(ToMain.OPEN_FOLDER2, ({channel,path}) => {
             if (!path) return
             if (channel === "JA_GEMINI_HYMN_FOLDER") {
@@ -914,6 +1021,8 @@
             previewAutoplay = localStorage.getItem("ja-gemini-preview-autoplay") !== "false"
             compactUi = localStorage.getItem("ja-gemini-compact-ui") === "true"
             largeUi = localStorage.getItem("ja-gemini-large-ui") === "true"
+            const storedFiles = JSON.parse(localStorage.getItem("ja-gemini-selected-media-files") || "[]")
+            selectedMediaPaths = Array.isArray(storedFiles) ? storedFiles.filter((p):p is string => typeof p==="string" && !!geminiFileType(p)).slice(0,5000) : []
         } catch {}
         setupNavigation()
         collectMockText()
@@ -977,9 +1086,12 @@
         disable("btnProgramToAll", "Envío múltiple pendiente de aislamiento")
         disable("btnPreviewToAll", "Envío múltiple pendiente de aislamiento")
         disable("btnProjectSelectedVerse", "Biblia todavía no integrada en esta prueba")
-        bind("btnAddMultimedia", () => sendMain(Main.OPEN_FOLDER, {channel:"JA_GEMINI_MEDIA_FOLDER",title:"Vincular carpeta Multimedia"}))
+        bind("btnAddMultimedia", toggleAddMediaMenu)
         const addMedia = el("btnAddMultimedia")
-        if (addMedia) addMedia.title = "Vincular una carpeta de multimedia real desde Windows"
+        if (addMedia) { addMedia.title = "Añadir archivos individuales o vincular una carpeta"; addMedia.setAttribute("aria-haspopup","true") }
+        document.addEventListener("click",outsideMediaMenu)
+        window.addEventListener("keydown",escapeConsole,true)
+        cleanup.push(()=>document.removeEventListener("click",outsideMediaMenu),()=>window.removeEventListener("keydown",escapeConsole,true))
         bind("btnLargeTextToggle", () => {
             largeUi = !largeUi
             saveOperatorPreferences()
@@ -988,8 +1100,8 @@
             notice("Texto de interfaz " + (largeUi ? "ampliado" : "normal"))
         })
         bind("btnResetTargets", resetTargetSelection)
-        bind("btnPreviewFullscreen", () => { void toggleLocalFullscreen("previewCanvasContent") })
-        bind("btnProgramFullscreen", () => { void toggleLocalFullscreen("programCanvasContent") })
+        bind("btnPreviewFullscreen", () => toggleLocalFullscreen("previewCanvasContent"))
+        bind("btnProgramFullscreen", () => toggleLocalFullscreen("programCanvasContent"))
         bind("btnMultiScreenMenu", openScreenSettings)
         window.addEventListener("keydown", operatorShortcuts, true)
         cleanup.push(() => window.removeEventListener("keydown", operatorShortcuts, true))
@@ -1027,6 +1139,8 @@
         rebuildOutputs()
         return () => {
             if (timer) clearTimeout(timer)
+            closeLocalExpanded()
+            closeAddMediaMenu()
             scanGeneration++
             thumbObserver?.disconnect()
             thumbObserver = null

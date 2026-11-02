@@ -141,3 +141,24 @@ test("Botones Agregar Multimedia y A+ operan en la consola, sin tocar la proyecc
  assert.ok(settings.includes('dispatch("largeUiChange"'),"Preferencia tipográfica desconectada")
  assert.ok(!shell.includes('["btnLargeTextToggle","btnOpenDiagModal"'),"A+ quedó deshabilitado")
 })
+
+test("Regresiones físicas de cuatro botones: Restablecer, Ampliar, Agregar y Limpiar",()=>{
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const css=read("engine/public/ja-gemini-layout.css")
+ const fragment=read("engine/src/frontend/components/ja/gemini-fragment.generated.ts")
+ for(const id of ["btnResetTargets","btnPreviewFullscreen","btnProgramFullscreen","btnAddMultimedia","btnBridgeClearText"]){
+   // La fuente versionada es placeholder hasta prepare-gemini; este gate se
+   // completa mediante audit-controls del HTML real en el workflow.
+   assert.ok(shell.includes('bind("'+id+'"'),"El control no está conectado: "+id)
+ }
+ const reset=shell.split("function resetTargetSelection()")[1].split("function closeLocalExpanded()")[0]
+ assert.ok(reset.includes('preview.replaceChildren()') && reset.includes('prepared = ""'),"Restablecer debe limpiar una Vista previa visible")
+ for(const unsafe of ["setOutput(","clearBackground(","clearSlide("])assert.ok(!reset.includes(unsafe),"Restablecer no debe alterar Programa")
+ assert.ok(shell.includes('target.classList.add("ja-console-expanded")') && css.includes('.ja-console-expanded'),"Ampliar debe funcionar dentro de JA")
+ assert.ok(!shell.includes("requestFullscreen()"),"No depender de Fullscreen API en Electron")
+ assert.ok(shell.includes("Main.OPEN_FILE") && shell.includes("ToMain.OPEN_FILE2"),"Agregar debe importar archivos reales desde Windows")
+ assert.ok(shell.includes("Main.OPEN_FOLDER"),"También debe permitir vincular carpetas")
+ const clear=shell.split("function clearSelectedTextLayer()")[1].split("function openScreenSettings()")[0]
+ assert.ok(clear.includes("clearSlide(true, selectedId)"),"Debe limpiar solo la diapositiva del destino")
+ assert.ok(!clear.includes("clearBackground(") && !clear.includes("setOutput("),"No borrar fondos ni interferir audio al limpiar texto")
+})
