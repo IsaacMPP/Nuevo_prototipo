@@ -1,12 +1,24 @@
 <script lang="ts">
     import { createEventDispatcher } from "svelte"
-    import { outputs, mediaFolders, scriptureMode, scriptures } from "../../stores"
+    import { outputs, mediaFolders, scriptureMode, scriptures, saved } from "../../stores"
 
     export let selectedOutputId: string = ""
-    const dispatch = createEventDispatcher()
-    let hymnCollection = "Himnario Adventista"
+    export let previewAutoplay = true
+    export let compactUi = false
+    export let startSection: "general" | "screens" | "libraries" | "playback" | "shortcuts" = "general"
 
-    // Datos reales de FreeShow: no inventar salidas ni bibliotecas.
+    const dispatch = createEventDispatcher()
+    let section = startSection
+    let hymnCollection = "Himnario Adventista"
+    const sections = [
+        {id:"general",name:"General",symbol:"⚙"},
+        {id:"screens",name:"Pantallas y salidas",symbol:"▣"},
+        {id:"libraries",name:"Archivos y bibliotecas",symbol:"▤"},
+        {id:"playback",name:"Audio y reproducción",symbol:"♫"},
+        {id:"shortcuts",name:"Atajos y ayuda",symbol:"⌨"}
+    ] as const
+
+    // Lecturas del estado REAL. No se generan monitores ni salidas ficticias.
     $: configuredOutputs = Object.entries($outputs).filter(([, output]) => output?.enabled && !output?.stageOutput)
     $: mediaFolderCount = Object.values($mediaFolders).filter((folder) => !!folder?.path).length
     $: localBibleCount = Object.values($scriptures).filter((bible) => !!bible && !bible.api && !bible.collection).length
@@ -19,85 +31,149 @@
     }
 </script>
 
-<svelte:window on:keydown|capture={handleKeydown} />
+<svelte:window on:keydown|capture={handleKeydown}/>
 <div class="ja-settings-backdrop" role="presentation" on:click={() => dispatch("close")}>
     <section class="ja-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="ja-settings-title" on:click|stopPropagation={() => {}}>
         <header class="ja-settings-header">
             <div>
                 <h2 id="ja-settings-title">Configuración JA</h2>
-                <p>Salidas, bibliotecas y preferencias disponibles en la consola Gemini.</p>
+                <p>Preferencias del operador y controles de la consola Gemini</p>
             </div>
-            <button type="button" aria-label="Cerrar configuración" title="Cerrar configuración" on:click={() => dispatch("close")}>✕</button>
+            <button type="button" aria-label="Cerrar configuración" title="Cerrar" on:click={() => dispatch("close")}>✕</button>
         </header>
-        <div class="ja-settings-content">
-            <section class="ja-settings-section">
-                <h3>Pantalla de trabajo</h3>
-                <p>Selecciona qué salida inspeccionas en Programa. No se envía ni cambia contenido al seleccionar.</p>
-                {#if configuredOutputs.length}
-                    <div class="ja-settings-outputs">
-                        {#each configuredOutputs as [id, output] (id)}
-                            <button type="button" aria-pressed={selectedOutputId === id} disabled={!output.active} on:click={() => dispatch("selectOutput", {id})}>
-                                <span>{output.name || "Salida"}</span>
-                                <small>{output.active ? (selectedOutputId === id ? "Seleccionada" : "Activa") : "Inactiva"}</small>
-                            </button>
-                        {/each}
+        <div class="ja-settings-body">
+            <nav class="ja-settings-nav" aria-label="Categorías de configuración">
+                {#each sections as item}
+                    <button type="button" aria-current={section===item.id ? "page" : undefined} on:click={() => (section=item.id)}>
+                        <span aria-hidden="true">{item.symbol}</span><span>{item.name}</span>
+                    </button>
+                {/each}
+            </nav>
+            <main class="ja-settings-content">
+                {#if section === "general"}
+                    <h3>General</h3>
+                    <p class="intro">Comportamiento y presentación de la consola. Estos ajustes no modifican lo que ya está proyectado.</p>
+                    <div class="setting-row">
+                        <div><strong>Interfaz compacta</strong><small>Reduce espacios en listas y controles. Conserva el diseño Gemini.</small></div>
+                        <input type="checkbox" aria-label="Interfaz compacta" checked={compactUi}
+                            on:change={(e) => dispatch("compactUiChange", {enabled:e.currentTarget.checked})}/>
                     </div>
-                {:else}
-                    <p>No hay salidas configuradas. La detección y asignación física se integrarán en esta interfaz; no se creará una salida ficticia.</p>
+                    <div class="setting-row">
+                        <div><strong>Estado del sistema</strong><small>Información del estado de guardado que proporciona el motor.</small></div>
+                        <span class="state">{$saved ? "Guardado" : "Cambios pendientes"}</span>
+                    </div>
+                    <div class="setting-row">
+                        <div><strong>Consola única</strong><small>JA Gemini es la única interfaz del operador. FreeShow permanece como motor interno.</small></div>
+                        <span class="state">Activa</span>
+                    </div>
+                    <button class="setting-secondary" type="button" on:click={() => {
+                        if (window.confirm("¿Restablecer solo la densidad de la interfaz y la reproducción automática de Vista previa? No afecta Programa, archivos ni salidas.")) dispatch("resetPreferences")
+                    }}>Restablecer preferencias de interfaz</button>
+                {:else if section === "screens"}
+                    <h3>Pantallas y salidas</h3>
+                    <p class="intro">Selecciona qué salida configurada deseas inspeccionar. Elegirla no mueve ni reemplaza contenido proyectado.</p>
+                    <div class="status-counter">Salidas configuradas en JA: <strong>{configuredOutputs.length}</strong></div>
+                    {#if configuredOutputs.length}
+                        <div class="ja-settings-outputs">
+                            {#each configuredOutputs as [id, output] (id)}
+                                <button type="button" aria-pressed={selectedOutputId===id} disabled={!output.active} on:click={() => dispatch("selectOutput",{id})}>
+                                    <span>{output.name || "Salida " + id}</span>
+                                    <small>{output.active ? (selectedOutputId===id ? "Inspeccionada" : "Activa") : "Inactiva"} · {id}</small>
+                                </button>
+                            {/each}
+                        </div>
+                    {:else}
+                        <p class="info">Todavía no hay una salida de JA lista para inspeccionar.</p>
+                    {/if}
+                    <p class="info">Importante: las salidas configuradas no equivalen necesariamente a todos los monitores que Windows detecta. La detección física, identificación por número/modelo y asignación HDMI/spacedesk están pendientes del módulo multipantalla. No se asignará automáticamente una pantalla equivocada.</p>
+                {:else if section === "libraries"}
+                    <h3>Archivos y bibliotecas</h3>
+                    <p class="intro">Vincula carpetas reales sin mover ni borrar archivos de origen.</p>
+                    <div class="setting-group">
+                        <strong>Multimedia</strong><small>{mediaFolderCount} carpeta(s) registradas</small>
+                        <div class="ja-settings-actions">
+                            <button type="button" on:click={() => dispatch("linkMedia")}>+ Vincular carpeta</button>
+                            <button type="button" on:click={() => dispatch("refreshMedia")}>Actualizar biblioteca</button>
+                        </div>
+                    </div>
+                    <div class="setting-group">
+                        <strong>Himnario</strong><small>Colecciones diferenciadas de la biblioteca Multimedia</small>
+                        <label for="ja-settings-hymn-collection">Colección</label>
+                        <select id="ja-settings-hymn-collection" bind:value={hymnCollection}>
+                            <option value="Himnario Adventista">Himnario Adventista</option>
+                            <option value="Cantos Juveniles">Cantos Juveniles</option>
+                        </select>
+                        <div class="ja-settings-actions">
+                            <button type="button" on:click={() => dispatch("linkHymn", {collection:hymnCollection})}>+ Vincular carpeta</button>
+                            <button type="button" on:click={() => dispatch("refreshHymn")}>Actualizar himnario</button>
+                        </div>
+                    </div>
+                    <div class="setting-group">
+                        <strong>Biblias locales</strong><small>{localBibleCount} traducción(es) locales detectadas</small>
+                        <div class="ja-settings-actions">
+                            <button type="button" aria-pressed={$scriptureMode==="grid"} on:click={() => scriptureMode.set("grid")}>Cuadrícula</button>
+                            <button type="button" aria-pressed={$scriptureMode==="list"} on:click={() => scriptureMode.set("list")}>Lista</button>
+                        </div>
+                        <p class="info">El editor de estilo bíblico se desarrollará dentro del módulo Biblia, no mezclado con la configuración general.</p>
+                    </div>
+                {:else if section === "playback"}
+                    <h3>Audio y reproducción</h3>
+                    <p class="intro">Preferencias locales de preparación. El audio público y el volumen de Programa permanecen bajo sus controles independientes.</p>
+                    <div class="setting-row">
+                        <div><strong>Reproducir automáticamente en Vista previa</strong><small>Al seleccionar un vídeo, se inicia silenciado de forma local. Desactivarlo no interrumpe Programa.</small></div>
+                        <input type="checkbox" aria-label="Reproducir automáticamente en Vista previa" checked={previewAutoplay}
+                            on:change={(e) => dispatch("previewAutoplayChange",{enabled:e.currentTarget.checked})}/>
+                    </div>
+                    <p class="info">Vista previa comienza siempre silenciada. El sonido local se habilita desde el control de audio de Vista previa. La configuración de dispositivos de audio por pantalla y aislamiento multipantalla sigue pendiente de pruebas físicas.</p>
+                {:else if section === "shortcuts"}
+                    <h3>Atajos y ayuda</h3>
+                    <p class="intro">Atajos disponibles en la consola Gemini. No interceptan la escritura en los campos de texto.</p>
+                    <div class="shortcut-row"><strong>Ctrl + ,</strong><span>Abrir o cerrar Configuración JA</span></div>
+                    <div class="shortcut-row"><strong>Esc</strong><span>Cerrar Configuración o salir de pantalla ampliada</span></div>
+                    <div class="shortcut-row"><strong>◀ / ▶</strong><span>Preparar el versículo anterior/siguiente dentro de Biblia, sin alterar Programa</span></div>
+                    <p class="info">Atajos y opciones adicionales se incorporarán únicamente con una acción verificada, no como controles decorativos.</p>
                 {/if}
-            </section>
-            <section class="ja-settings-section">
-                <h3>Biblia</h3>
-                <p>{localBibleCount} traducción(es) locales detectadas. Cambia la presentación del navegador de versículos.</p>
-                <div class="ja-settings-actions">
-                    <button type="button" aria-pressed={$scriptureMode === "grid"} on:click={() => scriptureMode.set("grid")}>Cuadrícula</button>
-                    <button type="button" aria-pressed={$scriptureMode === "list"} on:click={() => scriptureMode.set("list")}>Lista</button>
-                </div>
-            </section>
-            <section class="ja-settings-section">
-                <h3>Bibliotecas locales</h3>
-                <p>{mediaFolderCount} carpeta(s) multimedia registradas. Vincular o actualizar no borra los archivos originales.</p>
-                <div class="ja-settings-actions">
-                    <button type="button" on:click={() => dispatch("linkMedia")}>+ Vincular Multimedia</button>
-                    <button type="button" on:click={() => dispatch("refreshMedia")}>Actualizar Multimedia</button>
-                </div>
-                <div class="ja-settings-actions">
-                    <label for="ja-settings-hymn-collection">Colección</label>
-                    <select id="ja-settings-hymn-collection" bind:value={hymnCollection}>
-                        <option value="Himnario Adventista">Himnario Adventista</option>
-                        <option value="Cantos Juveniles">Cantos Juveniles</option>
-                    </select>
-                    <button type="button" on:click={() => dispatch("linkHymn", {collection:hymnCollection})}>+ Vincular carpeta</button>
-                    <button type="button" on:click={() => dispatch("refreshHymn")}>Actualizar Himnario</button>
-                </div>
-            </section>
-            <p class="ja-settings-disclaimer">Configuración de dispositivos HDMI, audio independiente, fondos bíblicos y transiciones: integración pendiente. No se ofrecen opciones simuladas.</p>
+            </main>
         </div>
         <footer><button type="button" on:click={() => dispatch("close")}>Cerrar</button></footer>
     </section>
 </div>
 
 <style>
-    .ja-settings-backdrop {position:absolute;inset:0;z-index:1000;background:rgba(2,8,24,.78);display:flex;align-items:center;justify-content:center;padding:18px;color:#edf5ff}
-    .ja-settings-dialog {width:min(760px,100%);max-height:95%;overflow:hidden;display:flex;flex-direction:column;border:1px solid #3d648a;border-radius:13px;background:#081732;box-shadow:0 22px 90px #020917}
-    .ja-settings-header {display:flex;align-items:start;justify-content:space-between;gap:14px;border-bottom:1px solid #28456c;padding:18px 22px;background:#102447}
-    .ja-settings-header h2 {font-size:19px;font-weight:750;margin:0}
-    .ja-settings-header p {font-size:12px;color:#bed2e9;margin:5px 0 0}
-    .ja-settings-header button {font-size:18px;padding:3px 9px}
-    .ja-settings-content {overflow:auto;flex:1;min-height:0;padding:12px 22px}
-    .ja-settings-section {border-bottom:1px solid #26416a;padding:12px 0 17px}
-    .ja-settings-section h3 {font-size:14px;font-weight:700;margin:0 0 6px}
-    .ja-settings-section p {font-size:12px;color:#bfcee3;margin:0 0 12px}
-    .ja-settings-actions {display:flex;align-items:center;flex-wrap:wrap;gap:9px;margin-top:9px}
-    .ja-settings-outputs {display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:9px}
-    .ja-settings-outputs button {display:flex;flex-direction:column;align-items:start;gap:4px;min-width:0}
-    .ja-settings-outputs small {font-size:11px;color:#9edfc2}
-    .ja-settings-dialog button,.ja-settings-dialog select {border:1px solid #456a94;background:#14375d;color:#fff;border-radius:7px;font-size:12px;padding:9px 11px;cursor:pointer}
-    .ja-settings-dialog button:hover {border-color:#4cd1fd;background:#205078}
-    .ja-settings-dialog button[aria-pressed="true"] {border-color:#f3bf2b;background:#4b3b16}
-    .ja-settings-dialog button:disabled {opacity:.42;cursor:not-allowed}
-    .ja-settings-dialog label {font-size:12px;color:#dde7f6}
-    .ja-settings-disclaimer {font-size:11px;line-height:1.5;color:#a9b9d2;margin:18px 0 8px}
-    .ja-settings-dialog footer {display:flex;justify-content:flex-end;padding:12px 22px;border-top:1px solid #28456c}
-    @media(max-width:600px) {.ja-settings-backdrop{padding:8px}.ja-settings-header,.ja-settings-content,.ja-settings-dialog footer{padding-left:13px;padding-right:13px}}
+    .ja-settings-backdrop{position:absolute;inset:0;z-index:1000;background:rgba(2,8,24,.78);display:flex;align-items:center;justify-content:center;padding:16px;color:#edf5ff}
+    .ja-settings-dialog{width:min(890px,100%);height:min(650px,92%);overflow:hidden;display:flex;flex-direction:column;border:1px solid #3d648a;border-radius:12px;background:#081732;box-shadow:0 22px 90px #020917}
+    .ja-settings-header{display:flex;align-items:start;justify-content:space-between;gap:14px;border-bottom:1px solid #28456c;padding:17px 21px;background:#102447}
+    .ja-settings-header h2{font-size:19px;font-weight:750;margin:0;color:#ffe000}
+    .ja-settings-header p{font-size:12px;color:#bed2e9;margin:5px 0 0}
+    .ja-settings-header button{font-size:18px;padding:3px 9px}
+    .ja-settings-body{display:grid;grid-template-columns:210px minmax(0,1fr);min-height:0;flex:1}
+    .ja-settings-nav{background:#101f3d;border-right:1px solid #294368;padding:12px 8px;display:flex;flex-direction:column;gap:5px;overflow-y:auto}
+    .ja-settings-nav button{display:flex;align-items:center;gap:9px;text-align:left;width:100%;border:1px solid transparent!important;background:transparent!important}
+    .ja-settings-nav button[aria-current="page"]{background:#1e466c!important;border-color:#4cd1fd!important}
+    .ja-settings-nav span:first-child{width:16px;text-align:center;color:#ffe000}
+    .ja-settings-content{overflow-y:auto;min-height:0;padding:24px;display:block}
+    .ja-settings-content h3{font-size:18px;font-weight:750;margin:0 0 8px}
+    .ja-settings-content .intro{font-size:12px;color:#b7c9e1;line-height:1.6;margin:0 0 20px}
+    .setting-row{display:flex;justify-content:space-between;align-items:center;gap:20px;padding:14px 0;border-bottom:1px solid #263e61}
+    .setting-row div,.setting-group{display:flex;flex-direction:column;gap:5px}
+    .setting-row strong,.setting-group strong{font-size:13px}
+    .setting-row small,.setting-group small,.setting-group label{font-size:11px;color:#b7c9e1;line-height:1.5}
+    .setting-row input{min-width:18px;height:18px;accent-color:#4cd1fd;cursor:pointer}
+    .state,.status-counter{font-size:12px;color:#a7e5c4}
+    .setting-group{padding:14px 0;border-bottom:1px solid #263e61}
+    .setting-group select{max-width:240px}
+    .ja-settings-actions{display:flex;align-items:center;flex-wrap:wrap;gap:9px;margin-top:9px}
+    .ja-settings-outputs{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:9px;margin-top:14px}
+    .ja-settings-outputs button{display:flex;flex-direction:column;align-items:start;gap:5px;min-width:0}
+    .ja-settings-outputs small{font-size:11px;color:#9edfc2;overflow:hidden;text-overflow:ellipsis}
+    .info{font-size:12px!important;line-height:1.65!important;color:#a6bdd9;margin:15px 0 0}
+    .shortcut-row{display:flex;gap:15px;align-items:center;border-bottom:1px solid #263e61;padding:14px 0;font-size:12px}
+    .shortcut-row strong{min-width:86px;color:#ffe000}
+    .ja-settings-dialog button,.ja-settings-dialog select{border:1px solid #456a94;background:#14375d;color:#fff;border-radius:7px;font-size:12px;padding:9px 11px;cursor:pointer}
+    .ja-settings-dialog button:hover{border-color:#4cd1fd;background:#205078}
+    .ja-settings-dialog button[aria-pressed="true"]{border-color:#f3bf2b;background:#4b3b16}
+    .ja-settings-dialog button:disabled{opacity:.42;cursor:not-allowed}
+    .setting-secondary{margin-top:19px}
+    .ja-settings-dialog footer{display:flex;justify-content:flex-end;padding:12px 20px;border-top:1px solid #28456c}
+    @media(max-width:610px){.ja-settings-backdrop{padding:7px}.ja-settings-dialog{height:95%}.ja-settings-body{grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr)}.ja-settings-nav{flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid #294368}.ja-settings-nav button{white-space:nowrap;flex:none;width:auto}.ja-settings-content{padding:15px}.ja-settings-header{padding:13px}}
 </style>
