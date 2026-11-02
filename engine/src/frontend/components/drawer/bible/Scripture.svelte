@@ -472,7 +472,7 @@
             })
         }
 
-        if (playWhenLoaded) {
+        if (playWhenLoaded && !geminiPreviewOnly) {
             // Explicit external "play" remains primary-only unless the
             // operator is already controlling a live Bible output.
             if (hasLiveScripture) setTimeout(refreshLiveScripture)
@@ -1250,7 +1250,7 @@
                                     on:mousedown={(e) => openVerse(updateVersesSelection(e, content.id))}
                                     on:click={(e) => openVerse(updateVersesSelection(e, content.id, true))}
                                     on:click={(e) => (hasLiveScripture && !e.ctrlKey && !e.metaKey ? refreshLiveScripture() : false)}
-                                    on:dblclick={(e) => (hasLiveScripture && !e.ctrlKey && !e.metaKey ? false : playScripture())}
+                                    on:dblclick={(e) => (geminiPreviewOnly || (hasLiveScripture && !e.ctrlKey && !e.metaKey) ? false : playScripture())}
                                     role="none"
                                 >
                                     <span class="v" style={endNumber && subverse && showSuffixInPicker ? "width: 60px;" : ""}
