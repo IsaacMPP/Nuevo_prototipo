@@ -2161,7 +2161,9 @@ function getScriptureTemplateId() {
     const onlyOneNormalOutput = getAllNormalOutputs().length === 1
     if (!onlyOneNormalOutput) return scriptureTemplate
 
-    const styleId = getFirstActiveOutput()?.style || ""
+    // Keep the Scripture template bound to the same configured JA primary as playScripture().
+    // getFirstActiveOutput was not in scope here and caused a runtime ReferenceError.
+    const styleId = getJAMainOutput()?.style || ""
     const styleScriptureTemplate = onlyOneNormalOutput ? get(styles)[styleId]?.templateScripture : ""
     return styleScriptureTemplate || scriptureTemplate
 }

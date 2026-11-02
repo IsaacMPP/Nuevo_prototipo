@@ -57,3 +57,10 @@ test("Biblia alinea la pestaña real antes de proyectar y conserva FreeShow de r
  assert.ok(css.includes('select[data-role="ja-bibles"] option'))
  assert.ok(source.includes('dispatch("classic")'),"No quitar el gestor FreeShow mientras falten módulos")
 })
+
+test("Proyección bíblica resuelve la plantilla de la salida principal JA sin ReferenceError",()=>{
+ const source=read("engine/src/frontend/components/drawer/bible/scripture.ts")
+ assert.match(source,/function getScriptureTemplateId\(\) \{[\s\S]*?const styleId = getJAMainOutput\(\)\?\.style \|\| ""/,"La plantilla debe usar la misma salida principal que playScripture")
+ assert.ok(!/\bgetFirstActiveOutput\s*\(/.test(source),"Referencia a helper no importado en proyección bíblica")
+ assert.ok(source.includes("import { getAllNormalOutputs, getJAMainOutput, sendToJAOutputs, setOutput }"),"Falta la resolución explícita del destino principal")
+})

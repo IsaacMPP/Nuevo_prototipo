@@ -78,3 +78,17 @@ Estado: cambio candidato a CI; posterior validación Windows/HDMI/Spacedesk pend
 
 ### Prompt de continuidad autocontenido (posterior a esta modificación)
 Continuar JA Proyecciones Gemini + FreeShow 1.6.7, repo IsaacMPP/Nuevo_prototipo, rama experiment/gemini-freeshow. Se corrigieron en la rama experimental: reproducción automática silenciada de Vista previa, volumen de Programa mediante VideoPlayer y sesión aislada de una salida, diseño de transporte horario/slider, selección de Biblia sincronizada con drawerTabsData, selector oscuro y etiquetado del respaldo FreeShow clásico. Verificar resultado del último Actions y su instalador antes de afirmarlo listo. Efectuar pruebas físicas de reproducción previa, volumen, Rut 2:1 en Programa, cambio a multimedia, HDMI, scroll, salidas y audio; reportar S0/S1, corregir causa raíz. Preservar diseño Gemini, MainOutput, rama oficial feature/motor-propio-v1, main, PR #2 DRAFT y repo JA_Proyecciones2. No fusionar. Documentar cada cambio y producir prompt nuevo tras cada modificación.
+
+## Incidente S1: ReferenceError al proyectar Biblia desde Gemini (1 noviembre 2026)
+
+**Evidencia física:** al pulsar «Proyectar en principal» con una Biblia local visible y una salida FreeShow activa, Windows mostró «Error al proyectar Biblia: ReferenceError: getFirstActiveOutput…». Los libros/versículos sí se cargaban: el fallo estaba en el camino de generación de diapositiva, no en la importación del texto.
+
+**Causa raíz verificable:** `scripture.ts`, función `getScriptureTemplateId()`, invocaba `getFirstActiveOutput()` sin importarlo. La referencia se evaluaba al preparar la plantilla de proyección, provocando el error en ejecución aunque compilara.
+
+**Corrección aislada:** resolver el estilo de plantilla desde `getJAMainOutput()?.style`, igual que el destino empleado por `playScripture()`. Conservar el valor predeterminado de la plantilla cuando no exista salida principal válida. Añadir prueba de regresión al flujo experimental. No modificar `MainOutput`, la capa de audio, el HTML Gemini, FreeShow clásico, `main` ni JA_Proyecciones2.
+
+**Aceptación pendiente (S1 abierto hasta Windows):** instalar artefacto generado desde este cambio; seleccionar específicamente **RV1909** y Rut 2:1 (no confundir con Dios Habla Hoy mostrada en la captura); proyectar y comprobar texto en Programa y salida HDMI. Repetir Génesis 1:1 y 1:2, lista/cuadrícula, cambiar a MP4 y comprobar borrado de versículo y audio intacto. Verificar además que la aplicación no regrese silenciosamente al motor clásico. Si el versículo no se proyecta, adjuntar captura y consola y mantener incidencia S1.
+
+### Prompt de continuidad después del fix de Biblia
+
+Continuar JA Proyecciones con diseño Gemini y FreeShow 1.6.7 en `IsaacMPP/Nuevo_prototipo`, rama `experiment/gemini-freeshow`. La captura física mostró ReferenceError getFirstActiveOutput al proyectar un versículo; en `scripture.ts` se corrigió el helper no importado usando `getJAMainOutput()?.style` en `getScriptureTemplateId()`, con regresión estática en `integration.test.cjs`. Consultar el CI del commit más reciente antes de descargar y probar instalador. Validar en Windows RV1909 Rut 2:1 y Génesis 1:1–2, pantalla Programa/HDMI, limpiar Biblia y cambiar a vídeo, sin interferencia con vista previa, volumen principal y salidas. S1 no terminado hasta prueba física. Proteger `main`, `feature/motor-propio-v1`, PR #2 y `JA_Proyecciones2`. No fusionar, documentar resultados y entregar prompt autocontenido después de cada cambio.
