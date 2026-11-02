@@ -142,3 +142,16 @@ Revisión del código y cambios del siguiente lote:
 
 ### Contención adicional de transiciones (prioridad de restaurar Programa)
 Se retiró **Fundido** de la interfaz de esta versión, además de todas las opciones del antiguo menú de efectos. `publishPreparedMedia()` deja de modificar `transitionData.media`: `getOutputTransitions` aplica precedencia `slideData.mediaTransition > currentStyle.transition.media > transitionData.media`, de modo que no puede garantizarse el efecto visible modificando solo el valor global. **Quick Play y Cortar publican por el mecanismo nativo**, sin presentar un efecto como validado. No reactivar Fundido hasta demostrar su comportamiento visual sobre la salida física y probar el audio.
+
+## Fase P1 — Configuración de Logo propio y preservación del reloj de Vista previa
+**Entrada operativa:** el usuario confirma que reproducción vinculada de MP4 funciona inicialmente. Al preparar un clip distinto y volver al mismo MP4 que sigue en Programa, la Vista previa empezaba desde cero.
+
+**Cambio de menor riesgo:** cuando se prepara el mismo archivo que `playingPath` y `VideoPlayer.getPlaying(...)` confirma una sesión pública real, volver a habilitar `followProgram` y sincronizar posición/pausa al cargar el preview. No modificar ni reiniciar la sesión en Programa; mantener Vista previa silenciada. La selección de otro archivo vuelve a desvincular. Caso físico: A a Programa, B en Preview, A otra vez en Preview, debe mostrar el tiempo actual de A sin cortar audio ni reiniciar Programa.
+
+**Logo imagen:** `JaGeminiSettings.svelte` añade categoría Logo y marca: elegir PNG/JPG/WEBP desde diálogo nativo, precargar la imagen antes de aceptar, cambiar ubicación y tamaño; persistencia de ruta y ajustes por operador. `effects[JA_LOGO]` usa `encodeFilePath` y sigue siendo una capa reversible por salida; no reemplaza el contenido Programa. Ruta inválida informa un error, sin modificar el logo anterior.
+
+**Logo vídeo NO implementado todavía:** el renderizador nativo `EffectRender.initAsset/drawAsset` usa `new Image()` y canvas `drawImage(image)`; no permite MP4/WEBM. Requiere componente de video overlay independiente por salida, loop silencioso, ubicación y escala, cache, limpieza y prueba Windows. No ofrecer un botón de vídeo que solo simule funcionar ni convertir un MP4 en imagen estática.
+
+**Grupos/destinos:** `quickTargetButtons` ya selecciona una salida configurada, pero Windows identifica laptop + HDMI + spacedesk y JA actualmente crea una única salida FreeShow. Para marcar varias salidas con el mismo contenido y otras con diferente contenido, primero resolver la detección/asignación y estado por outputId. Contrato: el operador prepara un contenido, marca destinos reales (checkbox), valida el destino y aplica solo esos IDs; puede guardar grupos nombrados (ej. 'Principal + spacedesk'), tiene vista previa por destino y ajuste independiente de sonido. El motor de Programa nunca comparte objeto mutable entre salidas y no transmite audio simultáneo sin autorizar. No crear salidas falsas ni desbloquear «enviar a todas» todavía.
+
+**Aceptación:** comprobar CI y archivo de logo real sobre vídeo, cambio de posición/tamaño, guardado entre reinicios y aislamiento de la salida; prueba física de sincronización al regresar a A. Si no funcionan, reabrir como S1. No declarar fase cerrada.

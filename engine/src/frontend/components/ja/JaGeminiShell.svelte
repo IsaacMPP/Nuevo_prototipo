@@ -30,12 +30,16 @@
 
     let host: HTMLDivElement
     let settingsOpen = false
-    let settingsStartSection: "general" | "screens" | "libraries" | "playback" | "shortcuts" = "general"
+    let settingsStartSection: "general" | "screens" | "libraries" | "playback" | "branding" | "shortcuts" = "general"
     let previewAutoplay = true
     let followProgram = false
     // La fase S0 mantiene solo envío directo: transiciones no validadas se ocultan.
     const JA_BLACK = "ja_gemini_blackout_effect"
     const JA_LOGO = "ja_gemini_logo_effect"
+    let customLogoPath = ""
+    let logoScale = 1.35
+    let logoPosition: "center" | "top-left" | "top-right" | "bottom-left" | "bottom-right" = "center"
+    let logoRequestGeneration = 0
     let compactUi = false
     let largeUi = false
     let prepared = ""
@@ -123,12 +127,69 @@
     }
     // Restablecer nunca limpia Programa ni reubica salidas físicas.
     // El botón original restablecía solo la selección (invisible con una salida).
+
+    const logoPositions: Record<string,{x:number;y:number}> = {
+        center:{x:0.5,y:0.5},"top-left":{x:0.15,y:0.17},"top-right":{x:0.85,y:0.17},
+        "bottom-left":{x:0.15,y:0.83},"bottom-right":{x:0.85,y:0.83}
+    }
+    function logoEffectItem(): AssetItem {
+        const point=logoPositions[logoPosition] || logoPositions.center
+        return {type:"asset",path:customLogoPath?encodeFilePath(customLogoPath):"./ja-logo.png",
+            size:logoScale,x:point.x,y:point.y}
+    }
+    function updateLogoEffect() {
+        effects.update(current => ({
+            ...current,
+            [JA_LOGO]:{name:"JA · Logotipo",color:null,placeUnderSlide:false,
+                style:"width:100%;height:100%;",background:"transparent",opacity:1,items:[logoEffectItem()]}
+        }))
+    }
+    function persistLogoSettings() {
+        try {
+            localStorage.setItem("ja-gemini-logo-path",customLogoPath)
+            localStorage.setItem("ja-gemini-logo-size",String(logoScale))
+            localStorage.setItem("ja-gemini-logo-position",logoPosition)
+        }catch(error){notice("El logo fue ajustado, pero no se guardaron las preferencias: "+String(error))}
+    }
+    function configureLogoPath(path: string) {
+        if (!/\.(png|jpe?g|webp)$/i.test(path) || /^(?:https?:|data:|blob:)/i.test(path)) {
+            notice("El efecto Logo admite PNG, JPG y WEBP; el vídeo necesita una capa multimedia independiente.")
+            return
+        }
+        const generation=++logoRequestGeneration
+        const image=new Image()
+        image.onload=()=>{
+            if(generation!==logoRequestGeneration)return
+            if(!image.naturalWidth || !image.naturalHeight)
+                return notice("El archivo de logo no contiene una imagen válida")
+            customLogoPath=path
+            updateLogoEffect()
+            persistLogoSettings()
+            notice("Logo cargado: "+fileName(path)+". Utiliza el botón Logo para mostrarlo u ocultarlo.")
+        }
+        image.onerror=()=>{if(generation===logoRequestGeneration)notice("No se pudo abrir el logo elegido. Revisa el archivo y vuelve a seleccionarlo.")}
+        image.src=encodeFilePath(path)
+    }
+    function selectLogoImage() {
+        sendMain(Main.OPEN_FILE,{id:"ja-gemini-logo-image",channel:"JA_GEMINI_LOGO_IMAGE",
+            title:"Elegir logo transparente o imagen",multiple:false,read:false,
+            filter:{name:"Imágenes PNG, JPG o WEBP",extensions:["png","jpg","jpeg","webp"]}})
+    }
+    function resetLogoImage() {
+        logoRequestGeneration++
+        customLogoPath=""
+        logoScale=1.35
+        logoPosition="center"
+        updateLogoEffect()
+        persistLogoSettings()
+        notice("Logo predeterminado restaurado. Programa no cambia hasta activar/desactivar Logo.")
+    }
     function ensureJAOutputEffects() {
         effects.update(current => ({
             ...current,
             [JA_BLACK]: {name:"JA · Cortina negra",color:null,placeUnderSlide:false,style:"width:100%;height:100%;",background:"#000000",opacity:1,items:[]},
             [JA_LOGO]: {name:"JA · Logotipo",color:null,placeUnderSlide:false,style:"width:100%;height:100%;",background:"transparent",opacity:1,
-                items:[{type:"asset",path:"./ja-logo.png",size:1.35,x:0.5,y:0.5} as AssetItem]}
+                items:[logoEffectItem()]}
         }))
     }
     function setOperatorEffect(id: string) {
@@ -915,6 +976,10 @@
     }
     function installFolderPicker() {
         const fileToken = receiveToMain(ToMain.OPEN_FILE2, ({channel,files}) => {
+            if(channel === "JA_GEMINI_LOGO_IMAGE") {
+                if(Array.isArray(files) && typeof files[0] === "string") configureLogoPath(files[0])
+                return
+            }
             if(channel !== "JA_GEMINI_MEDIA_FILES" || !Array.isArray(files)) return
             const newPaths = files.filter(path=>typeof path === "string" && !!geminiFileType(path))
             const omitted = files.length - newPaths.length
@@ -1040,7 +1105,10 @@
         biblePreviewRenderer = null
         biblePreviewReady = false
         prepared = path
-        followProgram=false
+        const samePlayingVideo = !!(playingPath && selectedId &&
+            normalizeJAContentPath(path)===normalizeJAContentPath(playingPath) &&
+            !!VideoPlayer.getPlaying(playingPath,[selectedId]))
+        followProgram=samePlayingVideo
         previewMedia?.pause()
         previewMedia = null
         const target = el("previewCanvasContent")
@@ -1061,7 +1129,11 @@
             // Mute prevents a second, unsupervised audio source from reaching speakers.
             m.addEventListener("loadeddata", () => {
                 if (previewMedia !== m || !m.isConnected) return
-                if (previewAutoplay) void m.play().catch(() => notice("Vista previa no pudo iniciar. Comprueba formato/códec y pulsa Play."))
+                if (samePlayingVideo && type==="video") {
+                    syncLinkedPreview()
+                } else if (previewAutoplay) {
+                    void m.play().catch(() => notice("Vista previa no pudo iniciar. Comprueba formato/códec y pulsa Play."))
+                }
             }, {once:true})
             m.addEventListener("play", updatePreviewProgress)
             m.addEventListener("pause", updatePreviewProgress)
@@ -1117,6 +1189,12 @@
             previewAutoplay = localStorage.getItem("ja-gemini-preview-autoplay") !== "false"
             compactUi = localStorage.getItem("ja-gemini-compact-ui") === "true"
             largeUi = localStorage.getItem("ja-gemini-large-ui") === "true"
+            const storedLogo=localStorage.getItem("ja-gemini-logo-path") || ""
+            if(!storedLogo || (/\.(png|jpe?g|webp)$/i.test(storedLogo) && !/^(?:https?:|data:|blob:)/i.test(storedLogo))) customLogoPath=storedLogo
+            const size=Number(localStorage.getItem("ja-gemini-logo-size") || "1.35")
+            if(Number.isFinite(size)) logoScale=Math.max(0.35,Math.min(2.5,size))
+            const position=localStorage.getItem("ja-gemini-logo-position") || "center"
+            if(position in logoPositions) logoPosition=position as typeof logoPosition
             const storedFiles = JSON.parse(localStorage.getItem("ja-gemini-selected-media-files") || "[]")
             selectedMediaPaths = Array.isArray(storedFiles) ? storedFiles.filter((p):p is string => typeof p==="string" && !!geminiFileType(p)).slice(0,5000) : []
         } catch {}
@@ -1166,6 +1244,8 @@
         el("btnBridgeFade")?.remove()
         bind("btnBridgeBlack",()=>setOperatorEffect(JA_BLACK))
         bind("btnBridgeLogo",()=>setOperatorEffect(JA_LOGO))
+        const logoButton=el("btnBridgeLogo")
+        if(logoButton)logoButton.title="Activar o retirar logo propio en Programa. Elegir archivo en Configuración JA → Logo y marca."
         bind("btnProgramPause", pauseProgram)
         bind("btnBridgeClearText", clearSelectedTextLayer)
         // Negro, Logo y Fundido siguen bloqueados hasta comprobar su efecto real por salida.
@@ -1294,6 +1374,9 @@
     {#if settingsOpen}
         <JaGeminiSettings
             selectedOutputId={selectedId}
+            logoName={customLogoPath?fileName(customLogoPath):"Logo predeterminado JA"}
+            {logoScale}
+            {logoPosition}
             {previewAutoplay}
             {compactUi}
             {largeUi}
@@ -1306,6 +1389,18 @@
             on:compactUiChange={(event) => { compactUi = event.detail.enabled; saveOperatorPreferences() }}
             on:largeUiChange={(event) => { largeUi = event.detail.enabled; saveOperatorPreferences() }}
             on:resetPreferences={resetOperatorPreferences}
+            on:chooseLogo={selectLogoImage}
+            on:resetLogo={resetLogoImage}
+            on:logoScaleChange={(event) => {
+                logoScale=Math.max(0.35,Math.min(2.5,Number(event.detail.value)||1.35))
+                updateLogoEffect();persistLogoSettings()
+            }}
+            on:logoPositionChange={(event) => {
+                if(event.detail.value in logoPositions) {
+                    logoPosition=event.detail.value
+                    updateLogoEffect();persistLogoSettings()
+                }
+            }}
             on:close={() => { settingsOpen = false }}
             on:selectOutput={(event) => { selectedId = event.detail.id; rebuildOutputs() }}
             on:linkMedia={() => sendMain(Main.OPEN_FOLDER, {channel:"JA_GEMINI_MEDIA_FOLDER",title:"Vincular carpeta Multimedia"})}

@@ -227,3 +227,30 @@ test("Transiciones y controles visibles cumplen un contrato mínimo sin efectos 
  assert.ok(!shell.includes("showTransitionOptions"),"No ofrecer menú ficticio de efectos")
  for (const id of ["btnProgramToAll","btnPreviewToAll"])assert.ok(shell.includes('el("'+id+'")?.remove()'),"Ocultar botón no implementado: "+id)
 });
+
+test("Logo propio: selector nativo de imagen, efecto enlazado y configuración persistente",()=>{
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const settings=read("engine/src/frontend/components/ja/JaGeminiSettings.svelte")
+ for(const item of [
+  'channel:"JA_GEMINI_LOGO_IMAGE"',
+  'configureLogoPath(files[0])',
+  'logoEffectItem()',
+  'image.src=encodeFilePath(path)',
+  'localStorage.setItem("ja-gemini-logo-path",customLogoPath)',
+  'on:chooseLogo={selectLogoImage}',
+  'on:logoPositionChange=',
+  'on:logoScaleChange='
+ ])assert.ok(shell.includes(item),"Logo sin conexión real: "+item)
+ assert.ok(settings.includes('Logo y marca') && settings.includes('dispatch("chooseLogo")'),"Debe existir panel funcional del logo")
+ assert.ok(settings.includes('dispatch("logoPositionChange"'),"Posición sin manejar")
+ assert.ok(settings.includes('dispatch("logoScaleChange"'),"Escala sin manejar")
+ assert.ok(!shell.includes('items:[{type:"asset",path:"./ja-logo.png"'),"El Logo no debe seguir fijo")
+});
+test("Regresar al mismo vídeo puede revincular Vista previa sin reiniciar Programa",()=>{
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const body=shell.split("function prepare(path: string)")[1].split("function project()")[0]
+ assert.ok(body.includes('VideoPlayer.getPlaying(playingPath,[selectedId])'),"La revinculación requiere sesión pública real")
+ assert.ok(body.includes("followProgram=samePlayingVideo"),"Falta recuperar el vínculo del mismo medio")
+ assert.ok(body.includes('if (samePlayingVideo && type==="video")'),"No reiniciar desde cero si el vídeo ya está en Programa")
+ assert.ok(body.includes("syncLinkedPreview()"),"Debe obtener el tiempo y pausa del vídeo real")
+});

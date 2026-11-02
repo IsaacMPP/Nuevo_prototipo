@@ -6,7 +6,10 @@
     export let previewAutoplay = true
     export let compactUi = false
     export let largeUi = false
-    export let startSection: "general" | "screens" | "libraries" | "playback" | "shortcuts" = "general"
+    export let startSection: "general" | "screens" | "libraries" | "playback" | "branding" | "shortcuts" = "general"
+    export let logoName = "Logo predeterminado JA"
+    export let logoScale = 1.35
+    export let logoPosition: "center" | "top-left" | "top-right" | "bottom-left" | "bottom-right" = "center"
 
     const dispatch = createEventDispatcher()
     let section = startSection
@@ -16,6 +19,7 @@
         {id:"screens",name:"Pantallas y salidas",symbol:"▣"},
         {id:"libraries",name:"Archivos y bibliotecas",symbol:"▤"},
         {id:"playback",name:"Audio y reproducción",symbol:"♫"},
+        {id:"branding",name:"Logo y marca",symbol:"✦"},
         {id:"shortcuts",name:"Atajos y ayuda",symbol:"⌨"}
     ] as const
 
@@ -131,6 +135,33 @@
                             on:change={(e) => dispatch("previewAutoplayChange",{enabled:e.currentTarget.checked})}/>
                     </div>
                     <p class="info">Vista previa comienza siempre silenciada. El sonido local se habilita desde el control de audio de Vista previa. La configuración de dispositivos de audio por pantalla y aislamiento multipantalla sigue pendiente de pruebas físicas.</p>
+                {:else if section === "branding"}
+                    <h3>Logo y marca</h3>
+                    <p class="intro">Configura una imagen que puedas mostrar u ocultar sobre Programa sin reemplazar el vídeo, el fondo o el audio.</p>
+                    <div class="setting-group">
+                        <strong>Imagen de logo</strong><small>{logoName}</small>
+                        <div class="ja-settings-actions">
+                            <button type="button" on:click={() => dispatch("chooseLogo")}>Elegir imagen…</button>
+                            <button type="button" on:click={() => {
+                                if(window.confirm("¿Volver al logo predeterminado JA? No se borrará el archivo original."))dispatch("resetLogo")
+                            }}>Usar logo predeterminado</button>
+                        </div>
+                        <p class="info">Admite PNG con transparencia, JPG y WEBP. El botón Logo de la consola activa o retira la capa en la salida actual.</p>
+                    </div>
+                    <div class="setting-group">
+                        <label for="ja-logo-position">Posición</label>
+                        <select id="ja-logo-position" value={logoPosition} on:change={(event) => dispatch("logoPositionChange",{value:event.currentTarget.value})}>
+                            <option value="center">Centro</option>
+                            <option value="top-left">Superior izquierda</option>
+                            <option value="top-right">Superior derecha</option>
+                            <option value="bottom-left">Inferior izquierda</option>
+                            <option value="bottom-right">Inferior derecha</option>
+                        </select>
+                        <label for="ja-logo-size">Tamaño relativo: {Math.round(logoScale*100)}%</label>
+                        <input id="ja-logo-size" type="range" min="0.35" max="2.5" step="0.05" value={logoScale}
+                            on:change={(event) => dispatch("logoScaleChange",{value:Number(event.currentTarget.value)})}/>
+                    </div>
+                    <p class="info">Los logos animados MP4/WEBM requerirán una capa de vídeo independiente, silenciosa y con repetición. El renderizador de efectos actual solo admite imágenes; no presentaremos el vídeo como logo hasta que funcione realmente.</p>
                 {:else if section === "shortcuts"}
                     <h3>Atajos y ayuda</h3>
                     <p class="intro">Atajos disponibles en la consola Gemini. No interceptan la escritura en los campos de texto.</p>
