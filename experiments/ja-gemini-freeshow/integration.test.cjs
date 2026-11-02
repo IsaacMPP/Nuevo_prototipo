@@ -104,3 +104,9 @@ test("Al editar plantillas o seleccionar versículos en Gemini no se actualiza u
  const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
  assert.ok(shell.includes("isScriptureDraft || !previewMedia"),"Los controles de transporte se deben aislar durante una vista bíblica")
 })
+
+test("Doble clic y búsqueda bíblica no pueden emitir desde Gemini",()=>{
+ const navigator=read("engine/src/frontend/components/drawer/bible/Scripture.svelte")
+ assert.ok(navigator.includes("if (playWhenLoaded && !geminiPreviewOnly)"),"La búsqueda puede publicar sin pulsar Proyectar")
+ assert.ok(navigator.includes("geminiPreviewOnly || (hasLiveScripture && !e.ctrlKey"),"El doble clic puede publicar accidentalmente")
+})
