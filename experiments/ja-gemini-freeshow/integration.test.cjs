@@ -17,7 +17,7 @@ test("El adaptador usa salidas reales de FreeShow, nunca los vídeos ficticios",
  for(const expected of ["setOutput(","PreviewOutput","videoSync(","VideoPlayer.pause(","VideoPlayer.play(","VideoPlayer.seekTo(","clearBackground(selectedId)","get(outputs)","Main.READ_FOLDER","hymnVideos"]){
   assert.ok(s.includes(expected), "Falta cableado real: "+expected);
  }
- assert.ok(s.includes("ids.length !== 1"),"No se ha protegido la etapa de salida única");
+ assert.ok(s.includes("available.length!==1"),"No se ha protegido la etapa de salida única");
 });
 test("El arranque no deja llamadas a auxiliares desaparecidos",()=>{
  const source=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
@@ -128,8 +128,8 @@ test("Controles generales: restablecimiento seguro, ampliar monitor y limpiar so
  assert.ok(settings.includes('window.confirm('),"Restablecer preferencias debe solicitar confirmación")
  assert.ok(settings.includes('dispatch("previewAutoplayChange"') && shell.includes("if (previewAutoplay) void m.play()"),"Preferencia de autoplay no conectada al reproductor")
  assert.ok(settings.includes('dispatch("compactUiChange"') && shell.includes('ja-compact-ui'),"Densidad de interfaz no conectada")
- assert.ok(!shell.includes('bind("btnBridgeBlack"'),"No simular cortina negra")
- assert.ok(!shell.includes('bind("btnBridgeLogo"'),"No simular logo")
+ assert.ok(shell.includes('bind("btnBridgeBlack",()=>setOperatorEffect(JA_BLACK))'),"Cortina negra debe usar el efecto de salida nativo")
+ assert.ok(shell.includes('bind("btnBridgeLogo",()=>setOperatorEffect(JA_LOGO))'),"Logo debe usar el efecto de salida nativo")
 })
 
 test("Botones Agregar Multimedia y A+ operan en la consola, sin tocar la proyección",()=>{
