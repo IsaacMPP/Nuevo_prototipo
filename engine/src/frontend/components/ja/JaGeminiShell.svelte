@@ -270,8 +270,7 @@
             let n: Node | null
             while ((n = textWalker.nextNode())) {
                 const current = n.nodeValue || ""
-                if (new RegExp(m[1] + "\\s*\\(\\d+\\)", "i").test(current))
-                    n.nodeValue = current.replace(/\(\d+\)/, "(" + counts[type] + ")")
+                if (/\(\s*\d+\s*\)/.test(current)) n.nodeValue = current.replace(/\(\s*\d+\s*\)/, "(" + counts[type] + ")")
             }
             btn.setAttribute("aria-pressed", String(typeFilter === type))
             btn.style.backgroundColor = typeFilter === type ? "#2169a5" : ""
@@ -505,11 +504,108 @@
             if (b.textContent?.includes("lista")) b.setAttribute("aria-pressed",String(get(scriptureMode)==="list"))
         }
         if (activeBibleId && scriptureTarget) {
-            if (!scriptureView) scriptureView=new Scripture({target:scriptureTarget,props:{active:activeBibleId,searchValue:""}})
+            if (!scriptureView) { scriptureTarget.replaceChildren(); scriptureView=new Scripture({target:scriptureTarget,props:{active:activeBibleId,searchValue:""}}) }
             else scriptureView.$set({active:activeBibleId})
         } else {
             scriptureTarget.textContent="Todavía no hay una Biblia local válida. Verifica RV1909 en Biblioteca FreeShow."
         }
+    }
+    function collectMockText() {
+        mockNodes.length = 0
+        const walker = document.createTreeWalker(host, NodeFilter.SHOW_TEXT)
+        let item: Node | null
+        while ((item = walker.nextNode())) {
+            const v = item.nodeValue?.trim() || ""
+            if (/Pantallas conectadas|Estado:\s*En vivo|Guardado\s*\(\d{1,2}:\d{2}\)|Modo:\s*Servicio|^[0-9]+\/[0-9]+$|^En vivo$/i.test(v))
+                mockNodes.push({node:item as Text, original:v})
+        }
+        renderRealHeader()
+    }
+    function renderRealHeader() {
+        const configured = Object.values(get(outputs)).filter(x=>x?.enabled && !x?.stageOutput)
+        const active = configured.filter(x=>x.active)
+        for (const entry of mockNodes) {
+            const original=entry.original
+            if (/Pantallas conectadas/i.test(original)) entry.node.nodeValue = "Salidas FreeShow:"
+            else if (/^[0-9]+\/[0-9]+$/.test(original)) entry.node.nodeValue = active.length + "/" + configured.length
+            else if (/Guardado/i.test(original)) entry.node.nodeValue = get(saved) ? "Guardado" : "Cambios pendientes"
+            else if (/Estado:\s*En vivo|^En vivo$/i.test(original))
+                entry.node.nodeValue = active.length ? "Salida activa" : "Sin salida activa"
+            else if (/Modo:\s*Servicio/i.test(original)) entry.node.nodeValue = "Modo: prueba con archivos locales"
+        }
+        // El mock incluía medidores sin conexión al audio real.
+        const fakeMeter = el("audioMeterBars")
+        if (fakeMeter) { fakeMeter.replaceChildren(); fakeMeter.title = "Medidor no conectado; no mostrar barras simuladas" }
+    }
+    function connectMediaTypeFilters() {
+        const root = el("moduleView_multimedia")
+        for (const btn of root?.querySelectorAll<HTMLButtonElement>("button") || []) {
+            const name = btn.textContent?.trim() || ""
+            const type = /v[ií]deos?\s*\(\d+\)/i.test(name) ? "video" :
+                /im[aá]genes\s*\(\d+\)/i.test(name) ? "image" :
+                /audio\s*\(\d+\)/i.test(name) ? "audio" : null
+            if (!type) continue
+            const handler = () => { typeFilter = type; renderLibrary() }
+            btn.addEventListener("click",handler)
+            cleanup.push(()=>btn.removeEventListener("click",handler))
+        }
+        for (const button of host.querySelectorAll<HTMLButtonElement>("button")) {
+            if (/agregar multimedia/i.test(button.textContent || "")) {
+                const handler = () => sendMain(Main.OPEN_FOLDER, {channel:"JA_GEMINI_MEDIA_FOLDER",title:"Vincular carpeta Multimedia"})
+                button.addEventListener("click",handler)
+                cleanup.push(()=>button.removeEventListener("click",handler))
+                button.title = "Vincula una carpeta real de Windows para indexar sus archivos"
+            }
+            if (/^(Restablecer|Logo|Negro|Fundido)$/i.test(button.textContent?.trim() || "")) {
+                button.disabled = true
+                button.title = "Pendiente: no es un control operativo todavía"
+            }
+        }
+    }
+    function installFolderPicker() {
+        const token = receiveToMain(ToMain.OPEN_FOLDER2, ({channel,path}) => {
+            if (!path) return
+            if (channel === "JA_GEMINI_HYMN_FOLDER") {
+                linkHymnFolder(collection,path)
+                notice("Carpeta vinculada a " + collection)
+                void refreshJAHymnLibrary()
+            } else if (channel === "JA_GEMINI_MEDIA_FOLDER") {
+                if (Object.values(get(mediaFolders)).some(folder=>normalizeJAContentPath(folder.path || "")===normalizeJAContentPath(path))) {
+                    notice("Esta carpeta ya está vinculada a Multimedia")
+                    void scanMediaFolders()
+                    return
+                }
+                mediaFolders.update(folders=>({
+                    ...folders,
+                    ["ja_gemini_"+uid()]:{name:fileName(path),path,icon:"folder"}
+                }))
+                notice("Carpeta Multimedia vinculada: " + fileName(path))
+            }
+        })
+        cleanup.push(()=>destroyMain(token))
+    }
+    function removeInertGeminiControls() {
+        const dropdown=el("btnProjectDropdown") as HTMLButtonElement | null
+        if (dropdown) {dropdown.disabled=true;dropdown.title="Gestión de proyectos pendiente; el modo actual utiliza bibliotecas locales reales"}
+        el("projectDropdownMenu")?.remove()
+        const fauxWindows=el("btnOpenDiagModal")?.nextElementSibling
+        if (fauxWindows?.textContent?.includes("✕")) fauxWindows.remove()
+        for (const id of ["btnLargeTextToggle","btnOpenDiagModal","btnBridgeBlack","btnBridgeClearText"])
+            disable(id,"Función pendiente; no se ejecutan controles de demostración")
+        const sort=el("multimediaSortSelect") as HTMLSelectElement | null
+        if (sort) {
+            sort.replaceChildren()
+            const opt=document.createElement("option")
+            opt.value="name";opt.textContent="Orden: nombre"
+            sort.append(opt);sort.value="name";sort.disabled=true
+            sort.title="Los archivos están ordenados por nombre real"
+        }
+        const hymnEnd=el("hymnEndBehavior") as HTMLSelectElement | null
+        if (hymnEnd) {hymnEnd.disabled=true;hymnEnd.title="Comportamiento final de himno pendiente"}
+        const grid=el("moduleView_multimedia")
+        for(const b of grid?.querySelectorAll<HTMLButtonElement>("button") || [])
+            if (["⊞","☰"].includes(b.textContent?.trim()||"")) {b.disabled=true;b.title="Vista de lista pendiente; cuadrícula real disponible"}
+        el("moduleView_biblia")?.replaceChildren()
     }
     function setupNavigation() {
         const menu=el("leftModuleSidebar")
@@ -610,6 +706,7 @@
     onMount(() => {
         setupNavigation()
         collectMockText()
+        removeInertGeminiControls()
         connectMediaTypeFilters()
         installFolderPicker()
         showModule("multimedia")

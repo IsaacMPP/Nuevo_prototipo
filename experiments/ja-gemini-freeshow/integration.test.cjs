@@ -19,6 +19,12 @@ test("El adaptador usa salidas reales de FreeShow, nunca los vídeos ficticios",
  }
  assert.ok(s.includes("ids.length !== 1"),"No se ha protegido la etapa de salida única");
 });
+test("El arranque no deja llamadas a auxiliares desaparecidos",()=>{
+ const source=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ for(const fn of ["collectMockText","renderRealHeader","connectMediaTypeFilters","installFolderPicker","removeInertGeminiControls"]){
+  assert.ok(source.includes("function "+fn+"("),fn+" necesita implementación antes de crear instalador")
+ }
+})
 test("FreeShow conserva MainOutput y su proceso de salida original",()=>{
  const s=read("engine/src/frontend/App.svelte");
  assert.ok(s.includes("<MainOutput />"),"Se cambió la ventana de proyección");
