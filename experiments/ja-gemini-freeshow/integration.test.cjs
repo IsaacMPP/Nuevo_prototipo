@@ -131,3 +131,13 @@ test("Controles generales: restablecimiento seguro, ampliar monitor y limpiar so
  assert.ok(!shell.includes('bind("btnBridgeBlack"'),"No simular cortina negra")
  assert.ok(!shell.includes('bind("btnBridgeLogo"'),"No simular logo")
 })
+
+test("Botones Agregar Multimedia y A+ operan en la consola, sin tocar la proyección",()=>{
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const settings=read("engine/src/frontend/components/ja/JaGeminiSettings.svelte")
+ assert.ok(shell.includes('bind("btnAddMultimedia",'),"Agregar Multimedia debe abrir selector de carpeta real")
+ assert.ok(shell.includes('bind("btnLargeTextToggle",'),"A+ necesita manejador")
+ assert.ok(shell.includes('ja-large-ui'),"A+ debe tener efecto visible en UI")
+ assert.ok(settings.includes('dispatch("largeUiChange"'),"Preferencia tipográfica desconectada")
+ assert.ok(!shell.includes('["btnLargeTextToggle","btnOpenDiagModal"'),"A+ quedó deshabilitado")
+})

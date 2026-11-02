@@ -31,6 +31,7 @@
     let settingsStartSection: "general" | "screens" | "libraries" | "playback" | "shortcuts" = "general"
     let previewAutoplay = true
     let compactUi = false
+    let largeUi = false
     let prepared = ""
     let selectedId = ""
     let mode: "multimedia" | "himnario" | "biblia" = "multimedia"
@@ -99,11 +100,13 @@
         try {
             localStorage.setItem("ja-gemini-preview-autoplay", String(previewAutoplay))
             localStorage.setItem("ja-gemini-compact-ui", String(compactUi))
+            localStorage.setItem("ja-gemini-large-ui", String(largeUi))
         } catch (error) { notice("No se pudieron guardar las preferencias de esta consola: " + String(error)) }
     }
     function resetOperatorPreferences() {
         previewAutoplay = true
         compactUi = false
+        largeUi = false
         saveOperatorPreferences()
         notice("Preferencias visuales y de Vista previa restauradas. Programa permanece intacto.")
     }
@@ -743,7 +746,7 @@
         el("projectDropdownMenu")?.remove()
         const fauxWindows=el("btnOpenDiagModal")?.nextElementSibling
         if (fauxWindows?.textContent?.includes("✕")) fauxWindows.remove()
-        for (const id of ["btnLargeTextToggle","btnOpenDiagModal","btnBridgeBlack","btnBridgeLogo"])
+        for (const id of ["btnOpenDiagModal","btnBridgeBlack","btnBridgeLogo"])
             disable(id,"Función pendiente; no se ejecutan controles de demostración")
         const sort=el("multimediaSortSelect") as HTMLSelectElement | null
         if (sort) {
@@ -910,6 +913,7 @@
         try {
             previewAutoplay = localStorage.getItem("ja-gemini-preview-autoplay") !== "false"
             compactUi = localStorage.getItem("ja-gemini-compact-ui") === "true"
+            largeUi = localStorage.getItem("ja-gemini-large-ui") === "true"
         } catch {}
         setupNavigation()
         collectMockText()
@@ -973,6 +977,16 @@
         disable("btnProgramToAll", "Envío múltiple pendiente de aislamiento")
         disable("btnPreviewToAll", "Envío múltiple pendiente de aislamiento")
         disable("btnProjectSelectedVerse", "Biblia todavía no integrada en esta prueba")
+        bind("btnAddMultimedia", () => sendMain(Main.OPEN_FOLDER, {channel:"JA_GEMINI_MEDIA_FOLDER",title:"Vincular carpeta Multimedia"}))
+        const addMedia = el("btnAddMultimedia")
+        if (addMedia) addMedia.title = "Vincular una carpeta de multimedia real desde Windows"
+        bind("btnLargeTextToggle", () => {
+            largeUi = !largeUi
+            saveOperatorPreferences()
+            const toggle = el("btnLargeTextToggle")
+            toggle?.setAttribute("aria-pressed",String(largeUi))
+            notice("Texto de interfaz " + (largeUi ? "ampliado" : "normal"))
+        })
         bind("btnResetTargets", resetTargetSelection)
         bind("btnPreviewFullscreen", () => { void toggleLocalFullscreen("previewCanvasContent") })
         bind("btnProgramFullscreen", () => { void toggleLocalFullscreen("programCanvasContent") })
@@ -1035,13 +1049,14 @@
 </script>
 
 <svelte:head><link rel="stylesheet" href="ja-gemini.css" /><link rel="stylesheet" href="ja-gemini-layout.css" /></svelte:head>
-<div class={"ja-gemini-host " + geminiBodyClasses + (compactUi ? " ja-compact-ui" : "")} bind:this={host}>
+<div class={"ja-gemini-host " + geminiBodyClasses + (compactUi ? " ja-compact-ui" : "") + (largeUi ? " ja-large-ui" : "")} bind:this={host}>
     {@html geminiHtml}
     {#if settingsOpen}
         <JaGeminiSettings
             selectedOutputId={selectedId}
             {previewAutoplay}
             {compactUi}
+            {largeUi}
             startSection={settingsStartSection}
             on:previewAutoplayChange={(event) => {
                 previewAutoplay = event.detail.enabled
@@ -1049,6 +1064,7 @@
                 saveOperatorPreferences()
             }}
             on:compactUiChange={(event) => { compactUi = event.detail.enabled; saveOperatorPreferences() }}
+            on:largeUiChange={(event) => { largeUi = event.detail.enabled; saveOperatorPreferences() }}
             on:resetPreferences={resetOperatorPreferences}
             on:close={() => { settingsOpen = false }}
             on:selectOutput={(event) => { selectedId = event.detail.id; rebuildOutputs() }}

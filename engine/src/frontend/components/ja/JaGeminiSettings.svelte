@@ -5,6 +5,7 @@
     export let selectedOutputId: string = ""
     export let previewAutoplay = true
     export let compactUi = false
+    export let largeUi = false
     export let startSection: "general" | "screens" | "libraries" | "playback" | "shortcuts" = "general"
 
     const dispatch = createEventDispatcher()
@@ -59,6 +60,11 @@
                             on:change={(e) => dispatch("compactUiChange", {enabled:e.currentTarget.checked})}/>
                     </div>
                     <div class="setting-row">
+                        <div><strong>Texto de interfaz ampliado</strong><small>Aumenta el tamaño del texto de navegación y de los controles de JA; no modifica diapositivas ni proyección.</small></div>
+                        <input type="checkbox" aria-label="Texto de interfaz ampliado" checked={largeUi}
+                            on:change={(e) => dispatch("largeUiChange", {enabled:e.currentTarget.checked})}/>
+                    </div>
+                    <div class="setting-row">
                         <div><strong>Estado del sistema</strong><small>Información del estado de guardado que proporciona el motor.</small></div>
                         <span class="state">{$saved ? "Guardado" : "Cambios pendientes"}</span>
                     </div>
@@ -67,7 +73,7 @@
                         <span class="state">Activa</span>
                     </div>
                     <button class="setting-secondary" type="button" on:click={() => {
-                        if (window.confirm("¿Restablecer solo la densidad de la interfaz y la reproducción automática de Vista previa? No afecta Programa, archivos ni salidas.")) dispatch("resetPreferences")
+                        if (window.confirm("¿Restablecer la densidad, tamaño de texto y reproducción automática de Vista previa? No afecta Programa, archivos ni salidas.")) dispatch("resetPreferences")
                     }}>Restablecer preferencias de interfaz</button>
                 {:else if section === "screens"}
                     <h3>Pantallas y salidas</h3>
