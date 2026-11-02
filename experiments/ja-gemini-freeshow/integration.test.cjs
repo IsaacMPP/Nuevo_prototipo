@@ -196,3 +196,10 @@ test("Banner de Biblioteca no aparenta cambiar modo y controles multipantalla de
  assert.ok(shell.includes('disable("btnPreviewToAll", "Pendiente S0:'),"Nunca afirmar envío a pantallas no identificadas")
  assert.ok(shell.includes('if(isLinkedVideo())VideoPlayer.seekTo(playingPath,selectedId,seconds)'),"La búsqueda vinculada necesita controlar la sesión pública")
 })
+
+test("Agregar multimedia tiene un único manejador: no abre carpetas de forma simultánea",()=>{
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const filters=shell.split("function connectMediaTypeFilters()")[1].split("function installFolderPicker()")[0]
+ assert.ok(!filters.includes('sendMain(Main.OPEN_FOLDER'),"El filtro no debe registrar un segundo diálogo de carpeta")
+ assert.ok(shell.includes('bind("btnAddMultimedia", toggleAddMediaMenu)'),"Menú de importación faltante")
+})
