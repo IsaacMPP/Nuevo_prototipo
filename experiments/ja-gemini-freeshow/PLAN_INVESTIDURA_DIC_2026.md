@@ -61,3 +61,20 @@
 3. No modificar `MainOutput.svelte`, control de audio, persistencia o capa de salidas salvo pruebas que justifiquen un cambio puntual.
 4. El componente `Scripture.svelte` conserva cuadrícula/lista, navegador de textos locales y su lógica original.
 5. No habilitar "enviar a todas", NDI, todas las transiciones ni futuros módulos mediante botones vacíos. Primero validar los cambios y ampliar.
+
+## Validación física inicial y corrección de integración (1 noviembre 2026)
+Observación directa del operador en Windows: inicia; reconoce carpetas, 7 vídeos, 42 imágenes, 1 audio; MP4 se reproduce en Programa real. Reportó: Vista previa detenida, volumen no disponible, reloj y sliders superpuestos, selector bíblico blanco, proyección bíblica no fiable y acceso inesperado a FreeShow clásico. **No se declara corregido físicamente nada aún.**
+
+Corrección candidata: arranque local silenciado y desacoplado en Vista previa; slider de Programa conectado únicamente a la sesión nativa (deshabilitado si hay más de una salida); fila de transporte organizada; selección bíblica alineada a drawerTabsData y mensajes de error; estilo del selector nativo; acceso clásico etiquetado como herramienta avanzada temporal. No se cambian motor de audio, MainOutput, flujos de fondo, ni reglas de aislamiento multipantalla.
+
+**Pruebas de aceptación después del próximo artefacto:**
+- Seleccionar MP4; Vista previa debe moverse sola, estar silenciada, y Play/Pausa/seek deben funcionar sin alterar el vídeo en Programa.
+- En una salida activa, cambiar volumen de Programa 100→50→0→100%; confirmar con los altavoces del proyector que sí cambia. Pausar y reanudar; duración y progreso no deben montarse sobre los controles.
+- Biblia RV1909: texto visible en selector oscuro; elegir Rut 2:1 y proyectar mediante el botón; comprobar que el texto en Programa corresponde a esa referencia, que no quedan capas residuales al cambiar a vídeo y que no cambia el audio sin autorización.
+- No habilitar multipantalla hasta probar envío diferenciado, volumen solo principal, HDMI y Spacedesk. Si no se confirma proyección bíblica, registrar captura de Programa y salida física; S1 abierto.
+- Acceso 'Herramientas avanzadas (FreeShow clásico)' permanece por configuración de funciones aún no migradas; no es otra instalación ni un motor diferente.
+
+Estado: cambio candidato a CI; posterior validación Windows/HDMI/Spacedesk pendiente. No modificar main, rama oficial, PR #2 ni JA_Proyecciones2.
+
+### Prompt de continuidad autocontenido (posterior a esta modificación)
+Continuar JA Proyecciones Gemini + FreeShow 1.6.7, repo IsaacMPP/Nuevo_prototipo, rama experiment/gemini-freeshow. Se corrigieron en la rama experimental: reproducción automática silenciada de Vista previa, volumen de Programa mediante VideoPlayer y sesión aislada de una salida, diseño de transporte horario/slider, selección de Biblia sincronizada con drawerTabsData, selector oscuro y etiquetado del respaldo FreeShow clásico. Verificar resultado del último Actions y su instalador antes de afirmarlo listo. Efectuar pruebas físicas de reproducción previa, volumen, Rut 2:1 en Programa, cambio a multimedia, HDMI, scroll, salidas y audio; reportar S0/S1, corregir causa raíz. Preservar diseño Gemini, MainOutput, rama oficial feature/motor-propio-v1, main, PR #2 DRAFT y repo JA_Proyecciones2. No fusionar. Documentar cada cambio y producir prompt nuevo tras cada modificación.

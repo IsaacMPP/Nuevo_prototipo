@@ -72,3 +72,50 @@ html, body, #app { height: 100%; min-height: 0; overflow: hidden; }
   .ja-gemini-host .ja-screen-preview{width:82px}
   .ja-gemini-host .ja-screen-card{padding:6px;gap:7px}
 }
+
+/* Validación Windows 2026-11-01: transporte real sin superposición de reloj,
+   seek y volumen. Solo se redibuja la fila de controles, no el diseño Gemini. */
+.ja-gemini-host .ja-program-transport {
+    height:auto!important;min-height:64px;display:grid!important;
+    grid-template-columns:minmax(0,1fr);grid-template-rows:24px 24px;
+    gap:4px!important;padding:6px 9px!important;
+}
+.ja-gemini-host .ja-program-transport > :first-child {
+    width:100%;min-width:0;display:flex;align-items:center;gap:8px;
+    overflow:hidden;
+}
+.ja-gemini-host .ja-program-transport #programStateLabel {
+    flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;
+    white-space:nowrap;
+}
+.ja-gemini-host .ja-program-transport > :nth-child(2) {
+    display:flex!important;width:100%;min-width:0;align-items:center;gap:9px;
+}
+.ja-gemini-host #programTimeCounter {
+    flex:none;min-width:83px;font-variant-numeric:tabular-nums;
+    white-space:nowrap;font-size:11px;
+}
+.ja-gemini-host .ja-program-seek {
+    flex:1 1 auto;width:100%;min-width:65px;max-width:none;
+    height:5px;accent-color:#4cd1fd;cursor:pointer;
+}
+.ja-gemini-host #programVolumeSlider {
+    flex:none;width:92px;min-width:65px;height:5px;accent-color:#fbbf24;
+}
+.ja-gemini-host .ja-program-transport > :nth-child(2) > span:not(#programTimeCounter) {
+    display:none; /* El botón de silencio operativo sustituye el emoji decorativo */
+}
+.ja-gemini-host .ja-program-transport input:disabled {opacity:.35;cursor:not-allowed;}
+.ja-gemini-host #previewTimeCounter {min-width:83px;white-space:nowrap;font-variant-numeric:tabular-nums;}
+.ja-gemini-host #previewCanvasContent > video,
+.ja-gemini-host #previewCanvasContent > img {width:100%;height:100%;object-fit:contain;}
+/* El selector nativo de Windows heredaba texto blanco sobre opciones blancas. */
+.ja-gemini-host #moduleView_biblia select[data-role="ja-bibles"],
+.ja-gemini-host #moduleView_biblia select[data-role="ja-bibles"] option {
+    background-color:#08172f!important;color:#f1f5ff!important;
+    color-scheme:dark;
+}
+.ja-gemini-host #moduleView_biblia select[data-role="ja-bibles"] {
+    min-width:185px;max-width:100%;height:30px;
+    border:1px solid #45688a!important;
+}

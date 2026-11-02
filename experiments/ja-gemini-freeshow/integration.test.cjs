@@ -31,3 +31,29 @@ test("FreeShow conserva MainOutput y su proceso de salida original",()=>{
  assert.ok(s.includes("<JaGeminiShell"),"No se cargó Gemini en operador");
  assert.ok(s.includes("<MainLayout />"),"Debe mantenerse acceso al gestor clásico");
 });
+
+test("Vista previa real inicia silenciada y conserva controles independientes",()=>{
+ const source=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ assert.ok(source.includes('m.addEventListener("loadeddata"'),"Falta arranque de vídeo local")
+ assert.ok(source.includes("if (previewMedia !== m || !m.isConnected) return"),"Debe evitar reproducción de vista previa obsoleta")
+ assert.ok(source.includes("m.muted = true"),"No debe duplicar audio de Programa al seleccionar")
+ assert.ok(source.includes('bind("btnPreviewPlay"'),"Controles manuales deben permanecer")
+})
+test("Volumen y transporte usan la sesión nativa, nunca sliders de muestra",()=>{
+ const source=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const css=read("engine/public/ja-gemini-layout.css")
+ assert.ok(source.includes("VideoPlayer.getPlaying(playingPath, [selectedId])"))
+ assert.ok(source.includes("VideoPlayer.updateVolume(playingPath)"))
+ assert.ok(!source.includes('vol.disabled = true; vol.title = "Volumen fino pendiente'))
+ assert.ok(source.includes('programSeek.id = "jaProgramSeek"'))
+ assert.ok(css.includes(".ja-program-transport") && css.includes(".ja-program-seek"))
+})
+test("Biblia alinea la pestaña real antes de proyectar y conserva FreeShow de respaldo",()=>{
+ const source=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ assert.ok(source.includes("activeSubTab !== activeBibleId"))
+ assert.ok(source.includes("get(activeScripture).reference?.verses?.[0]?.length"))
+ assert.ok(source.includes('void playScripture().then('))
+ const css=read("engine/public/ja-gemini-layout.css")
+ assert.ok(css.includes('select[data-role="ja-bibles"] option'))
+ assert.ok(source.includes('dispatch("classic")'),"No quitar el gestor FreeShow mientras falten módulos")
+})

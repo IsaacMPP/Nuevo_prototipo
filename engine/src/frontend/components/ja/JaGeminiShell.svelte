@@ -16,7 +16,7 @@
     import Scripture from "../drawer/bible/Scripture.svelte"
     import { get } from "svelte/store"
     import { geminiHtml, geminiBodyClasses } from "./gemini-fragment.generated"
-    import { mediaFolders, outputs, outLocked, saved, scriptures, scriptureMode, drawerTabsData } from "../../stores"
+    import { activeScripture, mediaFolders, outputs, outLocked, playingVideos, saved, scriptures, scriptureMode, drawerTabsData } from "../../stores"
     import { encodeFilePath, getExtension, getMediaType } from "../helpers/media"
     import { clearBackground } from "../output/clear"
     import { setOutput } from "../helpers/output"
@@ -51,6 +51,7 @@
     let stopVideoState: (() => void) | null = null
     let cleanup: Array<() => void> = []
     let programSeek: HTMLInputElement | null = null
+    let programVolume: HTMLInputElement | null = null
     let previewMedia: HTMLMediaElement | null = null
     let timer: ReturnType<typeof setTimeout> | null = null
     let videoState = { paused: true, muted: false, currentTime: 0, duration: 0 }
@@ -213,6 +214,14 @@
         }
         const counter = el("programTimeCounter")
         if (counter) counter.textContent = playingPath ? time(videoState.currentTime) + " / " + time(videoState.duration) : "—"
+        if (programVolume) {
+            // The experimental slider changes only the one supervised session.
+            // Do not enable it with multiple outputs until per-output audio is tested.
+            const session = playingPath && selectedId ? VideoPlayer.getPlaying(playingPath, [selectedId]) : null
+            programVolume.disabled = !session || get(outLocked) || chooseOutput().length !== 1
+            if (session && document.activeElement !== programVolume)
+                programVolume.value = String(Math.round(Math.max(0, Math.min(1, VideoPlayer.getVolume(playingPath, [selectedId]))) * 100))
+        }
         if (programSeek) {
             programSeek.disabled = !playingPath || !Number.isFinite(videoState.duration) || videoState.duration <= 0
             programSeek.max = String(Math.max(1, videoState.duration))
@@ -479,7 +488,18 @@
             const project=document.createElement("button")
             project.type="button"
             project.textContent="▶ Proyectar en principal"
-            project.onclick=()=>{if(get(outLocked)) return notice("Las salidas están bloqueadas");void playScripture()}
+            project.onclick=()=>{
+                if (get(outLocked)) return notice("Las salidas están bloqueadas")
+                const ids = chooseOutput()
+                if (ids.length !== 1 || !selectedId || !get(outputs)[selectedId]?.active)
+                    return notice("Para proyectar la Biblia en esta prueba, activa una única salida principal.")
+                if (!activeBibleId || !get(activeScripture).reference?.verses?.[0]?.length)
+                    return notice("Selecciona primero un libro, capítulo y versículo de la Biblia.")
+                void playScripture().then(()=>{
+                    if (get(outputs)[selectedId]?.out?.slide?.id !== "temp")
+                        notice("FreeShow no confirmó el versículo en Programa. Comprueba la salida y la traducción.")
+                }).catch(error=>notice("Error al proyectar Biblia: "+String(error)))
+            }
             bar.append(project)
             area.append(bar)
             scriptureTarget=document.createElement("div")
@@ -499,6 +519,13 @@
             select.append(opt)
         }
         select.value=activeBibleId
+        // Scripture's projection engine reads drawerTabsData, not the select element.
+        // Set the native tab even when the first version was auto-selected.
+        if (activeBibleId && get(drawerTabsData).scripture?.activeSubTab !== activeBibleId) {
+            drawerTabsData.update(data => ({
+                ...data, scripture: { ...data.scripture, activeSubTab: activeBibleId }
+            }))
+        }
         for(const b of area.querySelectorAll<HTMLButtonElement>(".ja-library-toolbar button")){
             if (b.textContent?.includes("cuadriculada")) b.setAttribute("aria-pressed",String(get(scriptureMode)==="grid"))
             if (b.textContent?.includes("lista")) b.setAttribute("aria-pressed",String(get(scriptureMode)==="list"))
@@ -619,7 +646,7 @@
             ["presentaciones","▣ Presentaciones"],
             ["fondos","▧ Fondos"],
             ["listas","☰ Listas"],
-            ["classic","↗ Administrar bibliotecas / FreeShow"]
+            ["classic","↗ Herramientas avanzadas (FreeShow clásico)"]
         ]) {
             const button=document.createElement("button")
             button.type="button"
@@ -628,7 +655,10 @@
             button.setAttribute("aria-current",String(id===mode))
             if(id==="biblia"||id==="multimedia"||id==="himnario")
                 button.onclick=()=>showModule(id)
-            else if(id==="classic")button.onclick=()=>dispatch("classic")
+            else if(id==="classic") {
+                button.title="Acceso temporal al administrador original para configurar funciones aún pendientes; vuelve con el botón superior JA Gemini"
+                button.onclick=()=>dispatch("classic")
+            }
             else {button.disabled=true;button.title="Módulo pendiente de integración; disponible desde FreeShow clásico cuando corresponda"}
             menu.append(button)
         }
@@ -644,6 +674,11 @@
         }
         const play = el("btnPreviewPlay") as HTMLButtonElement | null
         if (play) play.textContent = previewMedia?.paused ? "▶" : "Ⅱ"
+        const mute = el("btnPreviewMute") as HTMLButtonElement | null
+        if (mute) {
+            mute.textContent = previewMedia?.muted ? "🔇" : "🔊"
+            mute.title = previewMedia?.muted ? "Activar escucha local de Vista previa" : "Silenciar Vista previa"
+        }
     }
     function prepare(path: string) {
         prepared = path
@@ -657,11 +692,18 @@
             const m = document.createElement(type === "video" ? "video" : "audio")
             m.className = "w-full h-full object-contain"
             m.src = encodeFilePath(path)
-            m.preload = "metadata"
+            m.preload = "auto"
+            m.setAttribute("playsinline", "")
             m.muted = true
             m.controls = false
             m.addEventListener("timeupdate", updatePreviewProgress)
             m.addEventListener("loadedmetadata", updatePreviewProgress)
+            // A selected media item should move in Preview without pressing Play.
+            // Mute prevents a second, unsupervised audio source from reaching speakers.
+            m.addEventListener("loadeddata", () => {
+                if (previewMedia !== m || !m.isConnected) return
+                void m.play().catch(() => notice("Vista previa no pudo iniciar. Comprueba formato/códec y pulsa Play."))
+            }, {once:true})
             m.addEventListener("play", updatePreviewProgress)
             m.addEventListener("pause", updatePreviewProgress)
             m.addEventListener("error", () => notice("Vista previa: formato o ruta no reproducible"))
@@ -703,6 +745,22 @@
         if (!playingPath || !selectedId) return notice("Programa no tiene vídeo activo")
         VideoPlayer.toggleMute(playingPath, selectedId)
     }
+    function setProgramVolume() {
+        if (!programVolume || !playingPath || !selectedId || get(outLocked) || chooseOutput().length !== 1) return
+        const session = VideoPlayer.getPlaying(playingPath, [selectedId])
+        if (!session) return
+        const next = Number(programVolume.value)
+        if (!Number.isFinite(next)) return
+        const level = Math.max(0, Math.min(100, next)) / 100
+        // A session-local value is safer than writing a global media preference.
+        playingVideos.update(sessions => {
+            if (!sessions.includes(session)) return sessions
+            session.volume = level
+            return [...sessions]
+        })
+        VideoPlayer.updateVolume(playingPath)
+        programVolume.title = "Volumen de Programa: " + Math.round(level * 100) + "%"
+    }
     onMount(() => {
         setupNavigation()
         collectMockText()
@@ -721,7 +779,7 @@
             slider.addEventListener("input", () => { if (previewMedia) previewMedia.currentTime = Number(slider.value) || 0 })
         }
         bind("btnPreviewPlay", () => { if (previewMedia) { if (previewMedia.paused) void previewMedia.play().catch(() => notice("No se pudo iniciar Vista previa")); else previewMedia.pause() } })
-        bind("btnPreviewMute", () => { if (previewMedia) previewMedia.muted = !previewMedia.muted })
+        bind("btnPreviewMute", () => { if (previewMedia) { previewMedia.muted = !previewMedia.muted; updatePreviewProgress() } })
         bind("btnBridgeQuickPlay", project)
         bind("btnBridgeCut", project)
         bind("btnProgramPause", pauseProgram)
@@ -729,12 +787,14 @@
         bind("btnBridgeBlack", () => notice("Cortina negra: todavía no integrada"))
         const programStatus = el("programTimeCounter")?.parentElement
         if (programStatus) {
+            programStatus.parentElement?.classList.add("ja-program-transport")
             programSeek = document.createElement("input")
+            programSeek.id = "jaProgramSeek"
             programSeek.type = "range"
             programSeek.min = "0"; programSeek.max = "1"; programSeek.step = "0.1"
             programSeek.disabled = true
             programSeek.title = "Buscar posición real del vídeo en Programa"
-            programSeek.className = "w-full accent-emerald-400"
+            programSeek.className = "ja-program-seek"
             programSeek.addEventListener("change", () => {
                 if (playingPath && selectedId && programSeek) VideoPlayer.seekTo(playingPath, selectedId, Number(programSeek.value))
             })
@@ -764,8 +824,16 @@
         disable("btnPreviewToAll", "Envío múltiple pendiente de aislamiento")
         disable("btnProjectSelectedVerse", "Biblia todavía no integrada en esta prueba")
         disable("btnOpenSettingsModal", "Configura pantallas y bibliotecas desde FreeShow clásico")
-        const vol = el("programVolumeSlider") as HTMLInputElement | null
-        if (vol) { vol.disabled = true; vol.title = "Volumen fino pendiente; usar silencio/reactivar real" }
+        programVolume = el("programVolumeSlider") as HTMLInputElement | null
+        if (programVolume) {
+            programVolume.min = "0"
+            programVolume.max = "100"
+            programVolume.step = "1"
+            programVolume.title = "Volumen real de la sesión en Programa (una salida)"
+            programVolume.addEventListener("input", setProgramVolume)
+            cleanup.push(() => programVolume?.removeEventListener("input", setProgramVolume))
+            updateTransport()
+        }
         const hymnSearch = el("hymnModuleSearch")
         const mediaSearch = el("multimediaSearchInput")
         hymnSearch?.addEventListener("input", renderLibrary)

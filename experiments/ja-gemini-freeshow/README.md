@@ -76,3 +76,11 @@ seek, mute y limpiar Programa preservando Vista previa. Registrar resultados/rep
 incidencias, corregir raíz y repetir CI. Multipantalla, audio por dispositivo, Biblia,
 Himnario JA y miniaturas aún no aceptados. No fusionar ni tocar main/JA_Proyecciones2.
 Entregar prompt autocontenido después de cada cambio.
+
+## Correcciones solicitadas tras ensayo Windows (1 noviembre 2026)
+- Arranque de Vista previa sin audio (autoplay local; controles independientes).
+- Volumen nativo de la sesión de Programa para **una sola salida**, sin modificar volumen global ni el de otras sesiones.
+- Fila de transporte separada y selector de biblias legible (Windows, tema oscuro).
+- Sincronizar traducción bíblica elegida con pestaña real usada por el motor antes de proyectar. Confirmación física de Biblia todavía pendiente.
+- Enlace a interfaz FreeShow clásica conservado como **herramienta avanzada temporal** para configuraciones/módulos no migrados, no como aplicación distinta.
+- Próximo gate: CI + prueba física con MP4, Rut 2:1, HDMI, audio y control de vista previa. No declarar listo por compile.
