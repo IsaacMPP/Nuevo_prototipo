@@ -21,7 +21,9 @@
     import { activeScripture, effects, mediaFolders, outputs, outLocked, playingVideos, saved, scriptures, scriptureMode, scriptureSettings, templates, drawerTabsData } from "../../stores"
     import { encodeFilePath, getExtension, getMediaType } from "../helpers/media"
     import { clearBackground, clearSlide } from "../output/clear"
-    import { setOutput } from "../helpers/output"
+    import { addOutput, setOutput } from "../helpers/output"
+    import { OUTPUT } from "../../../types/Channels"
+    import { send } from "../../utils/request"
     import { VideoPlayer } from "../media/video/videoPlayer"
     import { videoSync } from "../media/video/videoSync"
     import PreviewOutput from "../output/preview/PreviewOutput.svelte"
@@ -416,6 +418,42 @@
         e.stopImmediatePropagation()
         settingsStartSection = "general"
         settingsOpen = !settingsOpen
+    }
+    function assignMonitorToOutput(displayId: number, bounds: {x:number;y:number;width:number;height:number}, outputId: string) {
+        const current = get(outputs)
+        const target = current[outputId]
+        if (!target || !target.enabled || target.stageOutput || !Number.isFinite(displayId))
+            return notice("No se puede asignar la salida o monitor solicitado")
+        if (Object.entries(current).some(([id,o])=>id!==outputId && o.enabled && o.screen===String(displayId)))
+            return notice("El monitor ya está asignado a otra salida.")
+        outputs.update(a=>({...a,[outputId]:{...a[outputId],screen:String(displayId),bounds:{...bounds}}}))
+        send(OUTPUT,["UPDATE_BOUNDS"],{id:outputId,bounds})
+        if (!localStorage.getItem("ja-main-projector"))localStorage.setItem("ja-main-projector",outputId)
+        screenStructure = ""
+        rebuildOutputs()
+        notice("Salida "+(target.name||outputId)+" asignada al monitor "+displayId+". Comprueba visualmente antes de emitir.")
+    }
+    function createPhysicalOutput(displayId: number, bounds: {x:number;y:number;width:number;height:number}, name: string) {
+        if (!Number.isFinite(displayId) || get(outLocked))return notice("No se puede crear una salida mientras esté bloqueada.")
+        if(Object.values(get(outputs)).some(o=>o.enabled && o.screen===String(displayId)))
+            return notice("Este monitor ya tiene una salida JA.")
+        const outputId=addOutput(false,"",false,name)
+        if(!outputId)return notice("FreeShow no pudo registrar la nueva salida")
+        let outputSnapshot: any = null
+        outputs.update(a=>{
+            const output=a[outputId]
+            if(!output)return a
+            outputSnapshot={...output,enabled:true,active:true,screen:String(displayId),
+                bounds:{...bounds},boundsLocked:true,alwaysOnTop:true}
+            return {...a,[outputId]:outputSnapshot}
+        })
+        if(!outputSnapshot)return notice("No se pudo preparar la salida "+name)
+        // CREATE es la ruta nativa de FreeShow. La nueva salida comienza vacía:
+        // NO se copia Programa ni se emite audio a monitores recién creados.
+        send(OUTPUT,["CREATE"],{...outputSnapshot,id:outputId})
+        screenStructure=""
+        rebuildOutputs()
+        notice("Salida creada para "+name+". Selecciónala en Envío rápido; verifica que la pantalla física muestra la ventana correspondiente.")
     }
     function chooseOutput() {
         const available = Object.entries(get(outputs))
@@ -1403,6 +1441,8 @@
             }}
             on:close={() => { settingsOpen = false }}
             on:selectOutput={(event) => { selectedId = event.detail.id; rebuildOutputs() }}
+            on:assignDisplay={(event) => assignMonitorToOutput(event.detail.displayId,event.detail.bounds,event.detail.outputId)}
+            on:createDisplayOutput={(event) => createPhysicalOutput(event.detail.displayId,event.detail.bounds,event.detail.name)}
             on:linkMedia={() => sendMain(Main.OPEN_FOLDER, {channel:"JA_GEMINI_MEDIA_FOLDER",title:"Vincular carpeta Multimedia"})}
             on:linkHymn={(event) => {
                 collection = event.detail.collection

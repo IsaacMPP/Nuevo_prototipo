@@ -1,5 +1,9 @@
 <script lang="ts">
-    import { createEventDispatcher } from "svelte"
+    import { createEventDispatcher, onMount } from "svelte"
+    import { Main } from "../../../types/IPC/Main"
+    import { requestMain } from "../../IPC/main"
+    import { OUTPUT } from "../../../types/Channels"
+    import { send } from "../../utils/request"
     import { outputs, mediaFolders, scriptureMode, scriptures, saved } from "../../stores"
 
     export let selectedOutputId: string = ""
@@ -14,6 +18,50 @@
     const dispatch = createEventDispatcher()
     let section = startSection
     let hymnCollection = "Himnario Adventista"
+    type JaDisplay = {id:number;label?:string;internal?:boolean;bounds:{x:number;y:number;width:number;height:number}}
+    let physicalDisplays: JaDisplay[] = []
+    let displaysLoading = false
+    let displaysError = ""
+    let screenDestination = ""
+    let selectedPhysicalDisplayId = ""
+    async function refreshWindowsDisplays(){
+        displaysLoading = true
+        displaysError = ""
+        try{
+            const nativeDisplays = await requestMain(Main.GET_DISPLAYS)
+            physicalDisplays = (nativeDisplays || []).filter(d=>d && d.bounds && Number.isFinite(d.id))
+                .map(d=>({id:d.id,label:d.label,internal:d.internal,bounds:d.bounds}))
+                .sort((a,b)=>a.bounds.x-b.bounds.x)
+            if(!physicalDisplays.some(d=>String(d.id)===selectedPhysicalDisplayId))
+                selectedPhysicalDisplayId = physicalDisplays.find(d=>!d.internal)?.id?.toString() || ""
+        }catch(error){
+            displaysError = "No se pudo consultar Windows: "+String(error)
+        }finally{displaysLoading=false}
+    }
+    function identifyWindowsDisplays(){
+        if(!physicalDisplays.length)return
+        send(OUTPUT,["IDENTIFY_SCREENS"],physicalDisplays)
+    }
+    function assignExistingOutput(){
+        const display=physicalDisplays.find(d=>String(d.id)===selectedPhysicalDisplayId)
+        if(!display || !screenDestination)return
+        const output=$outputs[screenDestination]
+        if(!output || output.stageOutput || !output.enabled)return
+        const currentOwner=Object.entries($outputs).find(([id,o])=>id!==screenDestination && o.enabled && String(o.screen)===String(display.id))
+        if(currentOwner)return window.alert("Este monitor ya está asignado a "+(currentOwner[1].name||currentOwner[0]))
+        if(!window.confirm("¿Mover la salida "+(output.name||screenDestination)+" al monitor "+(display.label||display.id)+"? Esto puede cambiar inmediatamente dónde se proyecta el contenido en vivo."))return
+        dispatch("assignDisplay",{outputId:screenDestination,displayId:display.id,bounds:display.bounds})
+    }
+    function createAssignedOutput(){
+        const display=physicalDisplays.find(d=>String(d.id)===selectedPhysicalDisplayId)
+        if(!display)return
+        if(display.internal && !window.confirm("Este dispositivo parece ser un monitor integrado. ¿Seguro que quieres una salida de proyección encima de la consola de JA?"))return
+        const currentOwner=Object.entries($outputs).find(([,o])=>o.enabled && String(o.screen)===String(display.id))
+        if(currentOwner)return window.alert("Este monitor ya tiene una salida asignada: "+(currentOwner[1].name||currentOwner[0]))
+        if(!window.confirm("¿Crear una salida de FreeShow en "+(display.label||"monitor "+display.id)+"? Esta acción abre una ventana de proyección en el monitor elegido."))return
+        dispatch("createDisplayOutput",{displayId:display.id,bounds:display.bounds,name:display.label||"Monitor "+display.id})
+    }
+    onMount(()=>{void refreshWindowsDisplays()})
     const sections = [
         {id:"general",name:"General",symbol:"⚙"},
         {id:"screens",name:"Pantallas y salidas",symbol:"▣"},
@@ -95,7 +143,41 @@
                     {:else}
                         <p class="info">Todavía no hay una salida de JA lista para inspeccionar.</p>
                     {/if}
-                    <p class="info">Importante: las salidas configuradas no equivalen necesariamente a todos los monitores que Windows detecta. La detección física, identificación por número/modelo y asignación HDMI/spacedesk están pendientes del módulo multipantalla. No se asignará automáticamente una pantalla equivocada.</p>
+                    <div class="setting-group">
+                        <strong>Monitores detectados por Windows</strong>
+                        <small>Detección real de Electron; no son salidas ficticias de JA.</small>
+                        <div class="ja-settings-actions">
+                            <button type="button" disabled={displaysLoading} on:click={() => void refreshWindowsDisplays()}>Actualizar detección</button>
+                            <button type="button" disabled={!physicalDisplays.length} on:click={identifyWindowsDisplays}>Identificar pantallas</button>
+                        </div>
+                        {#if displaysError}<p class="info" role="alert">{displaysError}</p>{/if}
+                        {#if displaysLoading}<p class="info">Consultando monitores de Windows…</p>{/if}
+                        <div class="ja-settings-outputs" role="group" aria-label="Monitores físicos detectados">
+                            {#each physicalDisplays as display, index (display.id)}
+                                <button type="button" aria-pressed={selectedPhysicalDisplayId===String(display.id)}
+                                    on:click={() => (selectedPhysicalDisplayId=String(display.id))}>
+                                    <span>Pantalla {index+1} · {display.label||"Monitor sin modelo informado"}</span>
+                                    <small>{display.bounds.width} × {display.bounds.height} · {display.internal?"Integrada":"Externa o virtual"} · ID {display.id}</small>
+                                    <small>{Object.values($outputs).find(o=>o.enabled&&String(o.screen)===String(display.id))?.name||"Sin salida JA asignada"}</small>
+                                </button>
+                            {/each}
+                        </div>
+                        {#if !displaysLoading && !physicalDisplays.length && !displaysError}
+                            <p class="info">Windows no devolvió monitores. Comprueba la conexión y pulsa Actualizar detección.</p>
+                        {/if}
+                        <div class="ja-settings-actions">
+                            <button type="button" disabled={!selectedPhysicalDisplayId} on:click={createAssignedOutput}>Crear salida en monitor elegido</button>
+                        </div>
+                        <div class="ja-settings-actions">
+                            <label for="ja-output-to-assign">Asignar una salida existente</label>
+                            <select id="ja-output-to-assign" bind:value={screenDestination}>
+                                <option value="">Seleccionar salida JA…</option>
+                                {#each configuredOutputs as [id,output] (id)}<option value={id}>{output.name||id}</option>{/each}
+                            </select>
+                            <button type="button" disabled={!screenDestination||!selectedPhysicalDisplayId} on:click={assignExistingOutput}>Asignar a monitor elegido</button>
+                        </div>
+                    </div>
+                    <p class="info">Una pantalla de Windows puede ser HDMI o virtual (spacedesk); su etiqueta o modelo depende del controlador. Crear y asignar requiere confirmación. La detección no altera Programa. El envío simultáneo y el audio independiente siguen pendientes de validación física.</p>
                 {:else if section === "libraries"}
                     <h3>Archivos y bibliotecas</h3>
                     <p class="intro">Vincula carpetas reales sin mover ni borrar archivos de origen.</p>
