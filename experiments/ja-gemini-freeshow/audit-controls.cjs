@@ -13,9 +13,13 @@ const settingsPath = path.join(root, "engine/src/frontend/components/ja/JaGemini
 const reportDir = path.join(root, "experiments/ja-gemini-freeshow/build-audit");
 
 function attr(raw, name) {
-  const re = new RegExp("(?:^|\\s)" + name.replace(/[.*+?^${}()|[\]\\]/g,"\\$&") + "\\s*=\\s*(?:\\"([^\\"]*)\\"|'([^']*)'|([^\\s>]+))", "i");
-  const hit = raw.match(re);
-  return hit ? (hit[1] ?? hit[2] ?? hit[3] ?? "") : "";
+  // Evitar expresiones regulares construidas con fragmentos de HTML no confiables.
+  const rx = /\b([a-zA-Z][-a-zA-Z0-9:]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/g;
+  let hit;
+  while ((hit = rx.exec(raw))) {
+    if (hit[1].toLowerCase() === name.toLowerCase()) return hit[2] ?? hit[3] ?? hit[4] ?? "";
+  }
+  return "";
 }
 function clean(value) {
   return String(value || "").replace(/<[^>]*>/g, " ").replace(/&(?:nbsp|amp|lt|gt|quot);/g, " ").replace(/\s+/g, " ").trim().slice(0, 110);
