@@ -165,17 +165,21 @@ test("Regresiones físicas de cuatro botones: Restablecer, Ampliar, Agregar y Li
 
 test("Reglas de emisión: al publicar multimedia desaparece escritura temporal sin cortar audio de otros destinos",()=>{
  const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
- assert.ok(shell.includes('sendToJAOutputs("background",'),"Debe publicar desde enrutador JA")
- assert.ok(shell.includes('{replaceScripture:true}'),"Enviar vídeo debe retirar capa temporal anterior")
- assert.ok(shell.includes('clearBlackBeforePublishing([selectedId])'),"Cortina negra no puede ocultar contenido recién enviado")
- const router=read("engine/src/frontend/components/helpers/output.ts")
- assert.ok(router.includes('if (type === "background" && options.replaceScripture && data) clearTemporaryScriptureOnJAOutputs(valid)'))
+ assert.ok(shell.includes('setOutput("background",{'),"Debe conservar el envío nativo a una salida de FreeShow")
+ assert.ok(shell.includes('},false,selectedId)'),"El envío debe nombrar la salida, no proyectar implícitamente a todas")
+ assert.ok(shell.includes('if(scriptureSlide && (scriptureSlide.id==="temp" || scriptureSlide.id==="tempText"))'),"Debe limpiar solo el pasaje temporal")
+ assert.ok(shell.includes('clearSlide(true,selectedId)'),"La Biblia previa debe retirarse del destino")
+ assert.ok(shell.includes('clearBlackBeforePublishing([selectedId])'),"Cortina negra no puede ocultar el siguiente contenido")
+ const destinations=read("engine/src/frontend/utils/jaProjectionDestinations.ts")
+ assert.ok(destinations.includes('!!o.screen'),"No permitir multi-output sin asignación física")
+ const publisher=shell.split('function publishPreparedMedia(')[1].split('function toggleFollowProgram()')[0]
+ assert.ok(!publisher.includes('sendToJAOutputs('),"La salida única NO puede depender del validador multipantalla")
 })
 test("Consola: transiciones, negro y logo usan capas de FreeShow; sincronización de vídeo es opt-in y silenciada",()=>{
  const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
  for(const fragment of [
    'bind("btnBridgeCut",()=>publishPreparedMedia("cut"))',
-   'bind("btnBridgeFade",showTransitionOptions)',
+   'bind("btnBridgeFade",()=>publishPreparedMedia("fade"))',
    'bind("btnBridgeBlack",()=>setOperatorEffect(JA_BLACK))',
    'bind("btnBridgeLogo",()=>setOperatorEffect(JA_LOGO))',
    'setOutput("effects",next,false,selectedId)',
@@ -192,8 +196,8 @@ test("Banner de Biblioteca no aparenta cambiar modo y controles multipantalla de
  const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
  assert.ok(shell.includes('dropdown.replaceWith(status)'),"Eliminar selector ficticio de Modo")
  assert.ok(shell.includes('status.textContent = "Biblioteca local · Archivos reales"'),"Mostrar origen real de datos")
- assert.ok(shell.includes('disable("btnProgramToAll", "Pendiente S0:'),"Nunca afirmar envío a pantallas no identificadas")
- assert.ok(shell.includes('disable("btnPreviewToAll", "Pendiente S0:'),"Nunca afirmar envío a pantallas no identificadas")
+ assert.ok(shell.includes('el("btnProgramToAll")?.remove()'),"No mostrar distribución no implementada")
+ assert.ok(shell.includes('el("btnPreviewToAll")?.remove()'),"No mostrar vista previa múltiple ficticia")
  assert.ok(shell.includes('if(isLinkedVideo())VideoPlayer.seekTo(playingPath,selectedId,seconds)'),"La búsqueda vinculada necesita controlar la sesión pública")
 })
 
@@ -203,3 +207,23 @@ test("Agregar multimedia tiene un único manejador: no abre carpetas de forma si
  assert.ok(!filters.includes('sendMain(Main.OPEN_FOLDER'),"El filtro no debe registrar un segundo diálogo de carpeta")
  assert.ok(shell.includes('bind("btnAddMultimedia", toggleAddMediaMenu)'),"Menú de importación faltante")
 })
+
+test("S0: el envío de una salida no exige campo screen ni primaryId de JA",()=>{
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const router=read("engine/src/frontend/utils/jaProjectionDestinations.ts")
+ const f=shell.split("function publishPreparedMedia(")[1].split("function toggleFollowProgram()")[0]
+ assert.ok(f.includes("setOutput(\"background\""),"El envío único debe volver a FreeShow")
+ assert.ok(!f.includes("sendToJAOutputs("),"Nunca bloquear la única salida con el router multipantalla")
+ assert.ok(f.includes("get(outputs)[selectedId]?.active"),"No proyectar en salida inactiva")
+ assert.ok(f.includes("available.length!==1"),"No permitir difusión insegura")
+ assert.ok(router.includes("!primaryId"),"El router de múltiples destinos exige primario; no reutilizarlo para la salida única")
+});
+test("Transiciones y controles visibles cumplen un contrato mínimo sin efectos simulados",()=>{
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ assert.ok(shell.includes('function project() {publishPreparedMedia("cut")}'))
+ assert.ok(shell.includes('bind("btnBridgeCut",()=>publishPreparedMedia("cut"))'))
+ assert.ok(shell.includes('bind("btnBridgeFade",()=>publishPreparedMedia("fade"))'))
+ assert.ok(!shell.includes('"blur" | "scale" | "slide"'),"No ofrecer efectos sin validación física")
+ assert.ok(!shell.includes("showTransitionOptions"),"No ofrecer menú ficticio de efectos")
+ for (const id of ["btnProgramToAll","btnPreviewToAll"])assert.ok(shell.includes('el("'+id+'")?.remove()'),"Ocultar botón no implementado: "+id)
+});

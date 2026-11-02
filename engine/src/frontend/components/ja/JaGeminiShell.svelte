@@ -21,7 +21,7 @@
     import { activeScripture, effects, mediaFolders, outputs, outLocked, playingVideos, saved, scriptures, scriptureMode, scriptureSettings, templates, transitionData, drawerTabsData } from "../../stores"
     import { encodeFilePath, getExtension, getMediaType } from "../helpers/media"
     import { clearBackground, clearSlide } from "../output/clear"
-    import { clearTemporaryScriptureOnJAOutputs, sendToJAOutputs, setOutput } from "../helpers/output"
+    import { setOutput } from "../helpers/output"
     import { VideoPlayer } from "../media/video/videoPlayer"
     import { videoSync } from "../media/video/videoSync"
     import PreviewOutput from "../output/preview/PreviewOutput.svelte"
@@ -33,8 +33,8 @@
     let settingsStartSection: "general" | "screens" | "libraries" | "playback" | "shortcuts" = "general"
     let previewAutoplay = true
     let followProgram = false
-    let transitionChoice: "cut" | "fade" | "blur" | "scale" | "slide" = "cut"
-    let transitionMenu: HTMLDivElement | null = null
+    // Solo transición inmediata y fundido nativo: otras opciones no fueron verificadas en Windows.
+    let transitionChoice: "cut" | "fade" = "cut"
     const JA_BLACK = "ja_gemini_blackout_effect"
     const JA_LOGO = "ja_gemini_logo_effect"
     let compactUi = false
@@ -151,36 +151,11 @@
                 setOutput("effects",enabledEffects.filter(effect=>effect!==JA_BLACK),false,id)
         }
     }
-    function chooseTransition(next: "cut"|"fade"|"blur"|"scale"|"slide") {
-        transitionChoice=next
-        transitionMenu?.remove()
-        transitionMenu=null
-        const b=el("btnBridgeFade")
-        if (b) { b.textContent="🪄 "+({cut:"Cortar",fade:"Fundido",blur:"Desenfoque",scale:"Escala",slide:"Deslizamiento"}[next]); b.setAttribute("aria-expanded","false") }
-        notice("Transición seleccionada: "+next+". Se aplicará al próximo contenido multimedia.")
-    }
-    function showTransitionOptions() {
-        if (transitionMenu) {transitionMenu.remove();transitionMenu=null;return}
-        const target=el("btnBridgeFade")
-        if(!target)return
-        const menu=document.createElement("div")
-        menu.className="ja-gemini-transition-menu"
-        menu.setAttribute("role","group")
-        menu.setAttribute("aria-label","Elegir transición de multimedia")
-        for(const [id,label] of [["cut","Corte inmediato"],["fade","Fundido"],["blur","Desenfoque"],["scale","Escala"],["slide","Deslizamiento"]] as const){
-            const b=document.createElement("button")
-            b.type="button";b.textContent=label
-            b.setAttribute("aria-pressed",String(id===transitionChoice))
-            b.onclick=()=>chooseTransition(id)
-            menu.append(b)
-        }
-        host.append(menu);transitionMenu=menu
-        const r=target.getBoundingClientRect(),h=host.getBoundingClientRect()
-        menu.style.left=Math.max(4,Math.min(host.clientWidth-menu.offsetWidth-8,r.left-h.left))+"px"
-        menu.style.top=Math.max(4,Math.min(host.clientHeight-menu.offsetHeight-8,r.bottom-h.top+3))+"px"
-        target.setAttribute("aria-expanded","true")
-    }
-    function publishPreparedMedia(choice: "cut"|"fade"|"blur"|"scale"|"slide" = transitionChoice) {
+    // En esta fase únicamente se publica a UNA salida real de FreeShow.
+    // El validador JA de múltiples destinos exige asignación física de monitor
+    // y primario persistido; ese requisito NO debe bloquear la salida única
+    // que FreeShow ya podía controlar. No usar este método para fan-out.
+    function publishPreparedMedia(choice: "cut"|"fade" = transitionChoice) {
         if(mode==="biblia") {
             const button=el("moduleView_biblia")?.querySelector<HTMLButtonElement>(".ja-bible-project")
             if(button)button.click()
@@ -190,28 +165,48 @@
         if(!prepared)return notice("Selecciona un archivo antes de proyectarlo")
         const available=chooseOutput()
         if(available.length!==1 || !selectedId || !available.includes(selectedId))
-            return notice("El envío de esta versión está limitado a UNA salida configurada; primero debemos identificar las demás pantallas.")
-        if(get(outLocked))return notice("La salida de Programa está bloqueada")
-        // Las transiciones nativas aplican al motor actualmente supervisado.
-        // No cambiar transición global cuando hay más de una salida.
-        const nativeType=choice==="cut"?"none":choice
-        transitionData.update(data=>({...data,media:{type:nativeType,duration:choice==="cut"?0:650,easing:"sine"}}))
-        clearBlackBeforePublishing([selectedId])
-        const kind=getMediaType(getExtension(prepared))
-        // La misma API nativa se encarga de quitar una diapositiva temporal
-        // (Biblia) antes de activar otro vídeo/fondo, solo en el destino.
-        const sent=sendToJAOutputs("background",{path:prepared,type:kind,loop:false,muted:false,startAt:0},[selectedId],{replaceScripture:true})
-        if(!sent.includes(selectedId))return notice("No se confirmó el envío a Programa")
-        // La vista se prepara con el vídeo a cero y queda sincronizable,
-        // sin emitir una segunda fuente de audio.
-        if(previewMedia && (kind==="video"||kind==="audio")){
-            previewMedia.pause()
-            try{previewMedia.currentTime=0}catch{}
-            previewMedia.muted=true
-            followProgram=true
-        } else followProgram=false
-        updatePreviewProgress()
-        notice("Programa: "+fileName(prepared)+" · "+(choice==="cut"?"Corte":choice)+". Vista previa "+(followProgram?"vinculada (silenciada)":"independiente")+".")
+            return notice("Configura una única salida de JA antes de enviar multimedia. La distribución múltiple sigue pendiente.")
+        if(get(outLocked) || !get(outputs)[selectedId]?.active)
+            return notice("La salida seleccionada está inactiva o bloqueada.")
+        const mediaPath=prepared
+        const kind=getMediaType(getExtension(mediaPath))
+        // TransitionData es nativo de FreeShow. Otros tipos permanecen ocultos
+        // hasta que una prueba física demuestre su ejecución real.
+        transitionData.update(data=>({
+            ...data,media:{type:choice==="fade"?"fade":"none",duration:choice==="fade"?650:0,easing:"sine"}
+        }))
+        try {
+            const previous=get(outputs)[selectedId]
+            // Una nueva imagen o vídeo principal REEMPLAZA el pasaje bíblico.
+            // No limpiar otras diapositivas ni overlays de otros destinos.
+            const scriptureSlide=previous?.out?.slide
+            if(scriptureSlide && (scriptureSlide.id==="temp" || scriptureSlide.id==="tempText"))
+                clearSlide(true,selectedId)
+            clearBlackBeforePublishing([selectedId])
+            // Ruta nativa que operaba en la primera prueba física de Windows.
+            // El ID explícito impide difundir a otras salidas no configuradas.
+            setOutput("background",{
+                path:mediaPath,type:kind,loop:false,muted:false,startAt:0
+            },false,selectedId)
+            const actual=get(outputs)[selectedId]?.out?.background
+            // La actualización del store indica recepción interna, NO que
+            // HDMI o spacedesk hayan mostrado correctamente el contenido.
+            if(!actual || !actual.path) {
+                followProgram=false
+                return notice("FreeShow no registró el contenido en Programa. Revisa la salida activa.")
+            }
+            if(previewMedia && kind==="video"){
+                previewMedia.pause()
+                try{previewMedia.currentTime=0}catch{}
+                previewMedia.muted=true
+                followProgram=true
+            }else followProgram=false
+            updatePreviewProgress()
+            notice("Enviado al motor de Programa: "+fileName(mediaPath)+". Confirma la salida física.")
+        } catch(error) {
+            followProgram=false
+            notice("Error al enviar a Programa: "+String(error))
+        }
     }
     function toggleFollowProgram() {
         if(!previewMedia || !playingPath || normalizeJAContentPath(prepared)!==normalizeJAContentPath(playingPath))
@@ -1088,7 +1083,7 @@
         if (label) label.textContent = fileName(path)
         updatePreviewProgress()
     }
-    function project() {publishPreparedMedia(transitionChoice)}
+    function project() {publishPreparedMedia("cut")}
     function clearProgram() {
         if (chooseOutput().length !== 1 || !selectedId) return notice("Limpieza de múltiples salidas no habilitada en esta prueba")
         if (get(outLocked)) return notice("La salida está bloqueada")
@@ -1171,7 +1166,7 @@
         }
         bind("btnBridgeQuickPlay",project)
         bind("btnBridgeCut",()=>publishPreparedMedia("cut"))
-        bind("btnBridgeFade",showTransitionOptions)
+        bind("btnBridgeFade",()=>publishPreparedMedia("fade"))
         bind("btnBridgeBlack",()=>setOperatorEffect(JA_BLACK))
         bind("btnBridgeLogo",()=>setOperatorEffect(JA_LOGO))
         bind("btnProgramPause", pauseProgram)
@@ -1213,9 +1208,13 @@
             cleanup.push(() => mute.remove())
         }
         const fadeButton=el("btnBridgeFade") as HTMLButtonElement|null
-        if(fadeButton){fadeButton.disabled=false;fadeButton.removeAttribute("aria-disabled");fadeButton.title="Elegir transición de salida nativa: Corte, Fundido, Desenfoque, Escala o Deslizamiento"}
-        disable("btnProgramToAll", "Pendiente S0: configurar e identificar las salidas reales para laptop, HDMI y spacedesk. Solo hay una salida JA supervisada.")
-        disable("btnPreviewToAll", "Pendiente S0: no emitir a monitores Windows sin asignar salidas JA ni validar audio independiente.")
+        if(fadeButton){fadeButton.disabled=false;fadeButton.removeAttribute("aria-disabled");fadeButton.title="Enviar el archivo preparado con fundido nativo (pendiente de prueba física)"}
+        // En esta versión existe UNA sola vista de preparación y UNA salida JA.
+        // «Vista previa a todas» nunca tuvo un buffer de preview por destino;
+        // «Programa a todas» exige asignar y verificar previamente los monitores.
+        // No mostrar botones inertes hasta implementar esa arquitectura.
+        el("btnProgramToAll")?.remove()
+        el("btnPreviewToAll")?.remove()
         disable("btnProjectSelectedVerse", "Biblia todavía no integrada en esta prueba")
         bind("btnAddMultimedia", toggleAddMediaMenu)
         const addMedia = el("btnAddMultimedia")
@@ -1270,7 +1269,6 @@
         rebuildOutputs()
         return () => {
             if (timer) clearTimeout(timer)
-            transitionMenu?.remove()
             closeLocalExpanded()
             closeAddMediaMenu()
             scanGeneration++
