@@ -1,6 +1,6 @@
 <script lang="ts">
     // Puente real Gemini -> servicios FreeShow. No ejecuta los scripts del mock.
-    import { createEventDispatcher, onMount } from "svelte"
+    import { onMount } from "svelte"
     import { uid } from "uid"
     import type { FileFolder } from "../../../types/Main"
     import { Main } from "../../../types/IPC/Main"
@@ -23,9 +23,10 @@
     import { VideoPlayer } from "../media/video/videoPlayer"
     import { videoSync } from "../media/video/videoSync"
     import PreviewOutput from "../output/preview/PreviewOutput.svelte"
+    import JaGeminiSettings from "./JaGeminiSettings.svelte"
 
-    const dispatch = createEventDispatcher()
     let host: HTMLDivElement
+    let settingsOpen = false
     let prepared = ""
     let selectedId = ""
     let mode: "multimedia" | "himnario" | "biblia" = "multimedia"
@@ -107,7 +108,7 @@
             list?.replaceChildren()
             targets?.replaceChildren()
             if (!available.length) {
-                if (list) list.textContent = "No hay salidas configuradas en FreeShow."
+                if (list) list.textContent = "Sin salidas configuradas. Abre Configuración JA."
                 if (targets) targets.textContent = "Sin salida configurada"
             }
             for (const id of available) {
@@ -172,7 +173,7 @@
             renderedOutput = selectedId
             target.replaceChildren()
             if (selectedId) programRenderer = new PreviewOutput({ target, props: { outputId: selectedId } })
-            else target.textContent = "Sin salida FreeShow"
+            else target.textContent = "Sin salida configurada"
         }
         const path = output?.out?.background?.path || output?.out?.background?.id || ""
         const valid = !!path && (getMediaType(getExtension(path)) === "video" || output?.out?.background?.type === "player")
@@ -194,7 +195,7 @@
         const label = el("programStateLabel")
         if (label) label.textContent = output ? (path ? fileName(path) : "Salida libre") : "Sin salida"
         const badge = el("programBadgeText")
-        if (badge) badge.textContent = output ? (path ? "Programa · FreeShow" : "Programa · Sin emisión") : "Programa · Sin salida"
+        if (badge) badge.textContent = output ? (path ? "Programa · Activo" : "Programa · Sin emisión") : "Programa · Sin salida"
         updateTransport()
         // La primera prueba no cambia automáticamente salidas no seleccionadas.
         if (available.length !== 1) disable("btnPreviewToAll", "Enviar a todos: se evaluará después de aislar sesiones")
@@ -497,7 +498,7 @@
                     return notice("Selecciona primero un libro, capítulo y versículo de la Biblia.")
                 void playScripture().then(()=>{
                     if (get(outputs)[selectedId]?.out?.slide?.id !== "temp")
-                        notice("FreeShow no confirmó el versículo en Programa. Comprueba la salida y la traducción.")
+                        notice("No se confirmó el versículo en Programa. Comprueba la salida y la traducción.")
                 }).catch(error=>notice("Error al proyectar Biblia: "+String(error)))
             }
             bar.append(project)
@@ -534,7 +535,7 @@
             if (!scriptureView) { scriptureTarget.replaceChildren(); scriptureView=new Scripture({target:scriptureTarget,props:{active:activeBibleId,searchValue:""}}) }
             else scriptureView.$set({active:activeBibleId})
         } else {
-            scriptureTarget.textContent="Todavía no hay una Biblia local válida. Verifica RV1909 en Biblioteca FreeShow."
+            scriptureTarget.textContent="Todavía no hay una Biblia local válida. Verifica RV1909 en Biblias instaladas."
         }
     }
     function collectMockText() {
@@ -553,7 +554,7 @@
         const active = configured.filter(x=>x.active)
         for (const entry of mockNodes) {
             const original=entry.original
-            if (/Pantallas conectadas/i.test(original)) entry.node.nodeValue = "Salidas FreeShow:"
+            if (/Pantallas conectadas/i.test(original)) entry.node.nodeValue = "Salidas:"
             else if (/^[0-9]+\/[0-9]+$/.test(original)) entry.node.nodeValue = active.length + "/" + configured.length
             else if (/Guardado/i.test(original)) entry.node.nodeValue = get(saved) ? "Guardado" : "Cambios pendientes"
             else if (/Estado:\s*En vivo|^En vivo$/i.test(original))
@@ -645,8 +646,7 @@
             ["youtube","▶ YouTube"],
             ["presentaciones","▣ Presentaciones"],
             ["fondos","▧ Fondos"],
-            ["listas","☰ Listas"],
-            ["classic","↗ Herramientas avanzadas (FreeShow clásico)"]
+            ["listas","☰ Listas"]
         ]) {
             const button=document.createElement("button")
             button.type="button"
@@ -655,11 +655,7 @@
             button.setAttribute("aria-current",String(id===mode))
             if(id==="biblia"||id==="multimedia"||id==="himnario")
                 button.onclick=()=>showModule(id)
-            else if(id==="classic") {
-                button.title="Acceso temporal al administrador original para configurar funciones aún pendientes; vuelve con el botón superior JA Gemini"
-                button.onclick=()=>dispatch("classic")
-            }
-            else {button.disabled=true;button.title="Módulo pendiente de integración; disponible desde FreeShow clásico cuando corresponda"}
+            else {button.disabled=true;button.title="Módulo pendiente de integración en JA Gemini"}
             menu.append(button)
         }
     }
@@ -725,9 +721,9 @@
         const ids = chooseOutput()
         if (ids.length !== 1 || !selectedId || !ids.includes(selectedId))
             return notice("Esta prueba aislada solo admite UNA salida habilitada para proteger las demás.")
-        if (get(outLocked)) return notice("La salida está bloqueada desde FreeShow.")
+        if (get(outLocked)) return notice("La salida de Programa está bloqueada.")
         setOutput("background", { path: prepared, type: getMediaType(getExtension(prepared)), loop: false, muted: false, startAt: 0 }, false, selectedId)
-        notice("Enviado al motor FreeShow: " + fileName(prepared))
+        notice("Contenido enviado a Programa: " + fileName(prepared))
     }
     function clearProgram() {
         if (chooseOutput().length !== 1 || !selectedId) return notice("Limpieza de múltiples salidas no habilitada en esta prueba")
@@ -823,7 +819,7 @@
         disable("btnProgramToAll", "Envío múltiple pendiente de aislamiento")
         disable("btnPreviewToAll", "Envío múltiple pendiente de aislamiento")
         disable("btnProjectSelectedVerse", "Biblia todavía no integrada en esta prueba")
-        disable("btnOpenSettingsModal", "Configura pantallas y bibliotecas desde FreeShow clásico")
+        bind("btnOpenSettingsModal", () => { settingsOpen = true })
         programVolume = el("programVolumeSlider") as HTMLInputElement | null
         if (programVolume) {
             programVolume.min = "0"
@@ -871,6 +867,20 @@
 <svelte:head><link rel="stylesheet" href="ja-gemini.css" /><link rel="stylesheet" href="ja-gemini-layout.css" /></svelte:head>
 <div class={"ja-gemini-host " + geminiBodyClasses} bind:this={host}>
     {@html geminiHtml}
+    {#if settingsOpen}
+        <JaGeminiSettings
+            selectedOutputId={selectedId}
+            on:close={() => { settingsOpen = false }}
+            on:selectOutput={(event) => { selectedId = event.detail.id; rebuildOutputs() }}
+            on:linkMedia={() => sendMain(Main.OPEN_FOLDER, {channel:"JA_GEMINI_MEDIA_FOLDER",title:"Vincular carpeta Multimedia"})}
+            on:linkHymn={(event) => {
+                collection = event.detail.collection
+                sendMain(Main.OPEN_FOLDER, {channel:"JA_GEMINI_HYMN_FOLDER",title:"Vincular " + collection})
+            }}
+            on:refreshMedia={() => { void scanMediaFolders() }}
+            on:refreshHymn={() => { void refreshJAHymnLibrary() }}
+        />
+    {/if}
 </div>
 <style>
     .ja-gemini-host { width: 100%; height: 100%; overflow: hidden; position: relative; }

@@ -84,3 +84,10 @@ Entregar prompt autocontenido después de cada cambio.
 - Sincronizar traducción bíblica elegida con pestaña real usada por el motor antes de proyectar. Confirmación física de Biblia todavía pendiente.
 - Enlace a interfaz FreeShow clásica conservado como **herramienta avanzada temporal** para configuraciones/módulos no migrados, no como aplicación distinta.
 - Próximo gate: CI + prueba física con MP4, Rut 2:1, HDMI, audio y control de vista previa. No declarar listo por compile.
+
+## Consola única JA Gemini (1 noviembre de 2026)
+Se retiró el acceso temporal a FreeShow clásico: `App.svelte` ya no monta `MainLayout` desde el operador y `JaGeminiShell.svelte` no ofrece `Herramientas avanzadas (FreeShow clásico)`. Se conserva íntegra la infraestructura interna FreeShow y `MainOutput` para reproducción y salidas, así como avisos de licencia.
+
+Configuración JA propia (`JaGeminiSettings.svelte`) abre desde el engrane y permite consultar las salidas activas y seleccionar la salida de trabajo, alternar cuadrícula/lista de Biblia, vincular carpetas reales y solicitar actualización de Multimedia o Himnario. **No equivale todavía a una configuración completa HDMI/audio/plantillas**, ni sustituye sus futuras pruebas físicas. Las opciones faltantes no se dibujan como botones falsos. El gestor original ya no es accesible en la consola de operador.
+
+Plan completo y gates en `PLAN_IMPLEMENTACION_FUNCIONAL_GEMINI.md`. Cualquier descripción anterior de usar «FreeShow clásico» como herramienta de operación es histórica y queda invalidada por esta decisión.

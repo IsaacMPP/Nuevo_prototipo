@@ -14,7 +14,7 @@ test("El diseño Gemini se conserva sin el controlador demostrativo",()=>{
 });
 test("El adaptador usa salidas reales de FreeShow, nunca los vídeos ficticios",()=>{
  const s=read("engine/src/frontend/components/ja/JaGeminiShell.svelte");
- for(const expected of ["setOutput(","PreviewOutput","videoSync(","VideoPlayer.pause(","VideoPlayer.play(","VideoPlayer.seekTo(","clearBackground(selectedId)","get(outputs)","Main.READ_FOLDER","hymnVideos","dispatch(\"classic\")"]){
+ for(const expected of ["setOutput(","PreviewOutput","videoSync(","VideoPlayer.pause(","VideoPlayer.play(","VideoPlayer.seekTo(","clearBackground(selectedId)","get(outputs)","Main.READ_FOLDER","hymnVideos"]){
   assert.ok(s.includes(expected), "Falta cableado real: "+expected);
  }
  assert.ok(s.includes("ids.length !== 1"),"No se ha protegido la etapa de salida única");
@@ -29,7 +29,8 @@ test("FreeShow conserva MainOutput y su proceso de salida original",()=>{
  const s=read("engine/src/frontend/App.svelte");
  assert.ok(s.includes("<MainOutput />"),"Se cambió la ventana de proyección");
  assert.ok(s.includes("<JaGeminiShell"),"No se cargó Gemini en operador");
- assert.ok(s.includes("<MainLayout />"),"Debe mantenerse acceso al gestor clásico");
+ assert.ok(!s.includes("<MainLayout />"),"FreeShow clásico no debe montarse en la interfaz");
+ assert.ok(!s.includes("on:classic"),"No debe existir ruta de vuelta a otra consola");
 });
 
 test("Vista previa real inicia silenciada y conserva controles independientes",()=>{
@@ -48,14 +49,14 @@ test("Volumen y transporte usan la sesión nativa, nunca sliders de muestra",()=
  assert.ok(source.includes('programSeek.id = "jaProgramSeek"'))
  assert.ok(css.includes(".ja-program-transport") && css.includes(".ja-program-seek"))
 })
-test("Biblia alinea la pestaña real antes de proyectar y conserva FreeShow de respaldo",()=>{
+test("Biblia alinea la pestaña real antes de proyectar en Gemini",()=>{
  const source=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
  assert.ok(source.includes("activeSubTab !== activeBibleId"))
  assert.ok(source.includes("get(activeScripture).reference?.verses?.[0]?.length"))
  assert.ok(source.includes('void playScripture().then('))
  const css=read("engine/public/ja-gemini-layout.css")
  assert.ok(css.includes('select[data-role="ja-bibles"] option'))
- assert.ok(source.includes('dispatch("classic")'),"No quitar el gestor FreeShow mientras falten módulos")
+ assert.ok(!source.includes('dispatch("classic")'),"No mostrar atajos al diseño clásico")
 })
 
 test("Proyección bíblica resuelve la plantilla de la salida principal JA sin ReferenceError",()=>{
@@ -63,4 +64,19 @@ test("Proyección bíblica resuelve la plantilla de la salida principal JA sin R
  assert.match(source,/function getScriptureTemplateId\(\) \{[\s\S]*?const styleId = getJAMainOutput\(\)\?\.style \|\| ""/,"La plantilla debe usar la misma salida principal que playScripture")
  assert.ok(!/\bgetFirstActiveOutput\s*\(/.test(source),"Referencia a helper no importado en proyección bíblica")
  assert.ok(source.includes("import { getAllNormalOutputs, getJAMainOutput, sendToJAOutputs, setOutput }"),"Falta la resolución explícita del destino principal")
+})
+
+test("El operador dispone de una sola consola JA y configuración propia operativa",()=>{
+ const app=read("engine/src/frontend/App.svelte")
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const settings=read("engine/src/frontend/components/ja/JaGeminiSettings.svelte")
+ assert.ok(app.includes("<JaGeminiShell />"),"Gemini debe ser la única consola")
+ assert.ok(!app.includes("MainLayout") && !app.includes("jaGeminiEnabled") && !app.includes("ja-classic-return"),"No debe quedar escape a FreeShow clásico")
+ assert.ok(!shell.includes('["classic"') && !shell.includes('dispatch("classic")'),"No debe existir menú de consola clásica")
+ assert.ok(shell.includes('bind("btnOpenSettingsModal", () => { settingsOpen = true })'),"Configuración debe abrir su panel real")
+ assert.ok(shell.includes("<JaGeminiSettings"),"Falta panel JA")
+ for(const event of ["selectOutput","linkMedia","linkHymn","refreshMedia","refreshHymn","close"]){
+   assert.ok(settings.includes('dispatch("'+event+'"'),"Acción de configuración sin conexión: "+event)
+ }
+ assert.ok(settings.includes("scriptureMode.set("),"Cambio de vista bíblica sin implementar")
 })
