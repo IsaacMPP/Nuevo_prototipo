@@ -121,7 +121,7 @@ test("Controles generales: restablecimiento seguro, ampliar monitor y limpiar so
    'bind("btnMultiScreenMenu", openScreenSettings)',
    'bind("btnBridgeClearText", clearSelectedTextLayer)'
  ]) assert.ok(shell.includes(command),"Falta acción real: "+command)
- assert.ok(shell.includes('slide?.id !== "temp" || !slide.categoryId'),"No limpiar presentaciones ni texto no bíblico")
+ assert.ok(shell.includes('if (!output.out?.slide) return notice('),"No se deben limpiar salidas sin una capa de diapositiva")
  assert.ok(shell.includes('clearSlide(true, selectedId)'),"La limpieza no está dirigida a una salida específica")
  const resets=shell.split("function resetTargetSelection()")[1]?.split("function toggleLocalFullscreen")[0] || ""
  assert.ok(!resets.includes('setOutput(') && !resets.includes('clearBackground(') && !resets.includes('clearSlide('),"Restablecer selección no debe alterar Programa")
@@ -135,7 +135,7 @@ test("Controles generales: restablecimiento seguro, ampliar monitor y limpiar so
 test("Botones Agregar Multimedia y A+ operan en la consola, sin tocar la proyección",()=>{
  const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
  const settings=read("engine/src/frontend/components/ja/JaGeminiSettings.svelte")
- assert.ok(shell.includes('bind("btnAddMultimedia",'),"Agregar Multimedia debe abrir selector de carpeta real")
+ assert.ok(shell.includes('bind("btnAddMultimedia", toggleAddMediaMenu)'),"Agregar Multimedia debe abrir opciones reales para archivos y carpetas")
  assert.ok(shell.includes('bind("btnLargeTextToggle",'),"A+ necesita manejador")
  assert.ok(shell.includes('ja-large-ui'),"A+ debe tener efecto visible en UI")
  assert.ok(settings.includes('dispatch("largeUiChange"'),"Preferencia tipográfica desconectada")
