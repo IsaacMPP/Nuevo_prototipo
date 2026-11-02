@@ -516,7 +516,7 @@
         if (!scriptureView) return
         e.preventDefault()
         e.stopImmediatePropagation()
-        void (scriptureView as any).navigatePreparedVerse(e.key === "ArrowLeft")
+        void (scriptureView as any).navigatePreparedVerse(e.key === "ArrowLeft").catch((error: unknown) => notice("No se pudo cambiar de versículo: " + String(error)))
     }
     function updateBibleUI() {
         if (mode !== "biblia") return
@@ -727,6 +727,19 @@
         }
     }
     function updatePreviewProgress() {
+        const isScriptureDraft = !!biblePreviewRenderer && biblePreviewReady
+        const playButton = el("btnPreviewPlay") as HTMLButtonElement | null
+        const muteButton = el("btnPreviewMute") as HTMLButtonElement | null
+        const seek = el("previewSeekSlider") as HTMLInputElement | null
+        if (playButton) {
+            playButton.disabled = isScriptureDraft || !previewMedia
+            playButton.title = isScriptureDraft ? "Biblia: usa las flechas o selecciona otro versículo" : "Pausar/reproducir Vista previa"
+        }
+        if (muteButton) {
+            muteButton.disabled = isScriptureDraft || !previewMedia
+            if (isScriptureDraft) muteButton.title = "La Biblia no tiene audio en Vista previa"
+        }
+        if (seek && isScriptureDraft) seek.disabled = true
         const counter = el("previewTimeCounter")
         if (counter && previewMedia) counter.textContent = time(previewMedia.currentTime) + " / " + time(previewMedia.duration)
         const slider = el("previewSeekSlider") as HTMLInputElement | null
@@ -736,7 +749,7 @@
             if (document.activeElement !== slider) slider.value = String(previewMedia.currentTime)
         }
         const play = el("btnPreviewPlay") as HTMLButtonElement | null
-        if (play) play.textContent = previewMedia?.paused ? "▶" : "Ⅱ"
+        if (play) play.textContent = previewMedia ? (previewMedia.paused ? "▶" : "Ⅱ") : "▶"
         const mute = el("btnPreviewMute") as HTMLButtonElement | null
         if (mute) {
             mute.textContent = previewMedia?.muted ? "🔇" : "🔊"

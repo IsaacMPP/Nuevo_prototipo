@@ -27,6 +27,8 @@
     import Center from "../../system/Center.svelte"
     import { createScriptureShow, formatBibleText, getShortBibleName, getVerseIdParts, getVersePartLetter, joinRange, loadJsonBible, moveSelection, outputIsScripture, playScripture, getControlledScriptureReference, getLiveScriptureOutputIds, hasLiveScriptureOutput, refreshLiveScripture, sanitizeVerseText, scriptureRangeSelect, sendScriptureToJAOutputs, sortScriptureSelection, splitText, swapPreviewBible } from "./scripture"
 
+    export let geminiPreviewOnly = false
+
     // JA: refresh the current projected verse when its active Scripture template
     // changes. The template is stored once and reused for subsequent verses.
     // Avoid firing while Scripture is not being projected, or on unrelated templates.
@@ -44,9 +46,9 @@
         if (signature === lastLiveStyle) return
         lastLiveStyle = signature
         if (liveStyleTimer) clearTimeout(liveStyleTimer)
-        if (!templateId || !hasLiveScriptureOutput(get(outputs))) return
+        if (geminiPreviewOnly || !templateId || !hasLiveScriptureOutput(get(outputs))) return
         liveStyleTimer = setTimeout(() => {
-            if (hasLiveScriptureOutput(get(outputs))) void refreshLiveScripture()
+            if (!geminiPreviewOnly && hasLiveScriptureOutput(get(outputs))) void refreshLiveScripture()
         }, 160)
     })
     onDestroy(() => {
@@ -57,8 +59,6 @@
     export let active: string | null
     export let searchValue: string
     // En la consola Gemini, seleccionar un versículo prepara contenido privado.
-    export let geminiPreviewOnly = false
-
     $: activeScriptureId = active || ""
     $: activeScriptures = [activeScriptureId]
     $: if ($scriptures[activeScriptureId]?.collection?.versions) activeScriptures = $scriptures[activeScriptureId].collection.versions
