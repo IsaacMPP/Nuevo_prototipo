@@ -1,6 +1,6 @@
 // Shared, side-effect-free policy for the Gemini library.
 // Paths come from native READ_FOLDER or the JA hymnal scanner, never from mock data.
-import { audioExtensions, imageExtensions, videoExtensions } from "../../values/extensions"
+import { audioExtensions, imageExtensions, videoExtensions } from "../values/extensions"
 import { isJAExclusiveHymnPath, normalizeJAContentPath } from "./jaHymnPaths"
 
 export type GeminiMediaType = "video" | "image" | "audio"
