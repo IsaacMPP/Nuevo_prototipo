@@ -23,6 +23,16 @@ jobs:
         run: npm run build:ui
       - name: Integrar Gemini con la consola Svelte FreeShow
         run: node experiments/ja-gemini-freeshow/prepare-gemini.cjs
+      - name: Auditar todos los controles del DOM Gemini compilado
+        run: |
+          node --test experiments/ja-gemini-freeshow/audit-controls.test.cjs
+          node experiments/ja-gemini-freeshow/audit-controls.cjs
+      - name: Publicar inventario de controles Gemini
+        uses: actions/upload-artifact@v4
+        with:
+          name: JA-Gemini-Auditoria-Controles
+          path: experiments/ja-gemini-freeshow/build-audit/*
+          retention-days: 14
       - name: Verificaciones de aislamiento y archivo generado
         run: node --test experiments/ja-gemini-freeshow/integration.test.cjs
       - name: Dependencias completas de FreeShow y Electron
