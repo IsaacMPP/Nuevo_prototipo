@@ -570,3 +570,32 @@ test("Himnario: coincidencias parciales por número y palabras sin alterar tarje
  assert.ok(s.includes('visual.className="aspect-video rounded-md bg-[#06132a] flex items-center justify-center text-sky-300 overflow-hidden"'),"Respetar miniaturas originales")
  assert.ok(!fn.includes("setOutput(") && !fn.includes("sendToJAOutputs("),"Buscar no puede proyectar")
 });
+
+test("Multimedia P3: videos, imágenes y audio se gestionan por rutas reales aisladas",()=>{
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const renderer=read("engine/src/frontend/components/output/layers/Media.svelte")
+ const background=read("engine/src/frontend/components/output/layers/BackgroundMedia.svelte")
+ const audio=read("engine/src/frontend/components/ja/JaGeminiAudioControls.svelte")
+ const css=read("engine/public/ja-gemini-layout.css")
+ const extensions=read("engine/src/frontend/values/extensions.ts")
+ const onlyAudio=shell.split("async function publishPreparedAudio(path:string,targets:string[])")[1].split("function sendToQuickTargets()")[0]
+ assert.ok(shell.includes('import { AudioPlayer } from "../../audio/audioPlayer"'),"Debe usar motor de audio FreeShow")
+ assert.ok(onlyAudio.includes("AudioPlayer.start(path,{name:fileName(path)},{playMultiple:true,startPaused:true})"),"No borrar sesiones ajenas al iniciar audio")
+ assert.ok(onlyAudio.includes("jaAudioPath")&&onlyAudio.includes("AudioPlayer.stop(previous)"),"Solo reemplazar pista de JA")
+ assert.ok(onlyAudio.includes('targets.includes(primary)'),"No habilitar audio fuera de pantalla principal")
+ assert.ok(onlyAudio.includes('targetSnapshot!==markedGroupTargets().join("|")'),"Prevenir reproducción tras cambios de destinos")
+ assert.ok(onlyAudio.includes("AudioPlayer.getPlaying(path)"),"Confirmar sesión nativa antes de indicar éxito")
+ assert.ok(!onlyAudio.includes("setOutput(")&&!onlyAudio.includes("sendToJAOutputs("),"Audio no debe borrar imágenes ni enviar un fondo no soportado")
+ assert.ok(shell.includes('if(kind==="audio"){void publishPreparedAudio(mediaPath,targets);return}'),"Envío grupal de audio separado del video")
+ assert.ok(shell.includes('if(kind==="audio"){void publishPreparedAudio(mediaPath,[destinationId]);return}'),"Envío individual de audio separado del video")
+ assert.ok(background.includes('if (type === "video" || type === "image") type = "media"'),"Motor solo muestra imágenes y videos")
+ assert.ok(renderer.includes('{#if type === "video"}')&&renderer.includes('{:else if type === "image"}'),"Conservar renderizador nativo")
+ for(const ext of ["mp4","webm","jpg","png","mp3","wav","ogg","flac","m4a"])assert.ok(extensions.includes('"'+ext+'"'),"Extensión no indexada: "+ext)
+ assert.ok(shell.includes("poster.className=\\"ja-native-audio-preview\\""),"Vista previa debe mostrar audio de forma comprensible")
+ assert.ok(shell.includes('img.onerror=()=>{if(img.isConnected)'),"Imagen inválida no se debe reportar como éxito")
+ assert.ok(audio.includes("AudioPlayer.pause(path)")&&audio.includes("AudioPlayer.play(path)")&&audio.includes("AudioPlayer.stop(path)"),"Controles de audio reales")
+ assert.ok(audio.includes("AudioPlayer.setTime(path"),"Seek de audio real")
+ assert.ok(audio.includes("AudioAnalyser.setSourceVolume(path"),"Control de ganancia del audio nativo")
+ assert.ok(css.includes(".ja-native-audio-panel")&&css.includes(".ja-native-audio-preview"),"Estilos de audio sin cambiar tarjetas")
+ assert.ok(shell.includes('item.className="ja-media-card p-2 min-w-0 rounded-lg bg-[#0a1938] border border-[#24446f] text-left hover:border-cyan-400"'),"Conservar miniaturas aprobadas")
+});

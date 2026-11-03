@@ -26,6 +26,9 @@
     import { OUTPUT } from "../../../types/Channels"
     import { send } from "../../utils/request"
     import { VideoPlayer } from "../media/video/videoPlayer"
+    import { AudioPlayer } from "../../audio/audioPlayer"
+    import { playingAudio } from "../../stores"
+    import JaGeminiAudioControls from "./JaGeminiAudioControls.svelte"
     import { videoSync } from "../media/video/videoSync"
     import PreviewOutput from "../output/preview/PreviewOutput.svelte"
     import JaGeminiBiblePreview from "./JaGeminiBiblePreview.svelte"
@@ -123,6 +126,11 @@
     let programSeek: HTMLInputElement | null = null
     let programVolume: HTMLInputElement | null = null
     let previewMedia: HTMLMediaElement | null = null
+    let jaAudioPath=""
+    let jaAudioBusy=false
+    let jaAudioGeneration=0
+    let jaAudioContainer: HTMLDivElement | null = null
+    let jaAudioControls: JaGeminiAudioControls | null = null
     let biblePreviewRenderer: JaGeminiBiblePreview | null = null
     let biblePreviewTimer: ReturnType<typeof setTimeout> | null = null
     let biblePreviewGeneration = 0
@@ -366,6 +374,67 @@
                 "Marcar pantallas no modifica lo que ya está en Programa"
         }
     }
+    // Audio is a nonvisual FreeShow channel: never set a background with type
+    // "audio" (BackgroundMedia cannot render it). Use the engine's real
+    // AudioPlayer, and never clear the slide/background on any screen.
+    function showJAOwnedAudio(path:string){
+        if(!jaAudioContainer){
+            notice("Audio iniciado; panel de controles no disponible en esta vista.")
+            return
+        }
+        jaAudioControls?.$destroy()
+        jaAudioControls=new JaGeminiAudioControls({target:jaAudioContainer,props:{path}})
+        jaAudioContainer.hidden=false
+        const close=()=>{
+            if(jaAudioPath!==path)return
+            jaAudioPath=""
+            jaAudioControls?.$destroy()
+            jaAudioControls=null
+            if(jaAudioContainer)jaAudioContainer.hidden=true
+        }
+        jaAudioControls.$on("ended",close)
+        jaAudioControls.$on("stopped",close)
+    }
+    async function publishPreparedAudio(path:string,targets:string[]){
+        if(jaAudioBusy)return notice("El audio anterior todavía está preparándose.")
+        if(get(outLocked))return notice("Las salidas están bloqueadas.")
+        const available=chooseOutput()
+        const primary=localStorage.getItem("ja-main-projector")||(available.length===1?available[0]:"")
+        if(!primary || !available.includes(primary) || !targets.includes(primary) ||
+            !targets.every(id=>available.includes(id)))
+            return notice("Para reproducir audio, incluye Primario entre las pantallas marcadas y verifica que esté activo.")
+        if(getMediaType(getExtension(path))!=="audio")
+            return notice("Selecciona un archivo de audio válido.")
+        if(get(playingAudio)[path] && jaAudioPath!==path)
+            return notice("Este archivo ya suena en otro reproductor de FreeShow. No tomaré control de esa sesión.")
+        const token=++jaAudioGeneration
+        const targetSnapshot=targets.join("|")
+        const previous=jaAudioPath
+        jaAudioBusy=true
+        try{
+            const active=AudioPlayer.audioExists(path)
+            const started=active || await AudioPlayer.start(path,{name:fileName(path)},{playMultiple:true,startPaused:true})
+            const session=AudioPlayer.getPlaying(path)
+            if(!started || !session?.audio){
+                notice("FreeShow no pudo abrir este audio. Revisa el formato y el archivo.")
+                return
+            }
+            if(token!==jaAudioGeneration || prepared!==path || get(outLocked) ||
+                targetSnapshot!==markedGroupTargets().join("|") ||
+                !chooseOutput().includes(primary)){
+                if(!active)AudioPlayer.stop(path)
+                notice("Cambió la preparación durante la carga del audio; no se inició.")
+                return
+            }
+            if(previous && previous!==path && AudioPlayer.audioExists(previous))AudioPlayer.stop(previous)
+            jaAudioPath=path
+            showJAOwnedAudio(path)
+            if(AudioPlayer.isPaused(path))AudioPlayer.play(path)
+            notice("Audio reproducido por el motor de FreeShow en la consola. La imagen y los videos de las pantallas no cambiaron.")
+        }catch(error){
+            notice("No fue posible reproducir el audio: "+String(error))
+        }finally{if(token===jaAudioGeneration)jaAudioBusy=false}
+    }
     function sendToQuickTargets() {
         if(publishingGroup)return notice("Ya se está preparando un envío sincronizado.")
         const selected=markedGroupTargets()
@@ -408,6 +477,7 @@
         if(!prepared)return notice("Prepara primero un vídeo o imagen en Vista previa.")
         const mediaPath=prepared
         const kind=getMediaType(getExtension(mediaPath))
+        if(kind==="audio"){void publishPreparedAudio(mediaPath,targets);return}
         const idSnapshot=targets.join("|")
         publishingGroup=true;refreshGroupChoices()
         try {
@@ -477,6 +547,7 @@
             return notice("La salida seleccionada está inactiva o bloqueada.")
         const mediaPath=prepared
         const kind=getMediaType(getExtension(mediaPath))
+        if(kind==="audio"){void publishPreparedAudio(mediaPath,[destinationId]);return}
         // No sobreescribir transiciones globales ni estilos: restaurar exactamente
         // la ruta nativa que sí publicaba archivos antes de la regresión.
         try {
@@ -1754,8 +1825,22 @@
         target.replaceChildren()
         const type = getMediaType(getExtension(path))
         if (type === "video" || type === "audio") {
+            if(type==="audio"){
+                const poster=document.createElement("div")
+                poster.className="ja-native-audio-preview"
+                poster.setAttribute("role","img")
+                poster.setAttribute("aria-label","Archivo de audio seleccionado: "+fileName(path))
+                const symbol=document.createElement("span")
+                symbol.textContent="♫"
+                const title=document.createElement("strong")
+                title.textContent=fileName(path)
+                const hint=document.createElement("small")
+                hint.textContent="Vista previa silenciada · usa ▶ y 🔊 para escuchar"
+                poster.append(symbol,title,hint)
+                target.append(poster)
+            }
             const m = document.createElement(type === "video" ? "video" : "audio")
-            m.className = "w-full h-full object-contain"
+            m.className = type==="audio" ? "ja-native-audio-preview-element" : "w-full h-full object-contain"
             m.src = encodeFilePath(path)
             m.preload = "auto"
             m.setAttribute("playsinline", "")
@@ -1783,6 +1868,7 @@
             img.src = encodeFilePath(path)
             img.alt = fileName(path)
             img.className = "w-full h-full object-contain"
+            img.onerror=()=>{if(img.isConnected){img.replaceWith(document.createTextNode("No se pudo abrir esta imagen. Comprueba su formato y ruta."));notice("Vista previa: imagen no compatible o inaccesible.")}}
             target.append(img)
         }
         const label = el("previewTimeCounter")
@@ -1926,6 +2012,13 @@
             programMute = mute
             programButtons.append(mute)
             cleanup.push(() => mute.remove())
+            // Own small audio strip below Program transport. The existing
+            // video timer, seek and volume remain exactly as approved.
+            jaAudioContainer=document.createElement("div")
+            jaAudioContainer.className="ja-audio-controller-slot"
+            jaAudioContainer.hidden=true
+            programButtons.parentElement?.after(jaAudioContainer)
+            cleanup.push(()=>jaAudioContainer?.remove())
         }
 
         // En esta versión existe UNA sola vista de preparación y UNA salida JA.
@@ -2015,6 +2108,13 @@
             screenRenderers=[]
             libraryToolbar?.remove()
             previewMedia?.pause()
+            ++jaAudioGeneration
+            jaAudioControls?.$destroy()
+            jaAudioControls=null
+            // Do not stop unrelated FreeShow music. Only the session started
+            // explicitly from this JA console belongs to us.
+            if(jaAudioPath && AudioPlayer.audioExists(jaAudioPath))AudioPlayer.stop(jaAudioPath)
+            jaAudioPath=""
             stopVideoState?.()
             programRenderer?.$destroy()
             for (const off of cleanup) off()
