@@ -777,7 +777,12 @@
                     if(publishingGroup)return
                     if(syncedTargetIds.has(id))syncedTargetIds.delete(id)
                     else syncedTargetIds.add(id)
-                    refreshGroupChoices()
+                    // Preserve the familiar single-target inspection. With two
+                    // or more checked outputs, keep the current Program view.
+                    if(syncedTargetIds.size===1) {
+                        selectedId=[...syncedTargetIds][0]
+                        rebuildOutputs()
+                    } else refreshGroupChoices()
                 }
                 targets?.append(target)
             }
