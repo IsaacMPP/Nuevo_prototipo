@@ -1303,7 +1303,7 @@
             notice("Biblia proyectada, pero todavía no se confirmó el seguimiento nativo de versículos.")
     }
     function enqueueBibleNavigation(moveLeft: boolean) {
-        if(mode!=="biblia" || !scriptureView || settingsOpen || bibleControlRestoring)return
+        if(mode!=="biblia" || !scriptureView || settingsOpen || bibleEditorOpen || bibleControlRestoring)return
         if(bibleNavigationQueue.length>=8)return notice("Hay demasiados cambios pendientes; comprueba la salida.")
         bibleNavigationQueue.push(moveLeft)
         void runBibleNavigation()
@@ -1345,7 +1345,7 @@
         }
     }
     function keyboardGeminiBible(e: KeyboardEvent) {
-        if (mode !== "biblia" || settingsOpen || !["ArrowLeft","ArrowRight"].includes(e.key)) return
+        if (mode !== "biblia" || settingsOpen || bibleEditorOpen || !["ArrowLeft","ArrowRight"].includes(e.key)) return
         if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return
         const focused = document.activeElement as HTMLElement | null
         const target = e.target as HTMLElement | null

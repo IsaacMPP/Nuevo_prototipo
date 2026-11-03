@@ -12,6 +12,10 @@
     $: appearance = $jaBibleAppearances[outputId] || DEFAULT_JA_BIBLE_APPEARANCE
     $: customized = !!$jaBibleAppearances[outputId]
     $: screenName = $outputs[outputId]?.name || "Salida seleccionada"
+    const chooseWeight=(value:string) => setStyle("fontWeight",value==="bold"?"bold":"normal")
+    const chooseHorizontal=(value:string) => setStyle("textAlign",value==="left"||value==="right"?value:"center")
+    const chooseVertical=(value:string) => setStyle("verticalAlign",value==="top"||value==="bottom"?value:"center")
+    const chooseBackgroundMode=(value:string) => setStyle("backgroundMode",value==="image"?"image":"color")
     function setStyle<K extends keyof JABibleAppearance>(key:K,value:JABibleAppearance[K]) {
         if(!outputId)return
         setJABibleAppearance(outputId,{[key]:value} as Partial<JABibleAppearance>)
@@ -51,7 +55,7 @@
             <label class="editor-field">
                 <span>Grosor</span>
                 <select aria-label="Grosor del texto" value={appearance.fontWeight}
-                    on:change={(e) => setStyle("fontWeight",e.currentTarget.value as "normal"|"bold")}>
+                    on:change={(e) => chooseWeight(e.currentTarget.value)}>
                     <option value="normal">Normal</option><option value="bold">Negrita</option>
                 </select>
             </label>
@@ -60,14 +64,14 @@
             <label class="editor-field">
                 <span>Alineación horizontal</span>
                 <select aria-label="Alineación horizontal bíblica" value={appearance.textAlign}
-                    on:change={(e) => setStyle("textAlign",e.currentTarget.value as JABibleAppearance["textAlign"])}>
+                    on:change={(e) => chooseHorizontal(e.currentTarget.value)}>
                     <option value="left">Izquierda</option><option value="center">Centro</option><option value="right">Derecha</option>
                 </select>
             </label>
             <label class="editor-field">
                 <span>Posición vertical</span>
                 <select aria-label="Alineación vertical bíblica" value={appearance.verticalAlign}
-                    on:change={(e) => setStyle("verticalAlign",e.currentTarget.value as JABibleAppearance["verticalAlign"])}>
+                    on:change={(e) => chooseVertical(e.currentTarget.value)}>
                     <option value="top">Arriba</option><option value="center">Centro</option><option value="bottom">Abajo</option>
                 </select>
             </label>
@@ -81,7 +85,7 @@
         <label class="editor-field">
             <span>Fondo de los versículos</span>
             <select aria-label="Tipo de fondo bíblico" value={appearance.backgroundMode}
-                on:change={(e) => setStyle("backgroundMode",e.currentTarget.value as JABibleAppearance["backgroundMode"])}>
+                on:change={(e) => chooseBackgroundMode(e.currentTarget.value)}>
                 <option value="color">Color sólido</option><option value="image">Imagen propia</option>
             </select>
         </label>

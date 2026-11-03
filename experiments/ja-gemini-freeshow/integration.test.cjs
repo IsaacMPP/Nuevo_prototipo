@@ -499,5 +499,11 @@ test("Biblia: editor preserva referencia, traducción y tamaño original de tít
  assert.ok(model.includes('const hasVerseKeys=items.some('),"Distinguir cuerpo de versículos")
  assert.ok(model.includes("if(hasVerseKeys && !hasVerses)return item"),"No tocar marcos de título o referencia")
  assert.ok(model.includes("verseKey(segment.sourceDynamicKey)"),"No cambiar tamaño de la referencia")
- assert.ok(model.includes('new Set([...(previous?.enabledFields||[]),...Object.keys(patch)')),"No duplicar cambios al arrastrar el tamaño")
+ assert.ok(model.includes("const enabledFields=[...new Set("),"No duplicar cambios al arrastrar el tamaño")
+});
+
+test("Biblia: editor bloquea navegación accidental mientras está abierto",()=>{
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ assert.ok(shell.includes('settingsOpen || bibleEditorOpen || bibleControlRestoring'),"Botones no deben navegar al editar")
+ assert.ok(shell.includes('settingsOpen || bibleEditorOpen || !["ArrowLeft"'),"Atajos no deben navegar al editar")
 });
