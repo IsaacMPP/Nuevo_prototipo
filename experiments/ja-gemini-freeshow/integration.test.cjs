@@ -591,7 +591,7 @@ test("Multimedia P3: videos, imágenes y audio se gestionan por rutas reales ais
  assert.ok(background.includes('if (type === "video" || type === "image") type = "media"'),"Motor solo muestra imágenes y videos")
  assert.ok(renderer.includes('{#if type === "video"}')&&renderer.includes('{:else if type === "image"}'),"Conservar renderizador nativo")
  for(const ext of ["mp4","webm","jpg","png","mp3","wav","ogg","flac","m4a"])assert.ok(extensions.includes('"'+ext+'"'),"Extensión no indexada: "+ext)
- assert.ok(shell.includes("poster.className=\\"ja-native-audio-preview\\""),"Vista previa debe mostrar audio de forma comprensible")
+ assert.ok(shell.includes('poster.className="ja-native-audio-preview"'),"Vista previa debe mostrar audio de forma comprensible")
  assert.ok(shell.includes('img.onerror=()=>{if(img.isConnected)'),"Imagen inválida no se debe reportar como éxito")
  assert.ok(audio.includes("AudioPlayer.pause(path)")&&audio.includes("AudioPlayer.play(path)")&&audio.includes("AudioPlayer.stop(path)"),"Controles de audio reales")
  assert.ok(audio.includes("AudioPlayer.setTime(path"),"Seek de audio real")
