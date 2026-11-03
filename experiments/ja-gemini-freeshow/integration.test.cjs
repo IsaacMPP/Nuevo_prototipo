@@ -544,7 +544,7 @@ test("Himnario y Multimedia: catálogo completo en lotes, sin límite fijo de 16
  assert.ok(source.includes('button.textContent="Mostrar "+Math.min('),"Debe haber alternativa accesible sin scroll")
  assert.ok(shell.includes('grid.addEventListener("scroll",onScroll,{passive:true})'),"La lista debe crecer al desplazarse")
  assert.ok(shell.includes('if(area.scrollHeight-area.scrollTop-area.clientHeight<420)'),"No pedir 613 miniaturas de una vez")
- assert.ok(shell.includes('if(thumbObserver) { thumbObserver.disconnect(); thumbObserver = null }'),"Desconectar miniaturas obsoletas al filtrar")
+ assert.ok(shell.includes('if (thumbObserver) { thumbObserver.disconnect(); thumbObserver = null }'),"Desconectar miniaturas obsoletas al filtrar")
  assert.ok(shell.includes("queuedHymnThumbnail(mediaPath)"),"Conservar caché y cola de miniaturas reales")
  assert.ok(shell.includes("clearHymnThumbnailRequests();void refreshJAHymnLibrary()"),"Actualizar también debe reintentar miniaturas fallidas")
  assert.ok(library.includes("export function geminiHymnSearch"),"Búsqueda por número y nombre del catálogo completo")
