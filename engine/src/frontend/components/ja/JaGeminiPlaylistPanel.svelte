@@ -144,12 +144,12 @@
                 <div class="dock-options">
                     <label><input type="checkbox" checked={playlist.autoNext}
                         on:change={e=>action("autoNext",{id:playlist.id,value:e.currentTarget.checked})}/> Siguiente automático</label>
-                    <div class="play-modes" role="group" aria-label="Modo de reproducción">
+                    <div class="play-modes" role="group" aria-label="Modo de reproducción, modificable durante la música">
                         {#each [{v:"normal",i:"☷",n:"Normal"},{v:"shuffle",i:"⤨",n:"Aleatorio"},
                             {v:"repeat-all",i:"↻",n:"Repetir lista"},{v:"repeat-one",i:"↻1",n:"Repetir canción"}] as mode}
                             <button type="button" class:active={playlist.playMode===mode.v}
                                 aria-pressed={playlist.playMode===mode.v}
-                                title={mode.n} on:click={()=>action("playMode",{id:playlist.id,playMode:mode.v})}>
+                                title={mode.n+" · cambiar sin detener la canción actual"} on:click={()=>action("playMode",{id:playlist.id,playMode:mode.v})}>
                                 <span>{mode.i}</span><small>{mode.n}</small>
                             </button>
                         {/each}

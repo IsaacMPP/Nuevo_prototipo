@@ -795,3 +795,21 @@ test("P5: bucle de video dentro de lista no provoca avance automático",()=>{
  assert.ok(monitor.includes('playlistNearEnd=false'),"No avanzar accidentalmente al cruzar fin en bucle")
  assert.ok(monitor.includes('return'),"Seguir video en bucle hasta Siguiente manual")
 });
+
+test("P5: cambiar modo de playlist en vivo conserva el reloj y reordena solo lo pendiente",()=>{
+ const s=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const ui=read("engine/src/frontend/components/ja/JaGeminiPlaylistPanel.svelte")
+ const block=s.split('if(event.type==="playMode"){')[1].split('if(event.type==="loopVideo"){')[0]
+ assert.ok(!block.includes("Detén la lista antes"),"Los modos deben cambiar durante reproducción")
+ assert.ok(block.includes("const active=playlistRunning && playlistCurrentId===id"),"No alterar otra lista")
+ assert.ok(block.includes('if(nextMode==="shuffle")'),"Crear recorrido nuevo al activar aleatorio")
+ assert.ok(block.includes("jaShuffleOrder(list.entries.length,playlistIndex)"),"La pista actual queda en primer lugar")
+ assert.ok(block.includes("playlistShufflePosition=0"),"La siguiente canción parte de una nueva cola")
+ assert.ok(block.includes("playlistShuffleOrder=[]"),"Al desactivar aleatorio se abandona la cola anterior")
+ assert.ok(block.includes("updateJAPlaylist(id,l=>({...l,playMode:nextMode"),"Guardar el modo seleccionado")
+ for(const prohibited of ["AudioPlayer.stop(","VideoPlayer.stop(","VideoPlayer.seekTo(","AudioPlayer.pause(","VideoPlayer.pause(","playJAPlaylistIndex("]){
+    assert.ok(!block.includes(prohibited),"Cambiar modo nunca debe alterar/reiniciar el reloj: "+prohibited)
+ }
+ assert.ok(ui.includes('modificable durante la música'),"Los controles anuncian cambio en vivo")
+ assert.ok(ui.includes('cambiar sin detener la canción actual'),"Se informa la acción al operador")
+});

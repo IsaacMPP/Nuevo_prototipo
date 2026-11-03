@@ -873,8 +873,30 @@
             return
         }
         if(event.type==="playMode"){
-            if(playlistRunning&&playlistCurrentId===id)return notice("Detén la lista antes de cambiar el modo de recorrido.")
-            updateJAPlaylist(id,l=>({...l,playMode:jaPlaybackMode(event.playMode),repeat:event.playMode==="repeat-all"}))
+            // Operator may switch Normal / Shuffle / Repeat while the track is
+            // playing. This changes only queue traversal: never pause, seek,
+            // stop or recreate the FreeShow audio/video session.
+            const nextMode=jaPlaybackMode(event.playMode)
+            const active=playlistRunning && playlistCurrentId===id
+            if(active){
+                if(nextMode==="shuffle"){
+                    // New shuffled pass starts AFTER the current song, without
+                    // replaying songs before the operator changes the mode.
+                    playlistShuffleOrder=jaShuffleOrder(list.entries.length,playlistIndex)
+                    playlistShufflePosition=0
+                }else{
+                    playlistShuffleOrder=[]
+                    playlistShufflePosition=0
+                }
+                // Clear only pending EOF detection, not the current clock.
+                // The next polling tick continues observing the same track.
+                playlistNearEnd=false
+            }
+            updateJAPlaylist(id,l=>({...l,playMode:nextMode,repeat:nextMode==="repeat-all"}))
+            notice("Modo de lista: "+(
+                nextMode==="shuffle"?"Aleatorio":nextMode==="repeat-all"?"Repetir lista":
+                nextMode==="repeat-one"?"Repetir canción":"Normal")+
+                (active?". La canción actual continúa sin reiniciar.":""))
             return
         }
         if(event.type==="loopVideo"){
