@@ -306,3 +306,5 @@ Prompt autocontenido: continuar JA Proyecciones repo IsaacMPP/Nuevo_prototipo, r
 CI inicial P5 #41698304080: 53/54 pruebas de aislamiento pasaron. Una prueba anterior de reloj multipantalla incluía el nuevo controlador de playlists dentro de su rango, encontró startAt:0 de un video nuevo y falló aunque el método de vinculación aún conserva el tiempo. Se delimitó la prueba al método correcto sin modificar funcionalidad.
 
 Refinamiento P5: Reproducir una entrada explícita de playlist reinicia esa entrada desde 0:00; recuperar pantallas en la acción normal de multipantalla conserva el reloj existente. Cambiar desde una canción en video a una entrada Solo audio congela la imagen anterior y pausa el sonido del video previo para evitar pistas simultáneas. El modal Listas bloquea atajos de navegación bíblica y se cierra con Escape.
+
+CI segundo intento #41699572786: fallo exclusivo de aserción textual antigua que esperaba atajos sin bloqueo de playlists. Ahora el código protege más estados, pero la prueba se actualizó para verificar el nuevo `playlistOpen` adicional. No hubo cambios al motor de proyección en esta corrección.

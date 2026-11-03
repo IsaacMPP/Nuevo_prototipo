@@ -505,7 +505,7 @@ test("Biblia: editor preserva referencia, traducción y tamaño original de tít
 test("Biblia: editor bloquea navegación accidental mientras está abierto",()=>{
  const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
  assert.ok(shell.includes('settingsOpen || bibleEditorOpen || bibleControlRestoring'),"Botones no deben navegar al editar")
- assert.ok(shell.includes('settingsOpen || bibleEditorOpen || !["ArrowLeft"'),"Atajos no deben navegar al editar")
+ assert.ok(shell.includes('settingsOpen || bibleEditorOpen || playlistOpen || !["ArrowLeft"'),"Atajos no deben navegar al editar Biblia o playlists")
 });
 
 test("Biblia: opacidad del rectángulo editada por pantalla, sin transparencia en letras",()=>{
