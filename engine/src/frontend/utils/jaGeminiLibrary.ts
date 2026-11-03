@@ -36,3 +36,23 @@ export function geminiSearch(items: GeminiFile[], query: string, type: GeminiMed
     const normalized = (query||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("es").trim()
     return items.filter(item => (type==="all" || item.kind===type) && (!normalized || item.name.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("es").includes(normalized)))
 }
+
+/** Use filenames as supplied by the real scanner. The number and title are
+ * separate presentation data; no file is renamed, copied or changed. */
+export function geminiHymnLabel(filename:string):{number:string;title:string}{
+    const base=(filename||"").replace(/\.[^.]+$/,"").trim()
+    const match=base.match(/^#?\s*(\d{1,4})\s*[-._)]?\s+(.+)$/)
+    return match ? {number:match[1],title:match[2].trim()} : {number:"",title:base}
+}
+/** Match #371, 371 and 0371 by the filename's leading hymn number,
+ * searching the entire catalog rather than only rendered cards. */
+export function geminiHymnSearch(items:GeminiFile[],query:string):GeminiFile[]{
+    const exact=(query||"").trim().match(/^#?\s*0*(\d{1,4})\s*$/)
+    if(exact){
+        const number=Number(exact[1])
+        return items.filter(item=>item.kind==="video" &&
+            Number(geminiHymnLabel(item.name).number)===number &&
+            !!geminiHymnLabel(item.name).number)
+    }
+    return geminiSearch(items,(query||"").trim().replace(/^#(?=\d)/,""),"video")
+}

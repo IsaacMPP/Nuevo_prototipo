@@ -530,3 +530,29 @@ test("Biblia: opacidad del rectángulo editada por pantalla, sin transparencia e
  assert.ok(scripture.includes("jaBibleAppearance: appearance"),"Proyección lleva los ajustes a cada versículo")
  assert.ok(renderer.includes("applyJABibleAppearanceToItems(boundItems,outSlide.jaBibleAppearance)"),"Programa usa compositor FreeShow")
 });
+
+test("Himnario y Multimedia: catálogo completo en lotes, sin límite fijo de 160",()=>{
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const library=read("engine/src/frontend/utils/jaGeminiLibrary.ts")
+ const css=read("engine/public/ja-gemini-layout.css")
+ const source=shell.split("function appendLibraryPage(area:HTMLElement)")[1].split("function renderLibrary()")[0]
+ assert.ok(shell.includes("const LIBRARY_BATCH_SIZE = 48"),"Lotes limitados para equipos modestos")
+ assert.ok(!shell.includes("shown.slice(0, 160)"),"No ocultar himnos 161..613")
+ assert.ok(shell.includes("libraryResults = mode===\"himnario\""),"Búsqueda se ejecuta sobre catálogo completo")
+ assert.ok(source.includes("libraryResults.slice(libraryRenderedCount,last)"),"Carga incremental debe recorrer los resultados reales")
+ assert.ok(source.includes("libraryRenderedCount=last"),"El siguiente lote continúa desde el anterior")
+ assert.ok(source.includes('button.textContent="Mostrar "+Math.min('),"Debe haber alternativa accesible sin scroll")
+ assert.ok(shell.includes('grid.addEventListener("scroll",onScroll,{passive:true})'),"La lista debe crecer al desplazarse")
+ assert.ok(shell.includes('if(area.scrollHeight-area.scrollTop-area.clientHeight<420)'),"No pedir 613 miniaturas de una vez")
+ assert.ok(shell.includes('if(thumbObserver) { thumbObserver.disconnect(); thumbObserver = null }'),"Desconectar miniaturas obsoletas al filtrar")
+ assert.ok(shell.includes("queuedHymnThumbnail(mediaPath)"),"Conservar caché y cola de miniaturas reales")
+ assert.ok(shell.includes("clearHymnThumbnailRequests();void refreshJAHymnLibrary()"),"Actualizar también debe reintentar miniaturas fallidas")
+ assert.ok(library.includes("export function geminiHymnSearch"),"Búsqueda por número y nombre del catálogo completo")
+ assert.ok(library.includes('match(/^#?\\s*0*(\\d{1,4})\\s*$/)'),"Aceptar #371, #001 y número simple")
+ assert.ok(library.includes("export function geminiHymnLabel"),"Separar número del título sin renombrar archivos")
+ assert.ok(shell.includes("item.dataset.mediaPath=file.path"),"Tarjeta corresponde a su archivo real")
+ assert.ok(shell.includes("updatePreparedLibraryCards()"),"Mostrar cuál himno está en Vista previa")
+ assert.ok(css.includes(".ja-library-card-title")&&css.includes(".ja-library-prepared"),"Diseño de miniaturas legible y selección clara")
+ assert.ok(css.includes("grid-column:1/-1"),"Paginación ocupa toda la cuadrícula")
+ assert.ok(!source.includes("setOutput(")&&!source.includes("sendToJAOutputs("),"Cargar miniaturas jamás modifica la proyección")
+});

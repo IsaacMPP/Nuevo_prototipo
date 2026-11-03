@@ -7,12 +7,12 @@
     import { Main } from "../../../types/IPC/Main"
     import { ToMain } from "../../../types/IPC/ToMain"
     import { requestMain, sendMain, receiveToMain, destroyMain } from "../../IPC/main"
-    import { geminiCounts, geminiFileType, geminiLocalFiles, geminiSearch, type GeminiFile, type GeminiMediaType } from "../../utils/jaGeminiLibrary"
+    import { geminiCounts, geminiFileType, geminiLocalFiles, geminiSearch, geminiHymnSearch, geminiHymnLabel, type GeminiFile, type GeminiMediaType } from "../../utils/jaGeminiLibrary"
     import { isPathInJACollection, normalizeJAContentPath } from "../../utils/jaHymnPaths"
     import { hymnVideos, hymnCollectionPaths, hymnSourcePaths, hymnLinks, hymnSourceStatus, linkHymnFolder, unlinkHymnFolder, refreshJAHymnLibrary } from "../../utils/jaHymnLibrary"
     import { registerJAMediaFolders } from "../../utils/jaMediaFolders"
     import { videoExtensions, imageExtensions, audioExtensions } from "../../values/extensions"
-    import { queuedHymnThumbnail } from "../../utils/jaHymnThumbnailQueue"
+    import { queuedHymnThumbnail, clearHymnThumbnailRequests } from "../../utils/jaHymnThumbnailQueue"
     import { registerJARV1909 } from "../drawer/bible/jaBundledBible"
     import { jaControlledOutputId } from "../../utils/jaControlledOutput"
     import { sendScriptureToJAOutputs, prepareGeminiScriptureDraft, getLiveScriptureOutputIds, refreshLiveScripture } from "../drawer/bible/scripture"
@@ -56,6 +56,14 @@
     let quickTargetsInitialized = false
     let publishingGroup = false
     let mode: "multimedia" | "himnario" | "biblia" = "multimedia"
+    // The catalog is always complete in memory. Only DOM cards are batched to
+    // protect slow PCs from hundreds of thumbnail decoders at the same time.
+    const LIBRARY_BATCH_SIZE = 48
+    let libraryResults: GeminiFile[] = []
+    let libraryRenderedCount = 0
+    let libraryGrid: HTMLElement | null = null
+    let libraryLoadFooter: HTMLElement | null = null
+    let libraryAppending = false
     let scriptureView: Scripture | null = null
     let scriptureTarget: HTMLElement | null = null
     let activeBibleId = ""
@@ -542,6 +550,7 @@
         biblePreviewReady = false
         biblePreviewReference = ""
         prepared = ""
+        updatePreparedLibraryCards()
         followProgram = false
         const preview = el("previewCanvasContent")
         if (preview) {
@@ -1081,7 +1090,10 @@
         const refresh = document.createElement("button")
         refresh.type = "button"
         refresh.textContent = "↻ Actualizar"
-        refresh.onclick = () => mode === "multimedia" ? void scanMediaFolders() : void refreshJAHymnLibrary()
+        refresh.onclick = () => {
+            if(mode==="multimedia")void scanMediaFolders()
+            else {clearHymnThumbnailRequests();void refreshJAHymnLibrary()}
+        }
         libraryToolbar.append(refresh)
         const extras = mode === "multimedia"
             ? Object.entries(get(mediaFolders)).filter(([key,f])=>key.startsWith("ja_gemini_") && !!f?.path).map(([key,f])=>({label:f.name || f.path || key,path:f.path || "",key}))
@@ -1154,6 +1166,91 @@
         img.onerror=()=>{ if(img.isConnected) img.replaceWith(document.createTextNode("▶")) }
         container.replaceChildren(img)
     }
+    function updatePreparedLibraryCards(){
+        if(!libraryGrid)return
+        const selected=prepared ? normalizeJAContentPath(prepared) : ""
+        for(const card of libraryGrid.querySelectorAll<HTMLButtonElement>(".ja-library-item")){
+            const isSelected=!!selected && normalizeJAContentPath(card.dataset.mediaPath||"")===selected
+            card.classList.toggle("ja-library-prepared",isSelected)
+            card.setAttribute("aria-pressed",String(isSelected))
+        }
+    }
+    function appendLibraryPage(area:HTMLElement){
+        if(!host || libraryAppending || libraryGrid!==area || mode==="biblia" ||
+            libraryRenderedCount>=libraryResults.length)return
+        libraryAppending=true
+        try {
+            libraryLoadFooter?.remove()
+            libraryLoadFooter=null
+            const last=Math.min(libraryResults.length,libraryRenderedCount+LIBRARY_BATCH_SIZE)
+            const thumbnails:Array<{box:HTMLDivElement;file:GeminiFile}>=[]
+            const fragment=document.createDocumentFragment()
+            for(const file of libraryResults.slice(libraryRenderedCount,last)){
+                const item=document.createElement("button")
+                item.type="button"
+                item.className="ja-media-card ja-library-item"
+                item.dataset.mediaPath=file.path
+                item.title=file.path+"\\nClic para preparar en Vista previa"
+                const hymn=mode==="himnario" ? geminiHymnLabel(file.name) : null
+                const niceName=hymn?.title || file.name.replace(/\\.[^.]+$/,"")
+                item.setAttribute("aria-label","Preparar en Vista previa: "+(hymn?.number ? "Himno "+hymn.number+", " : "")+niceName)
+                const visual=document.createElement("div")
+                visual.className="ja-library-poster"
+                const meta=document.createElement("div")
+                meta.className="ja-library-card-meta"
+                if(hymn?.number){
+                    const number=document.createElement("span")
+                    number.className="ja-library-number"
+                    number.textContent=hymn.number
+                    number.setAttribute("aria-hidden","true")
+                    meta.append(number)
+                }
+                const label=document.createElement("span")
+                label.className="ja-library-card-title"
+                label.textContent=niceName
+                meta.append(label)
+                const hint=document.createElement("small")
+                hint.className="ja-library-card-hint"
+                hint.textContent=file.kind==="video"?"▶ Vista previa":file.kind==="image"?"▧ Imagen":"♫ Audio"
+                item.append(visual,meta,hint)
+                item.onclick=()=>prepare(file.path)
+                fragment.append(item)
+                thumbnails.push({box:visual,file})
+            }
+            area.append(fragment)
+            // Thumbnail observers must attach only once cards are connected.
+            for(const {box,file} of thumbnails)showNativeThumbnail(box,file)
+            libraryRenderedCount=last
+            const footer=document.createElement("div")
+            footer.className="ja-library-load-more"
+            footer.setAttribute("role","status")
+            const summary=document.createElement("span")
+            summary.textContent="Mostrando "+libraryRenderedCount+" de "+libraryResults.length+
+                (mode==="himnario"?" himnos":" archivos")+" reales"
+            footer.append(summary)
+            if(libraryRenderedCount<libraryResults.length){
+                const button=document.createElement("button")
+                button.type="button"
+                button.className="ja-library-load-button"
+                button.textContent="Mostrar "+Math.min(LIBRARY_BATCH_SIZE,libraryResults.length-libraryRenderedCount)+" más"
+                button.setAttribute("aria-label","Cargar más archivos de esta biblioteca")
+                button.onclick=()=>appendLibraryPage(area)
+                footer.append(button)
+            }else{
+                const complete=document.createElement("span")
+                complete.className="ja-library-complete"
+                complete.textContent="Catálogo completo"
+                footer.append(complete)
+            }
+            libraryLoadFooter=footer
+            area.append(footer)
+            updatePreparedLibraryCards()
+        }finally{libraryAppending=false}
+    }
+    function maybeAppendLibraryPage(area:HTMLElement){
+        if(libraryGrid!==area || libraryAppending || libraryRenderedCount>=libraryResults.length)return
+        if(area.scrollHeight-area.scrollTop-area.clientHeight<420)appendLibraryPage(area)
+    }
     function renderLibrary() {
         if (!host) return
         if (thumbObserver) { thumbObserver.disconnect(); thumbObserver = null }
@@ -1161,36 +1258,22 @@
         if (!area) return
         const files = sourceFiles()
         const searchInput = el(mode === "himnario" ? "hymnModuleSearch" : "multimediaSearchInput") as HTMLInputElement | null
-        const shown = geminiSearch(files, searchInput?.value || "", mode === "himnario" ? "video" : typeFilter)
+        libraryResults = mode==="himnario"
+            ? geminiHymnSearch(files,searchInput?.value||"")
+            : geminiSearch(files,searchInput?.value||"",typeFilter)
+        libraryGrid=area
+        libraryRenderedCount=0
+        libraryLoadFooter=null
         area.replaceChildren()
-        if (!shown.length) {
-            const msg = document.createElement("p")
-            msg.className = "col-span-full p-5 text-sm text-slate-300"
-            msg.textContent = scanning && mode==="multimedia" ? "Leyendo archivos del disco…" :
-                mode==="himnario" ? "Sin vídeos encontrados en esta colección. Vincula tu carpeta de himnos o pulsa Actualizar." :
-                files.length ? "No se encontraron archivos para este filtro." : "Sin archivos reales encontrados. Pulsa «Vincular carpeta» para elegir tus vídeos, imágenes o audio."
+        area.scrollTop=0
+        if(!libraryResults.length){
+            const msg=document.createElement("p")
+            msg.className="ja-library-empty"
+            msg.textContent=scanning && mode==="multimedia"?"Leyendo archivos del disco…" :
+                mode==="himnario" ? "Sin himnos encontrados. Prueba otro número o título, vincula una carpeta o pulsa Actualizar." :
+                files.length?"No hay archivos para este filtro.":"Sin archivos reales. Pulsa «Vincular carpeta» para seleccionar tus vídeos, imágenes o audio."
             area.append(msg)
-        }
-        for (const file of shown.slice(0, 160)) {
-            const item = document.createElement("button")
-            item.type = "button";item.title=file.path
-            item.className = "ja-media-card p-2 min-w-0 rounded-lg bg-[#0a1938] border border-[#24446f] text-left hover:border-cyan-400"
-            const visual = document.createElement("div")
-            visual.className = "aspect-video rounded-md bg-[#06132a] flex items-center justify-center text-sky-300 overflow-hidden"
-            const label = document.createElement("p")
-            label.className = "text-xs text-slate-200 truncate mt-2"
-            label.textContent = file.name
-            item.append(visual,label)
-            item.onclick=()=>prepare(file.path)
-            area.append(item)
-            showNativeThumbnail(visual,file)
-        }
-        if (shown.length>160) {
-            const info=document.createElement("p")
-            info.className="col-span-full text-xs text-slate-300 p-2"
-            info.textContent="Mostrando 160 de "+shown.length+" archivos reales. Filtra por nombre para ver otros."
-            area.append(info)
-        }
+        }else appendLibraryPage(area)
         showCounts()
         renderToolbar()
     }
@@ -1702,6 +1785,7 @@
         biblePreviewRenderer = null
         biblePreviewReady = false
         prepared = path
+        updatePreparedLibraryCards()
         const samePlayingVideo = !!(playingPath && selectedId &&
             normalizeJAContentPath(path)===normalizeJAContentPath(playingPath) &&
             !!VideoPlayer.getPlaying(playingPath,[selectedId]))
@@ -1929,6 +2013,15 @@
         hymnSearch?.addEventListener("input", renderLibrary)
         mediaSearch?.addEventListener("input", renderLibrary)
         cleanup.push(() => hymnSearch?.removeEventListener("input", renderLibrary), () => mediaSearch?.removeEventListener("input", renderLibrary))
+        // Independent scroll for each library. Never scroll the console, previews
+        // or output cards; only append another small batch near the grid bottom.
+        for(const id of ["hymnModuleGrid","multimediaCardsGrid"]){
+            const grid=el(id)
+            if(!grid)continue
+            const onScroll=()=>maybeAppendLibraryPage(grid)
+            grid.addEventListener("scroll",onScroll,{passive:true})
+            cleanup.push(()=>grid.removeEventListener("scroll",onScroll))
+        }
         const uOutputs = outputs.subscribe(() => { rebuildOutputs(); renderRealHeader(); if(mode==="biblia")updateBibleFollowControls() })
         const uPlayingForGroup = playingVideos.subscribe(() => { if(host)refreshGroupChoices() })
         const uGroupLock = outLocked.subscribe(() => { if(host)refreshGroupChoices() })
