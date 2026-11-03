@@ -319,6 +319,12 @@
             action.title=count===0 ? "Marca al menos una salida externa" :
                 "Proyectar el contenido preparado únicamente en las "+count+" salidas marcadas"
         }
+        const bibleProject=el("moduleView_biblia")?.querySelector<HTMLButtonElement>(".ja-bible-project")
+        if(bibleProject){
+            bibleProject.textContent=count>1 ? "▶ Proyectar en "+count+" pantallas" :
+                count===1 ? "▶ Proyectar en "+(get(outputs)[destinations[0]]?.name||"pantalla marcada") :
+                "▶ Marca una pantalla para proyectar"
+        }
         const status=host.querySelector<HTMLElement>(".ja-sync-state")
         if(status){
             const file=count>1 ? get(outputs)[destinations[0]]?.out?.background?.path||"" : ""
