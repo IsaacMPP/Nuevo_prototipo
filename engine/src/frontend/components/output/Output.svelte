@@ -230,7 +230,8 @@
     const setTemplateItems = () => (currentSlide!.items = setTemplateStyle(slide!, currentStyle, currentSlide!.items, outputId, currentSlide!.customDynamicValues))
     let styleTemplate: Template | null = null
     const getStyleTemplateData = () => (styleTemplate = getStyleTemplate(slide!, currentStyle))
-    $: templateBackground = styleTemplate?.settings?.backgroundPath || ""
+    $: jaBibleAppearance = slide?.id==="temp" ? slide.jaBibleAppearance : undefined
+    $: templateBackground = jaBibleAppearance ? "" : styleTemplate?.settings?.backgroundPath || ""
 
     // lines
     let lines: { [key: string]: { start: number | null; end: number | null; linesStart?: number | null; linesEnd?: number | null; clickRevealed?: boolean } } = {}
@@ -328,7 +329,9 @@
     $: cropping = currentOutput?.cropping || currentStyle?.cropping
 
     // values
-    $: backgroundColor = currentOutput?.transparent ? "transparent" : styleTemplate?.settings?.backgroundColor || currentSlide?.settings?.color || currentStyle?.background || slide?.settings?.backgroundColor || "black"
+    $: backgroundColor = currentOutput?.transparent ? "transparent"
+        : jaBibleAppearance ? (jaBibleAppearance.backgroundMode==="color" ? jaBibleAppearance.backgroundColor : "#000000")
+        : styleTemplate?.settings?.backgroundColor || currentSlide?.settings?.color || currentStyle?.background || slide?.settings?.backgroundColor || "black"
     // background image
     $: styleBackground = currentStyle?.clearStyleBackgroundOnText && (slide || background) ? "" : currentStyle?.backgroundImage || ""
     $: styleBackgroundData = { path: styleBackground, ...($media[styleBackground] || {}), loop: true }

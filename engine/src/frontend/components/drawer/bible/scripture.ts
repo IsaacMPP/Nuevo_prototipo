@@ -17,6 +17,7 @@ import { trackScriptureUsage } from "../../../utils/analytics"
 import { getJADestinations } from "../../../utils/jaProjectionDestinations"
 import { jaControlledOutputId } from "../../../utils/jaControlledOutput"
 import { TemplateHelper } from "../../../utils/templates"
+import { getJABibleAppearance, copyJABibleAppearanceToTargets } from "../../../utils/jaBibleAppearance"
 import { getKey } from "../../../values/keys"
 import { customActionActivation } from "../../actions/actions"
 import { getItemText } from "../../edit/scripts/textStyle"
@@ -392,7 +393,7 @@ export async function refreshLiveScripture() {
 
 // Build an independent Scripture draft with the SAME native template and slide
 // constructor used by live projection, but without modifying outputs or audio.
-export async function prepareGeminiScriptureDraft() {
+export async function prepareGeminiScriptureDraft(outputId?:string) {
     const categoryId = get(drawerTabsData).scripture?.activeSubTab || ""
     const reference = clone(get(activeScripture).reference) as ScriptureReference
     if (!categoryId || !reference?.verses?.[0]?.length) return null
@@ -404,15 +405,18 @@ export async function prepareGeminiScriptureDraft() {
         { biblesContent, selectedChapters, selectedVerses }, true
     )
     const helper = new TemplateHelper(getScriptureTemplateId())
-    const backgroundPath = helper.getSetting("backgroundPath") || ""
+    const appearance = getJABibleAppearance(outputId || getJAMainOutput()?.id || "")
+    const backgroundPath = appearance
+        ? appearance.backgroundMode==="image" ? appearance.backgroundPath : ""
+        : helper.getSetting("backgroundPath") || ""
     const main = getJAMainOutput()
     const currentStyle = get(styles)[main?.style || ""] || {}
     const mediaStyle = backgroundPath ? getMediaStyle(get(media)[backgroundPath], currentStyle) : {}
     const slide = {
-        id: "temp", categoryId, scriptureReference: reference,
+        id: "temp", categoryId, scriptureReference: reference, jaBibleAppearance: appearance,
         tempItems: slides[0] || [], attributionString: getMergedAttribution(biblesContent, attributions),
         translations: biblesContent.length,
-        settings: { backgroundColor: helper.getSetting("backgroundColor") },
+        settings: { backgroundColor: appearance?.backgroundMode==="color" ? appearance.backgroundColor : helper.getSetting("backgroundColor") },
         customDynamicValues: slideDynamicValues[0]
     }
     return {
@@ -530,6 +534,7 @@ async function projectScripture(outputIds: string[], explicit: boolean, recordMa
 
     const tempItems: Item[] = slides[0] || []
     const categoryId = projectionCategoryId
+    const appearance = getJABibleAppearance(outputIds.length>1 ? mainOutput.id : outputIds[0])
 
     const [previousSlides, nextSlides] = await Promise.all([getPreviousSlides(), getNextSlides()])
 
@@ -541,7 +546,11 @@ async function projectScripture(outputIds: string[], explicit: boolean, recordMa
         const eligible = new Set(getJADestinations(get(outputs), mainOutput.id).map((d) => d.id))
         if (outputIds.some((id) => !eligible.has(id))) return false
     }
-    const slidePayload = { id: "temp", categoryId, scriptureReference: referenceSnapshot, tempItems, previousSlides, nextSlides, attributionString, translations: biblesContent.length, settings, customDynamicValues: slideDynamicValues[0] }
+    const slidePayload = { id: "temp", categoryId, scriptureReference: referenceSnapshot,
+        jaBibleAppearance: appearance, tempItems, previousSlides, nextSlides,
+        attributionString, translations: biblesContent.length,
+        settings:{...settings,backgroundColor:appearance?.backgroundMode==="color"?appearance.backgroundColor:settings.backgroundColor},
+        customDynamicValues: slideDynamicValues[0] }
     if (explicit) {
         // FreeShow's generic slide handler clears foreground backgrounds
         // globally when it encounters one. Clear only chosen displays first
@@ -554,6 +563,7 @@ async function projectScripture(outputIds: string[], explicit: boolean, recordMa
         if (foregroundTargets.length) sendToJAOutputs("background", null, foregroundTargets)
         const sent = sendToJAOutputs("slide", slidePayload, outputIds)
         if (sent.length !== outputIds.length) return false
+        if(outputIds.length>1)copyJABibleAppearanceToTargets(mainOutput.id,outputIds)
     } else {
         setOutput("slide", slidePayload, false, mainOutput.id)
     }
@@ -567,7 +577,9 @@ async function projectScripture(outputIds: string[], explicit: boolean, recordMa
         if (name || apiId) trackScriptureUsage(name, apiId, reference)
     })
 
-    const templateBackground = _template.getSetting("backgroundPath")
+    const templateBackground = appearance
+        ? appearance.backgroundMode==="image" ? appearance.backgroundPath : ""
+        : _template.getSetting("backgroundPath")
 
     // When a Bible template removes its image background (including "Restore
     // appearance"), the output must clear the previously projected media.

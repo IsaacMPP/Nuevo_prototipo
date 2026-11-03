@@ -1,4 +1,5 @@
 import type { AutosizeTypes } from "../frontend/components/edit/scripts/autosize"
+import type { JABibleAppearance } from "../frontend/utils/jaBibleAppearance"
 import type { Input } from "./Input"
 import type { Animation } from "./Output"
 import type { Cropping, Resolution } from "./Settings"
@@ -624,6 +625,7 @@ export interface OutSlide {
     id: ID
     categoryId?: string // temporary Scripture slide: currently selected Bible/collection ID
     scriptureReference?: { book: number | string | null; chapters: (number | string)[]; verses: (number | string)[][] } // per-output Bible navigation cursor
+    jaBibleAppearance?: JABibleAppearance // snapshot of per-output style for preview and on-air Scripture
     layout?: ID
     index?: number
     projectIndex?: number // only used to reference back to the project item index

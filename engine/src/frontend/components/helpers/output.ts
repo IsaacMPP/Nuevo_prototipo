@@ -1,3 +1,4 @@
+import { applyJABibleAppearanceToItems } from "../../utils/jaBibleAppearance"
 import { makeJAProjectionRequest } from "../../utils/jaProjectionDestinations"
 import { get } from "svelte/store"
 import { uid } from "uid"
@@ -2008,7 +2009,9 @@ export function setTemplateStyle(outSlide: OutSlide | null, currentStyle: Styles
     //     newItemsAuto: newItems?.find((i) => i.auto)
     // })
 
-    return newItems.filter(checkSpecificOutput)
+    const boundItems=newItems.filter(checkSpecificOutput)
+    return outSlide?.id==="temp" && outSlide.jaBibleAppearance
+        ? applyJABibleAppearanceToItems(boundItems,outSlide.jaBibleAppearance) : boundItems
 
     function checkSpecificOutput(item: Item) {
         if (!item) return false
