@@ -308,7 +308,12 @@
                 "Enviar el contenido preparado a las "+count+" pantallas marcadas con un único reloj de vídeo"
         }
         const all=host?.querySelector<HTMLButtonElement>(".ja-sync-all")
-        if(all)all.disabled=publishingGroup
+        if(all){
+            all.disabled=publishingGroup
+            const available=chooseOutput()
+            all.textContent=available.length>=2 && available.every(id=>syncedTargetIds.has(id))
+                ? "Desmarcar todas" : "Marcar todas"
+        }
         const status=host?.querySelector<HTMLElement>(".ja-sync-state")
         if(status){
             const destinations=markedGroupTargets()
@@ -743,7 +748,11 @@
                 selectAll.className="ja-sync-all"
                 selectAll.textContent="Marcar todas"
                 selectAll.onclick=()=>{
-                    for(const id of available)syncedTargetIds.add(id)
+                    const alreadyAll=available.every(id=>syncedTargetIds.has(id))
+                    for(const id of available) {
+                        if(alreadyAll)syncedTargetIds.delete(id)
+                        else syncedTargetIds.add(id)
+                    }
                     refreshGroupChoices()
                 }
                 const sendGroup=document.createElement("button")
