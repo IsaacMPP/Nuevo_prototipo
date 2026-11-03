@@ -44,15 +44,39 @@ export function geminiHymnLabel(filename:string):{number:string;title:string}{
     const match=base.match(/^#?\s*(\d{1,4})\s*[-._)]?\s+(.+)$/)
     return match ? {number:match[1],title:match[2].trim()} : {number:"",title:base}
 }
-/** Match #371, 371 and 0371 by the filename's leading hymn number,
- * searching the entire catalog rather than only rendered cards. */
+/** Progressive search over all scanned hymn videos, never only visible cards.
+ * "00" finds 001/002/003/100; "003" prioritizes its exact hymn.
+ * Partial titles and multiple words are accent- and case-insensitive. */
 export function geminiHymnSearch(items:GeminiFile[],query:string):GeminiFile[]{
-    const exact=(query||"").trim().match(/^#?\s*0*(\d{1,4})\s*$/)
-    if(exact){
-        const number=Number(exact[1])
-        return items.filter(item=>item.kind==="video" &&
-            Number(geminiHymnLabel(item.name).number)===number &&
-            !!geminiHymnLabel(item.name).number)
-    }
-    return geminiSearch(items,(query||"").trim().replace(/^#(?=\d)/,""),"video")
+    const normalize=(value:string):string=>value.normalize("NFD")
+        .replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("es").trim()
+    const needle=normalize((query||"").trim().replace(/^#\s*(?=\d)/,""))
+    const videos=items.filter(item=>item.kind==="video")
+    if(!needle)return videos
+    const numeric=/^\d+$/.test(needle)
+    const terms=numeric?[]:needle.split(/\s+/).filter(Boolean)
+    const ranked:{file:GeminiFile;score:number;index:number}[]=[]
+    videos.forEach((file,index)=>{
+        const base=file.name.replace(/\.[^.]+$/,"")
+        const filename=normalize(base)
+        // Handles 003 Title, 003-Title, 003.Title and videos named only 003.mp4.
+        const number=base.match(/^#?\s*(\d{1,4})(?=\D|$)/)?.[1]||""
+        const title=normalize(geminiHymnLabel(file.name).title)
+        let score=-1
+        if(numeric){
+            if(number===needle)score=0
+            else if(number && Number(needle)>0 && Number(number)===Number(needle))score=1
+            else if(number.startsWith(needle))score=2
+            else if(number.includes(needle))score=3
+            else if(filename.includes(needle))score=4
+        }else{
+            if(title===needle)score=0
+            else if(title.startsWith(needle))score=1
+            else if(terms.every(term=>title.includes(term)))score=2
+            else if(filename.includes(needle))score=3
+            else if(terms.every(term=>filename.includes(term)))score=4
+        }
+        if(score>=0)ranked.push({file,score,index})
+    })
+    return ranked.sort((a,b)=>a.score-b.score||a.index-b.index).map(entry=>entry.file)
 }

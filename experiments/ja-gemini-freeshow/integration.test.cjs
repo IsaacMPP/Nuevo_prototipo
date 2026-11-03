@@ -553,3 +553,20 @@ test("P3: restaurar tarjetas originales sin recorte de 160 y conservar el catál
  assert.ok(!s.includes("shown.slice(0, 160)"),"No mantener el corte fijo en el catálogo")
  assert.ok(!append.includes("setOutput(") && !append.includes("sendToJAOutputs("),"Cargar tarjetas no debe proyectar")
 });
+
+test("Himnario: coincidencias parciales por número y palabras sin alterar tarjetas",()=>{
+ const h=read("engine/src/frontend/utils/jaGeminiLibrary.ts")
+ const s=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const fn=h.split("export function geminiHymnSearch(")[1]
+ assert.ok(!fn.includes("const exact="),"No usar coincidencia numérica exclusiva")
+ assert.ok(fn.includes("number.startsWith(needle)")&&fn.includes("number.includes(needle)"),"00 debe mostrar 001,002,003 y demás coincidencias")
+ assert.ok(fn.includes("Number(number)===Number(needle)"),"Priorizar número exacto con ceros iniciales")
+ assert.ok(fn.includes("terms.every(term=>title.includes(term))"),"Buscar por fragmentos separados del título")
+ assert.ok(fn.includes('normalize("NFD")'),"No distinguir tildes ni mayúsculas")
+ assert.ok(fn.includes("ranked.sort((a,b)=>a.score-b.score||a.index-b.index)"),"Ordenar sin omitir resultados")
+ assert.ok(fn.includes('items.filter(item=>item.kind==="video")'),"Solo Himnario")
+ assert.ok(s.includes('geminiHymnSearch(files,searchInput?.value||"")'),"Buscar en todos los archivos")
+ assert.ok(s.includes('hymnSearch?.addEventListener("input", renderLibrary)'),"Filtrar conforme se escribe")
+ assert.ok(s.includes('visual.className="aspect-video rounded-md bg-[#06132a] flex items-center justify-center text-sky-300 overflow-hidden"'),"Respetar miniaturas originales")
+ assert.ok(!fn.includes("setOutput(") && !fn.includes("sendToJAOutputs("),"Buscar no puede proyectar")
+});
