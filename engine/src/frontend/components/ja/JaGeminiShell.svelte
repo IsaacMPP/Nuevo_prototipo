@@ -1122,7 +1122,7 @@
             const active = mode === "multimedia" && typeFilter === type
             btn.setAttribute("aria-pressed", String(active))
             btn.classList.toggle("ja-media-filter-active", active)
-            btn.style.backgroundColor = active ? "#2169a5" : "#101e41"
+            btn.style.background = active ? "#2169a5" : "#101e41"
             btn.style.borderColor = active ? "#4cd1fd" : "#30466f"
             btn.style.boxShadow = active ? "inset 0 0 0 1px rgba(76,209,253,.18)" : "none"
         }

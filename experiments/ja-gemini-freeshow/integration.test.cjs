@@ -607,7 +607,7 @@ test("Multimedia: solo una pestaña Videos/Imágenes/Audio queda resaltada",()=>
  assert.ok(show.includes('const active = mode === "multimedia" && typeFilter === type'),"La selección debe derivar del único filtro actual")
  assert.ok(show.includes('btn.setAttribute("aria-pressed", String(active))'),"Pestaña accesible seleccionada")
  assert.ok(show.includes('btn.classList.toggle("ja-media-filter-active", active)'),"Mantener clase visual sincronizada")
- assert.ok(show.includes('btn.style.backgroundColor = active ? "#2169a5" : "#101e41"'),"Desactivar explícitamente el azul de clase original")
+ assert.ok(show.includes('btn.style.background = active ? "#2169a5" : "#101e41"'),"Desactivar explícitamente color Y degradado del diseño original")
  assert.ok(show.includes('btn.style.borderColor = active ? "#4cd1fd" : "#30466f"'),"Desactivar borde de la pestaña anterior")
  assert.ok(show.includes('btn.style.boxShadow = active ? "inset 0 0 0 1px rgba(76,209,253,.18)" : "none"'),"Quitar halo del filtro anterior")
  assert.ok(!show.includes('typeFilter === type ? "#2169a5" : ""'),"No volver a dejar que Tailwind conserve azul al desmarcar")
