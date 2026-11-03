@@ -309,6 +309,22 @@
         }
         const all=host?.querySelector<HTMLButtonElement>(".ja-sync-all")
         if(all)all.disabled=publishingGroup
+        const status=host?.querySelector<HTMLElement>(".ja-sync-state")
+        if(status){
+            const destinations=markedGroupTargets()
+            const file=destinations.length>1 ? get(outputs)[destinations[0]]?.out?.background?.path||"" : ""
+            const sameFile=!!file && destinations.every(id=>get(outputs)[id]?.out?.background?.path===file)
+            const kind=file ? getMediaType(getExtension(file)) : ""
+            const shared=kind==="video" && get(playingVideos).some(session=>
+                destinations.every(id=>session.linkedOutputIds.includes(id)) &&
+                normalizeJAContentPath(session.path)===normalizeJAContentPath(file))
+            status.textContent=publishingGroup ? "Preparando el envío…" :
+                destinations.length<2 ? "Marca al menos dos salidas para formar un grupo." :
+                sameFile && shared ? "✓ Reloj de vídeo compartido activo en las pantallas marcadas." :
+                sameFile && kind==="video" ? "Vídeo enviado; esperando confirmación del reloj compartido." :
+                sameFile ? "Las pantallas marcadas muestran el mismo contenido." :
+                "Grupo preparado. Las pantallas no cambiarán hasta que pulses Enviar sincronizado."
+        }
     }
     async function sendPreparedToGroup() {
         if(publishingGroup)return
@@ -379,7 +395,7 @@
             rebuildOutputs()
             updatePreviewProgress()
             notice(received
-                ? "Contenido recibido por "+targets.length+" salidas con reloj compartido. Verifica HDMI, spacedesk y audio."
+                ? "Contenido recibido por "+targets.length+" salidas. Comprueba el reloj compartido en Multipantalla y verifica HDMI, spacedesk y audio."
                 : "FreeShow no confirmó el contenido en todas las salidas. Revisa cada destino.")
         }catch(error){
             followProgram=false
@@ -716,6 +732,10 @@
                     choices.append(label)
                 }
                 group.append(choices)
+                const status=document.createElement("span")
+                status.className="ja-sync-state"
+                status.setAttribute("role","status")
+                group.append(status)
                 const actions=document.createElement("div")
                 actions.className="ja-sync-actions"
                 const selectAll=document.createElement("button")
@@ -1639,6 +1659,8 @@
         mediaSearch?.addEventListener("input", renderLibrary)
         cleanup.push(() => hymnSearch?.removeEventListener("input", renderLibrary), () => mediaSearch?.removeEventListener("input", renderLibrary))
         const uOutputs = outputs.subscribe(() => { rebuildOutputs(); renderRealHeader() })
+        const uPlayingForGroup = playingVideos.subscribe(() => { if(host)refreshGroupChoices() })
+        const uGroupLock = outLocked.subscribe(() => { if(host)refreshGroupChoices() })
         const uSaved = saved.subscribe(() => renderRealHeader())
         const uFolders = mediaFolders.subscribe(() => { void scanMediaFolders() })
         const uBibles = scriptures.subscribe(() => { if(mode==="biblia") {updateBibleUI();scheduleBiblePreview()} })
@@ -1652,7 +1674,7 @@
         const uCollections = hymnCollectionPaths.subscribe(() => { if(mode==="himnario")renderLibrary() })
         const uRoots = hymnSourcePaths.subscribe(() => { void scanMediaFolders() })
         const uStatuses = hymnSourceStatus.subscribe(() => { if(mode==="himnario")renderToolbar() })
-        cleanup.push(uOutputs, uSaved, uFolders, uBibles, uScriptureDraft, uBibleTab, uBibleTemplate, uBibleSettings, uHymn, uCollections, uRoots, uStatuses)
+        cleanup.push(uOutputs, uPlayingForGroup, uGroupLock, uSaved, uFolders, uBibles, uScriptureDraft, uBibleTab, uBibleTemplate, uBibleSettings, uHymn, uCollections, uRoots, uStatuses)
         rebuildOutputs()
         return () => {
             if (timer) clearTimeout(timer)
