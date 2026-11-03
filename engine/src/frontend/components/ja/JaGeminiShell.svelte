@@ -1,6 +1,6 @@
 <script lang="ts">
     // Puente real Gemini -> servicios FreeShow. No ejecuta los scripts del mock.
-    import { onMount } from "svelte"
+    import { onMount, tick } from "svelte"
     import { uid } from "uid"
     import type { FileFolder } from "../../../types/Main"
     import type { AssetItem } from "../../../types/Effects"
@@ -14,6 +14,7 @@
     import { videoExtensions, imageExtensions, audioExtensions } from "../../values/extensions"
     import { queuedHymnThumbnail } from "../../utils/jaHymnThumbnailQueue"
     import { registerJARV1909 } from "../drawer/bible/jaBundledBible"
+    import { jaControlledOutputId } from "../../utils/jaControlledOutput"
     import { sendScriptureToJAOutputs, prepareGeminiScriptureDraft, getLiveScriptureOutputIds, refreshLiveScripture } from "../drawer/bible/scripture"
     import Scripture from "../drawer/bible/Scripture.svelte"
     import { get } from "svelte/store"
@@ -123,6 +124,8 @@
     let bibleFollowTargets: string[] = []
     let bibleFollowVersion = ""
     let bibleFollowEnabled = false
+    let bibleControlGeneration = 0
+    let bibleControlRestoring = false
     let bibleNavigationBusy = false
     const bibleNavigationQueue: boolean[] = []
     let timer: ReturnType<typeof setTimeout> | null = null
@@ -714,6 +717,79 @@
         }
         return available
     }
+    function inspectOutput(id: string) {
+        if(!chooseOutput().includes(id))return
+        selectedId=id
+        rebuildOutputs()
+        if(mode==="biblia")void restoreBibleControlForOutput(id)
+    }
+    // This recovers on-air Scripture into the private native picker, without emitting.
+    async function restoreBibleControlForOutput(id: string) {
+        const generation=++bibleControlGeneration
+        const previousTargets=[...bibleFollowTargets]
+        const previousVersion=bibleFollowVersion
+        const previousFollow=bibleFollowEnabled
+        bibleNavigationQueue.length=0
+        bibleFollowEnabled=false
+        bibleControlRestoring=true
+        ++biblePreviewGeneration
+        if(biblePreviewTimer)clearTimeout(biblePreviewTimer)
+        biblePreviewReady=false
+        updateBibleFollowControls()
+        try {
+            const slide=get(outputs)[id]?.out?.slide
+            const reference=slide?.scriptureReference
+            const version=slide?.categoryId||""
+            if(slide?.id!=="temp" || !version || !reference?.book ||
+                !reference?.chapters?.length || !reference?.verses?.[0]?.length ||
+                !get(scriptures)[version]) {
+                bibleFollowTargets=[]
+                bibleFollowVersion=""
+                return // An output with media must not change the private draft.
+            }
+            jaControlledOutputId.set(id)
+            activeBibleId=version
+            drawerTabsData.update(data=>({...data,scripture:{...data.scripture,activeSubTab:version}}))
+            updateBibleUI()
+            await tick()
+            if(generation!==bibleControlGeneration || selectedId!==id || mode!=="biblia")return
+            const restored=await scriptureView?.restoreGeminiPreparedReference({
+                book:reference.book,chapters:[...reference.chapters],
+                verses:reference.verses.map((v:(number|string)[])=>[...v])
+            },version)
+            if(generation!==bibleControlGeneration || selectedId!==id || mode!=="biblia")return
+            const current=get(outputs)[id]?.out?.slide
+            if(!restored || current?.id!=="temp" || current?.categoryId!==version ||
+                JSON.stringify(current?.scriptureReference||null)!==JSON.stringify(reference)){
+                bibleFollowTargets=[]
+                bibleFollowVersion=""
+                notice("La Biblia de esta pantalla cambió. Selecciona otra vez su tarjeta.")
+                return
+            }
+            const live=getLiveScriptureOutputIds()
+            if(!live.includes(id)){
+                bibleFollowTargets=[]
+                bibleFollowVersion=""
+                notice("Vista previa recuperada; seguimiento no confirmado. Proyecta nuevamente para habilitarlo.")
+            }else{
+                bibleFollowTargets=[...live]
+                bibleFollowVersion=version
+                const sameGroup=previousVersion===version && previousTargets.length===live.length &&
+                    previousTargets.every(target=>live.includes(target))
+                bibleFollowEnabled=sameGroup ? previousFollow : true
+            }
+            scheduleBiblePreview()
+        }catch(error){
+            bibleFollowTargets=[]
+            bibleFollowVersion=""
+            notice("No se pudo recuperar el control de esta pantalla: "+String(error))
+        }finally{
+            if(generation===bibleControlGeneration){
+                bibleControlRestoring=false
+                updateBibleFollowControls()
+            }
+        }
+    }
     function rebuildOutputs() {
         if (!host) return
         const available = chooseOutput()
@@ -771,7 +847,7 @@
                 badge.className = "ja-screen-badge text-[10px] px-2 py-1 rounded-xl whitespace-nowrap"
                 info.append(badge)
                 card.append(thumb,info)
-                card.onclick = () => { selectedId=id; rebuildOutputs() }
+                card.onclick = () => inspectOutput(id)
                 list?.append(card)
                 // Quick strip: multi-select destinations without mutating
                 // the inspected Program card. Screen previews remain clean.
@@ -790,18 +866,9 @@
                     if(publishingGroup)return
                     if(syncedTargetIds.has(id))syncedTargetIds.delete(id)
                     else syncedTargetIds.add(id)
-                    // Changing the desired destinations does not redirect a
-                    // Bible already on air. Pause follow until republished.
-                    if(mode==="biblia" && bibleFollowEnabled){
-                        bibleFollowEnabled=false
-                        updateBibleFollowControls()
-                    }
-                    // Preserve the familiar single-target inspection. With two
-                    // or more checked outputs, keep the current Program view.
-                    if(syncedTargetIds.size===1) {
-                        selectedId=[...syncedTargetIds][0]
-                        rebuildOutputs()
-                    } else refreshGroupChoices()
+                    // Marking future destinations must not revoke current Bible control.
+                    if(syncedTargetIds.size===1) inspectOutput([...syncedTargetIds][0])
+                    else refreshGroupChoices()
                 }
                 targets?.append(target)
             }
@@ -1136,7 +1203,7 @@
             if(node) {node.classList.toggle("hidden",module!==next);node.classList.toggle("flex",module===next)}
         }
         setupNavigation()
-        if(next==="biblia") {void registerJARV1909().then(()=>{updateBibleUI();scheduleBiblePreview()});updateBibleUI();scheduleBiblePreview()}
+        if(next==="biblia") {void registerJARV1909().then(()=>{updateBibleUI();if(get(outputs)[selectedId]?.out?.slide?.id==="temp")void restoreBibleControlForOutput(selectedId);else scheduleBiblePreview()});updateBibleUI();scheduleBiblePreview()}
         else {renderLibrary();if(next==="himnario")void refreshJAHymnLibrary()}
     }
     // Render the private next Scripture with FreeShow's actual slide compositor.
@@ -1184,6 +1251,11 @@
         }
     }
 
+    function updateBibleViewButtons(){
+        if(mode!=="biblia")return
+        for(const b of el("moduleView_biblia")?.querySelectorAll<HTMLButtonElement>(".ja-bible-view")||[])
+            b.setAttribute("aria-pressed",String(b.dataset.view===get(scriptureMode)))
+    }
     function bibleFollowGroupStillLive(): boolean {
         if(!bibleFollowTargets.length || !bibleFollowVersion || activeBibleId!==bibleFollowVersion)return false
         const actual=getLiveScriptureOutputIds()
@@ -1198,7 +1270,7 @@
         if(follow){
             const live=bibleFollowGroupStillLive()
             follow.setAttribute("aria-pressed",String(bibleFollowEnabled && live))
-            follow.disabled=bibleNavigationBusy
+            follow.disabled=bibleNavigationBusy || bibleControlRestoring
             follow.textContent=bibleFollowEnabled && live
                 ? "● Seguir en Programa ("+bibleFollowTargets.length+")"
                 : live ? "○ Seguir en Programa: apagado" : "○ Vista previa solamente"
@@ -1207,19 +1279,25 @@
                 : "Proyecta primero un versículo para habilitar el seguimiento en vivo"
         }
         for(const nav of el("moduleView_biblia")?.querySelectorAll<HTMLButtonElement>(".ja-bible-prev,.ja-bible-next")||[])
-            nav.disabled=!scriptureView || bibleNavigationQueue.length>=8
+            nav.disabled=!scriptureView || bibleControlRestoring || bibleNavigationQueue.length>=8
     }
     function armBibleFollow(targets: string[], version: string) {
+        ++bibleControlGeneration
+        bibleControlRestoring=false
+        bibleNavigationQueue.length=0
+        if(!targets.includes(selectedId))selectedId=targets[0]||""
+        jaControlledOutputId.set(selectedId)
         const actual=getLiveScriptureOutputIds()
         bibleFollowTargets=[...targets]
         bibleFollowVersion=version
         bibleFollowEnabled=targets.length>0 && actual.length===targets.length && targets.every(id=>actual.includes(id))
+        rebuildOutputs()
         updateBibleFollowControls()
         if(!bibleFollowEnabled)
             notice("Biblia proyectada, pero todavía no se confirmó el seguimiento nativo de versículos.")
     }
     function enqueueBibleNavigation(moveLeft: boolean) {
-        if(mode!=="biblia" || !scriptureView || settingsOpen)return
+        if(mode!=="biblia" || !scriptureView || settingsOpen || bibleControlRestoring)return
         if(bibleNavigationQueue.length>=8)return notice("Hay demasiados cambios pendientes; comprueba la salida.")
         bibleNavigationQueue.push(moveLeft)
         void runBibleNavigation()
@@ -1231,10 +1309,11 @@
         try {
             while(bibleNavigationQueue.length && mode==="biblia" && scriptureView){
                 const moveLeft=bibleNavigationQueue.shift()!
+                const routeGeneration=bibleControlGeneration
                 const before=JSON.stringify(get(activeScripture).reference||null)
                 const follow=bibleFollowEnabled && bibleFollowGroupStillLive() && !get(outLocked)
                 await scriptureView.navigatePreparedVerse(moveLeft)
-                if(mode!=="biblia")break
+                if(mode!=="biblia" || routeGeneration!==bibleControlGeneration)break
                 const after=JSON.stringify(get(activeScripture).reference||null)
                 if(before===after)continue
                 if(!follow || !bibleFollowEnabled)continue
@@ -1242,9 +1321,9 @@
                 // update; never project a stale result after a rapid selection.
                 const version=activeBibleId
                 const draft=await prepareGeminiScriptureDraft()
-                if(!draft || version!==activeBibleId || after!==JSON.stringify(get(activeScripture).reference||null))
+                if(!draft || routeGeneration!==bibleControlGeneration || version!==activeBibleId || after!==JSON.stringify(get(activeScripture).reference||null))
                     continue
-                if(!bibleFollowEnabled || get(outLocked) || !bibleFollowGroupStillLive()) {
+                if(routeGeneration!==bibleControlGeneration || !bibleFollowEnabled || get(outLocked) || !bibleFollowGroupStillLive()) {
                     bibleFollowEnabled=false
                     updateBibleFollowControls()
                     continue
@@ -1290,6 +1369,8 @@
             versions.setAttribute("aria-label","Seleccionar traducción bíblica instalada")
             versions.dataset.role="ja-bibles"
             versions.onchange=()=>{
+                ++bibleControlGeneration
+                bibleNavigationQueue.length=0
                 bibleFollowEnabled=false
                 bibleFollowTargets=[]
                 bibleFollowVersion=""
@@ -1302,8 +1383,10 @@
             for (const [label,which] of [["Vista cuadriculada","grid"],["Vista de lista","list"]] as const) {
                 const button=document.createElement("button")
                 button.type="button";button.textContent=label
+                button.className="ja-bible-view"
+                button.dataset.view=which
                 button.setAttribute("aria-pressed",String(get(scriptureMode)===which))
-                button.onclick=()=>{scriptureMode.set(which);updateBibleUI()}
+                button.onclick=()=>scriptureMode.set(which)
                 bar.append(button)
             }
             const project=document.createElement("button")
@@ -1388,10 +1471,7 @@
                 ...data, scripture: { ...data.scripture, activeSubTab: activeBibleId }
             }))
         }
-        for(const b of area.querySelectorAll<HTMLButtonElement>(".ja-library-toolbar button")){
-            if (b.textContent?.includes("cuadriculada")) b.setAttribute("aria-pressed",String(get(scriptureMode)==="grid"))
-            if (b.textContent?.includes("lista")) b.setAttribute("aria-pressed",String(get(scriptureMode)==="list"))
-        }
+        updateBibleViewButtons()
         if (activeBibleId && scriptureTarget) {
             if (!scriptureView) { scriptureTarget.replaceChildren(); scriptureView=new Scripture({target:scriptureTarget,props:{active:activeBibleId,searchValue:"",geminiPreviewOnly:true}}) }
             else scriptureView.$set({active:activeBibleId})
@@ -1809,13 +1889,14 @@
         const uBibleTab = drawerTabsData.subscribe(() => { if(mode==="biblia")scheduleBiblePreview() })
         const uBibleTemplate = templates.subscribe(() => { if(mode==="biblia")scheduleBiblePreview() })
         const uBibleSettings = scriptureSettings.subscribe(() => { if(mode==="biblia")scheduleBiblePreview() })
+        const uBibleMode = scriptureMode.subscribe(() => { if(mode==="biblia")updateBibleViewButtons() })
         window.addEventListener("keydown", keyboardGeminiBible, true)
         cleanup.push(() => window.removeEventListener("keydown", keyboardGeminiBible, true))
         const uHymn = hymnVideos.subscribe(() => { if(mode==="himnario")renderLibrary() })
         const uCollections = hymnCollectionPaths.subscribe(() => { if(mode==="himnario")renderLibrary() })
         const uRoots = hymnSourcePaths.subscribe(() => { void scanMediaFolders() })
         const uStatuses = hymnSourceStatus.subscribe(() => { if(mode==="himnario")renderToolbar() })
-        cleanup.push(uOutputs, uPlayingForGroup, uGroupLock, uSaved, uFolders, uBibles, uScriptureDraft, uBibleTab, uBibleTemplate, uBibleSettings, uHymn, uCollections, uRoots, uStatuses)
+        cleanup.push(uOutputs, uPlayingForGroup, uGroupLock, uSaved, uFolders, uBibles, uScriptureDraft, uBibleTab, uBibleTemplate, uBibleSettings, uBibleMode, uHymn, uCollections, uRoots, uStatuses)
         rebuildOutputs()
         return () => {
             if (timer) clearTimeout(timer)
@@ -1876,7 +1957,7 @@
                 }
             }}
             on:close={() => { settingsOpen = false }}
-            on:selectOutput={(event) => { selectedId = event.detail.id; rebuildOutputs() }}
+            on:selectOutput={(event) => { inspectOutput(event.detail.id) }}
             on:assignDisplay={(event) => { void assignMonitorToOutput(event.detail.displayId,event.detail.bounds,event.detail.outputId) }}
             on:createDisplayOutput={(event) => { void createPhysicalOutput(event.detail.displayId,event.detail.bounds,event.detail.name) }}
             on:activateDisplay={(event) => { void activateConfiguredOutput(event.detail.outputId,event.detail.displayId) }}

@@ -3,7 +3,7 @@
     import { ApiBible } from "json-bible/lib/api"
     import type { Verse } from "json-bible/lib/Bible"
     import type { VerseReference } from "json-bible/lib/reference"
-    import { onMount, onDestroy } from "svelte"
+    import { onMount, onDestroy, tick } from "svelte"
     import { get } from "svelte/store"
     import { defaultBibleBookNames } from "../../../converters/bebliaBible"
     import { activeDrawerTab, activePage, activePopup, activeEdit, activeScripture, activeTriggerFunction, customScriptureBooks, notFound, openScripture, outLocked, outputs, resized, scriptureHistory, scriptureMode, scriptures, scriptureSettings, selected, templates } from "../../../stores"
@@ -1013,6 +1013,20 @@
     let chapterLengths: { [key: number]: number } = {}
     $: if ($activeTriggerFunction === "scripture_next") _moveSelection(false)
     $: if ($activeTriggerFunction === "scripture_previous") _moveSelection(true)
+    // The screen selector reopens its emitted reference inside the private picker.
+    export async function restoreGeminiPreparedReference(
+        reference:{book:number|string|null;chapters:(number|string)[];verses:(number|string)[][]},
+        categoryId:string
+    ):Promise<boolean>{
+        if(!geminiPreviewOnly || !reference?.book || !reference?.chapters?.length ||
+            !reference?.verses?.[0]?.length || !categoryId)return false
+        await tick()
+        if(activeScriptureId!==categoryId || !previewBibleId)return false
+        const targetVersion=previewBibleId
+        if(!data[targetVersion]?.bibleData)await loadScripture(targetVersion)
+        if(activeScriptureId!==categoryId || previewBibleId!==targetVersion || !data[targetVersion]?.bibleData)return false
+        return await openBook(reference.book,clone(reference.chapters),clone(reference.verses))
+    }
     // API explícita para mover el borrador desde Gemini sin emitir en Programa.
     export async function navigatePreparedVerse(moveLeft: boolean) {
         if (!geminiPreviewOnly) return

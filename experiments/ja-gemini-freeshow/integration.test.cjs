@@ -411,8 +411,34 @@ test("Biblia: flechas y botones Anterior/Siguiente controlan Preview y seguimien
 
 test("Biblia: edición de destinos o referencia en vuelo no puede armar una sesión antigua",()=>{
  const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
- assert.ok(shell.includes('if(mode==="biblia" && bibleFollowEnabled)'),"Cambiar la selección debe pausar seguimiento")
+ assert.ok(shell.includes('if(syncedTargetIds.size===1) inspectOutput([...syncedTargetIds][0])'),"Casillas futuras no deben apagar seguimiento")
+ assert.ok(!shell.includes('if(mode==="biblia" && bibleFollowEnabled)'),"Marcar destinos no debe revocar control")
  assert.ok(shell.includes('referenceSent===JSON.stringify(get(activeScripture).reference||null)'),"Control de referencia grupal obsoleto")
  assert.ok(shell.includes('JSON.stringify(get(outputs)[id]?.out?.slide?.scriptureReference||null)===referenceSent'),"Grupo solo se arma si su texto enviado coincide")
  assert.ok(shell.includes('JSON.stringify(result?.scriptureReference||null)!==referenceSent'),"Salida individual no debe armar referencia antigua")
+});
+
+test("Biblia: control recuperable por pantalla y grupo de proyección",()=>{
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const nav=read("engine/src/frontend/components/drawer/bible/Scripture.svelte")
+ const scripture=read("engine/src/frontend/components/drawer/bible/scripture.ts")
+ const recovery=shell.split("async function restoreBibleControlForOutput(id: string)")[1].split("function rebuildOutputs()")[0]
+ assert.ok(shell.includes("card.onclick = () => inspectOutput(id)"),"La tarjeta controla su salida")
+ assert.ok(recovery.includes("jaControlledOutputId.set(id)"),"Vincular destino nativo de navegación")
+ assert.ok(recovery.includes("scriptureView?.restoreGeminiPreparedReference"),"Recuperar selección de la salida")
+ assert.ok(recovery.includes("getLiveScriptureOutputIds()"),"Usar grupo nativo")
+ assert.ok(recovery.includes("const sameGroup="),"Respetar seguimiento desactivado")
+ assert.ok(recovery.includes("generation!==bibleControlGeneration"),"Cancelar recuperación obsoleta")
+ const method=nav.split("export async function restoreGeminiPreparedReference(")[1].split("// API explícita")[0]
+ assert.ok(method.includes("await openBook(reference.book"),"Restaurar libro capítulo y versículo")
+ assert.ok(!method.includes("refreshLiveScripture(")&&!method.includes("sendScriptureToJAOutputs("),"No proyectar al recuperar")
+ assert.ok(scripture.includes("followed.navigationGroup === owner.navigationGroup"),"Envíos independientes conservan su grupo")
+});
+test("Biblia: vista superior sincronizada con inferior y cancelación de flechas obsoletas",()=>{
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ assert.ok(shell.includes('button.className="ja-bible-view"')&&shell.includes("button.dataset.view=which"))
+ assert.ok(shell.includes("const uBibleMode = scriptureMode.subscribe("))
+ assert.ok(shell.includes("updateBibleViewButtons()"))
+ assert.ok(shell.includes("routeGeneration!==bibleControlGeneration"))
+ assert.ok(shell.includes("bibleControlRestoring"))
 });
