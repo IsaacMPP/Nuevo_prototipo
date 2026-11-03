@@ -699,7 +699,7 @@ test("P5: Solo audio de MP4 e himnos nunca borra fondo o Biblia",()=>{
 test("P5: avanzar mixto usa el motor existente y YouTube visible",()=>{
  const s=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
  const native=read("engine/src/frontend/components/output/layers/BackgroundMedia.svelte")
- const run=s.split("async function playJAPlaylistIndex(id:string,index:number)")[1].split("function advanceJAPlaylist(")[0]
+ const run=s.split("async function playJAPlaylistIndex(id:string,index:number,fromQueue=false)")[1].split("function advanceJAPlaylist(")[0]
  assert.ok(run.includes('item.kind==="audio"||item.audioOnly'),"Lista admite pistas locales")
  assert.ok(run.includes("playJAOnlySound(item.path,targets"),"Reproduce audio sin video")
  assert.ok(run.includes('playerVideos.update(data=>({...data,[youtubeId]'),"Registro nativo YouTube")
@@ -715,7 +715,7 @@ test("P5: avanzar mixto usa el motor existente y YouTube visible",()=>{
 
 test("P5: Play nuevo inicia en cero sin perjudicar recuperación de reloj ni atajos bíblicos",()=>{
  const s=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
- const runner=s.split("async function playJAPlaylistIndex(id:string,index:number)")[1].split("function advanceJAPlaylist(")[0]
+ const runner=s.split("async function playJAPlaylistIndex(id:string,index:number,fromQueue=false)")[1].split("function advanceJAPlaylist(")[0]
  const recovery=s.split("async function joinAlreadyPlayingPrimary(mediaPath:string,targets:string[])")[1].split("function updateJAPlaylist(")[0]
  assert.ok(runner.includes("await VideoPlayer.stop(session.path,outputId)"),"Play explicito de una lista inicia desde cero")
  assert.ok(runner.includes('startAt:0'),"No reanudar otro canto por accidente")
