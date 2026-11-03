@@ -39,7 +39,7 @@ const clampSize=(value:unknown):number=> {
 export function normalizeJABibleAppearance(value:Partial<JABibleAppearance>|null|undefined):JABibleAppearance {
     const v=value||{}
     return {
-        enabledFields:(Array.isArray(v.enabledFields) ? v.enabledFields : Object.keys(v)).filter(key=>typeof key==="string"&&isEditableField(key)),
+        enabledFields:[...new Set((Array.isArray(v.enabledFields) ? v.enabledFields : Object.keys(v)).filter(key=>typeof key==="string"&&isEditableField(key)))],
         fontFamily:JA_BIBLE_FONT_FAMILIES.includes(v.fontFamily as typeof JA_BIBLE_FONT_FAMILIES[number])
             ? v.fontFamily! : DEFAULT_JA_BIBLE_APPEARANCE.fontFamily,
         fontSize:clampSize(v.fontSize),
@@ -77,7 +77,7 @@ export function setJABibleAppearance(id:string,patch:Partial<JABibleAppearance>)
     if(!id)return
     jaBibleAppearances.update(current=>{
         const previous=current[id]
-        const enabledFields=[...(previous?.enabledFields||[]),...Object.keys(patch).filter(isEditableField)]
+        const enabledFields=[...new Set([...(previous?.enabledFields||[]),...Object.keys(patch).filter(isEditableField)])]
         return {...current,[id]:normalizeJABibleAppearance({...previous,...patch,enabledFields})}
     })
     persist()
@@ -116,17 +116,32 @@ export function applyJABibleAppearanceToItems(items:Item[],raw:JABibleAppearance
         enabled.has("textColor") ? `color:${a.textColor};` : "",
         enabled.has("shadow") ? `text-shadow:${a.shadow?"2px 2px 5px rgba(0,0,0,.9)":"none"};` : ""
     ].join("")
+    // Modern Scripture emits sourceDynamicKey for verse body runs. Keep
+    // reference, translation title, attribution and their original smaller sizes.
+    // Legacy templates without these markers use the complete text frame.
+    const verseKey=(key:string|undefined)=>/^scripture(?:[1-4])?_text(?::|$)/.test(key||"")
+    const hasVerseKeys=items.some(item=>item?.lines?.some(line=>
+        line.text?.some(segment=>verseKey(segment.sourceDynamicKey))))
     return items.map(item=>{
         if(!item?.lines?.length || (item.type && item.type!=="text"))return item
+        const hasVerses=item.lines.some(line=>line.text?.some(segment=>verseKey(segment.sourceDynamicKey)))
+        if(hasVerseKeys && !hasVerses)return item
         return {
             ...item,
             textFit:enabled.has("fontSize")?"none" as Item["textFit"]:item.textFit,
             align:enabled.has("verticalAlign")?`${item.align||""};align-items:${vert};`:item.align,
-            lines:item.lines.map(line=>({
-                ...line,
-                align:enabled.has("textAlign")?`${line.align||""};text-align:${a.textAlign};`:line.align,
-                text:line.text.map(segment=>({...segment,style:`${segment.style||""};${css}`}))
-            }))
+            lines:item.lines.map(line=>{
+                const targetLine=!hasVerseKeys || line.text?.some(segment=>verseKey(segment.sourceDynamicKey))
+                return {
+                    ...line,
+                    align:targetLine&&enabled.has("textAlign")?`${line.align||""};text-align:${a.textAlign};`:line.align,
+                    text:line.text.map(segment=>({
+                        ...segment,
+                        style:targetLine && (!hasVerseKeys||verseKey(segment.sourceDynamicKey))
+                            ? `${segment.style||""};${css}` : segment.style
+                    }))
+                }
+            })
         }
     })
 }

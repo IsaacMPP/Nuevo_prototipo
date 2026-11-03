@@ -492,3 +492,12 @@ test("Biblia: editar un solo ajuste conserva el resto de la plantilla original",
  assert.ok(output.includes("jaBibleBackgroundOverride"),"No ocultar fondo de plantilla cuando solo se cambia tipografía")
  assert.ok(model.includes("if(changed){jaBibleAppearances.set(next);persist()}"),"No redibujar Preview innecesariamente al navegar grupo")
 });
+
+test("Biblia: editor preserva referencia, traducción y tamaño original de títulos",()=>{
+ const model=read("engine/src/frontend/utils/jaBibleAppearance.ts")
+ assert.ok(model.includes("sourceDynamicKey"),"Identificar texto bíblico real")
+ assert.ok(model.includes('const hasVerseKeys=items.some('),"Distinguir cuerpo de versículos")
+ assert.ok(model.includes("if(hasVerseKeys && !hasVerses)return item"),"No tocar marcos de título o referencia")
+ assert.ok(model.includes("verseKey(segment.sourceDynamicKey)"),"No cambiar tamaño de la referencia")
+ assert.ok(model.includes('new Set([...(previous?.enabledFields||[]),...Object.keys(patch)')),"No duplicar cambios al arrastrar el tamaño")
+});
