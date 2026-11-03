@@ -264,8 +264,10 @@ test("Pantallas Windows: detección física, identificación y salidas únicamen
  assert.ok(settings.includes('dispatch("assignDisplay"'),"Asignación de monitor debe requerir selección")
  assert.ok(settings.includes("window.confirm("),"Evitar movimientos físicos sin confirmación")
  assert.ok(shell.includes('addOutput(false,"",false,name)'),"Primero registrar una salida deshabilitada")
- assert.ok(shell.includes('send(OUTPUT,["CREATE"],{...outputSnapshot,id:outputId})'),"Abrir ventana nativa asignada")
- assert.ok(shell.includes('send(OUTPUT,["UPDATE_BOUNDS"],{id:outputId,bounds})'),"Reubicar mediante motor nativo")
+ assert.ok(shell.includes('toggleOutputs([id],{state:true})'),"Crear debe activar la ventana nueva, no solo registrarla")
+ assert.ok(shell.includes('toggleOutputs([outputId],{state:true})'),"La asignación debe activar la ventana nativamente")
+ const native=read("engine/src/electron/output/helpers/OutputVisibility.ts")
+ assert.ok(native.includes("await OutputHelper.Lifecycle.createOutput(output)"),"Debe esperar la creación antes de intentar mostrar la ventana")
 });
 test("Logo personalizado reconstruye clave del renderizador y no conserva imagen antigua",()=>{
  const s=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
