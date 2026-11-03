@@ -34,7 +34,8 @@
             physicalDisplays = (nativeDisplays || []).filter(d=>d && d.bounds && Number.isFinite(d.id))
                 .map(d=>({id:d.id,label:d.label,internal:d.internal,jaOperatorDisplay:(d as typeof d & {jaOperatorDisplay?:boolean}).jaOperatorDisplay,bounds:d.bounds}))
                 .sort((a,b)=>a.bounds.x-b.bounds.x)
-            if(!physicalDisplays.some(d=>String(d.id)===selectedPhysicalDisplayId))
+            const selected = physicalDisplays.find(d=>String(d.id)===selectedPhysicalDisplayId)
+            if(!selected || isOperatorDisplay(selected))
                 selectedPhysicalDisplayId = physicalDisplays.find(d=>!isOperatorDisplay(d))?.id?.toString() || ""
         }catch(error){
             displaysError = "No se pudo consultar Windows: "+String(error)

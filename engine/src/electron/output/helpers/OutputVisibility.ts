@@ -52,9 +52,10 @@ export class OutputVisibility {
         const invalidWindowPosition = windowCoveringMain && autoPosition && window.isAlwaysOnTop() === true
 
         if (state === true && !invalidWindowPosition) {
-            this.showWindow(window, output.alwaysOnTop !== false)
-
+            // Place an existing output window on its external monitor BEFORE
+            // showing it, so old windows cannot flash over the laptop console.
             OutputHelper.Bounds.updateBounds({ id: output.id, bounds })
+            this.showWindow(window, output.alwaysOnTop !== false)
             return true
         } else {
             this.hideWindow(window, output)
