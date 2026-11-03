@@ -325,27 +325,44 @@ test("Logo Windows: rutas file:/// válidas, dimensionamiento independiente de p
  const css=read("engine/public/ja-gemini-layout.css")
  assert.ok(css.includes('justify-content: flex-start !important'),"No separar tarjetas multipantalla verticalmente")
 })
-test("Biblia Gemini envía el versículo solo a la salida seleccionada (incluso secundaria)",()=>{
+test("Biblia Gemini utiliza los destinos marcados en Envío rápido (único o grupo)",()=>{
  const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
  const s=shell.split('project.className="ja-bible-project"')[1].split('bar.append(project)')[0]
- assert.ok(s.includes('const destinationId=selectedId'),"Usar salida seleccionada")
+ assert.ok(s.includes('const marked=markedGroupTargets()'),"Usar el selector de pantallas de Envío rápido")
+ assert.ok(s.includes('if(marked.length>1){void sendPreparedToGroup();return}'),"Grupo de Biblia no conectado")
+ assert.ok(s.includes('const destinationId=marked[0] || ""'),"Ruta de Biblia a un destino marcado")
  assert.ok(s.includes('ids.includes(destinationId)'),"Validar salida activa")
- assert.ok(s.includes('sendScriptureToJAOutputs([destinationId])'),"Envío explícito, sin difusión")
- assert.ok(!s.includes('ids.length !== 1'),"No prohibir dos salidas")
- assert.ok(!s.includes('playScripture().then'),"No forzar siempre la salida principal")
+ assert.ok(s.includes('sendScriptureToJAOutputs([destinationId])'),"Envío directo debe ser explícito")
+ assert.ok(!s.includes('playScripture().then'),"No usar un principal implícito")
 })
 
-test("Envío sincronizado: destinos marcados independientes de inspección y UI conectada",()=>{
+test("Envío rápido multiselección reemplaza el panel grande sin ocultar tarjetas",()=>{
  const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
  const css=read("engine/public/ja-gemini-layout.css")
- assert.ok(shell.includes("let syncedTargetIds = new Set<string>()"),"No existe selección independiente del grupo")
- assert.ok(shell.includes('check.type="checkbox"'),"No hay casillas de selección")
- assert.ok(shell.includes('check.onchange=()=>'),"Casilla de grupo no conectada")
- assert.ok(shell.includes('sendGroup.onclick=()=>{void sendPreparedToGroup()}'),"Botón de envío de grupo inerte")
- assert.ok(shell.includes('quickGroup.onclick=()=>{void sendPreparedToGroup()}'),"Envío rápido de grupo inerte")
- assert.ok(css.includes(".ja-sync-panel"),"Estilo del panel de sincronización faltante")
- assert.ok(shell.includes("for(const id of [...syncedTargetIds])if(!available.includes(id))syncedTargetIds.delete(id)"),"No retirar monitor desconectado del grupo")
- assert.ok(shell.includes("count<2 || get(outLocked)"),"El botón requiere mínimo 2 destinos")
+ assert.ok(shell.includes("let syncedTargetIds = new Set<string>()"),"Destinos deben ser separados de inspección de Programa")
+ assert.ok(shell.includes("let quickTargetsInitialized = false"),"No debe iniciar un grupo arbitrario de varias pantallas")
+ assert.ok(shell.includes('target.className="ja-target ja-quick-target'),"Checkbox visual solo en barra Envío rápido")
+ assert.ok(shell.includes('target.setAttribute("aria-label","Incluir "'),"No se identifican los destinos con accesibilidad")
+ assert.ok(shell.includes('if(syncedTargetIds.has(id))syncedTargetIds.delete(id)'),"Botón de cada pantalla no es reversible")
+ assert.ok(shell.includes('target.onclick=()=>{'),"Los destinos no tienen controlador")
+ assert.ok(shell.includes('send.onclick=sendToQuickTargets'),"Acción rápida desconectada")
+ assert.ok(!shell.includes('group.id="jaSyncPanel"'),"No se debe conservar bloque de sincronización en Multipantalla")
+ assert.ok(!shell.includes('list?.append(group)'),"Multipantalla solo presenta tarjetas")
+ assert.ok(css.includes(".ja-quick-target"),"Falta estilo compacto de barra")
+ assert.ok(!css.includes(".ja-sync-panel"),"No conservar CSS del panel retirado")
+ assert.ok(shell.includes("for(const id of [...syncedTargetIds])if(!available.includes(id))syncedTargetIds.delete(id)"),"No se retiran salidas desconectadas")
+});
+test("Quick Play y Cortar envían al destino marcado; al marcar varias usan un reloj",()=>{
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const p=shell.split("function publishPreparedMedia()")[1].split("function toggleFollowProgram()")[0]
+ assert.ok(p.includes("const targets=markedGroupTargets()"),"No usar el destino marcado")
+ assert.ok(p.includes("if(!targets.length)"),"No emitir sin destinos")
+ assert.ok(p.includes("if(targets.length>1){void sendPreparedToGroup();return}"),"Enviar grupo no está conectado a Quick Play")
+ assert.ok(p.includes("const destinationId=targets[0]"),"Envío individual debe seguir funcionando")
+ assert.ok(p.includes('},false,destinationId)'),"Envío individual debe llevar un outputId explícito")
+ assert.ok(p.includes("selectedId===destinationId"),"No vincular Vista previa a un Programa distinto al inspeccionado")
+ assert.ok(shell.includes('send.onclick=sendToQuickTargets'),"Acción de barra no utiliza mismo destino")
+ assert.ok(shell.includes('bind("btnBridgeQuickPlay",project)'),"No modificar el control Quick Play")
 });
 test("Multimedia sincronizada realiza una única emisión atómica y audio de primaria",()=>{
  const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
