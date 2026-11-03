@@ -712,3 +712,16 @@ test("P5: avanzar mixto usa el motor existente y YouTube visible",()=>{
  assert.ok(s.includes('if(!manual && !list.autoNext)')&&s.includes('if(list.repeat)next=0'),"Manual y repetición")
  assert.ok(s.includes('AudioPlayer.getPlaying(item.path)')&&s.includes('VideoPlayer.getPlaying(key,[primary])'),"Reconocer audio y video real")
 });
+
+test("P5: Play nuevo inicia en cero sin perjudicar recuperación de reloj ni atajos bíblicos",()=>{
+ const s=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const runner=s.split("async function playJAPlaylistIndex(id:string,index:number)")[1].split("function advanceJAPlaylist(")[0]
+ const recovery=s.split("async function joinAlreadyPlayingPrimary(mediaPath:string,targets:string[])")[1].split("function updateJAPlaylist(")[0]
+ assert.ok(runner.includes("await VideoPlayer.stop(session.path,outputId)"),"Play explicito de una lista inicia desde cero")
+ assert.ok(runner.includes('startAt:0'),"No reanudar otro canto por accidente")
+ assert.ok(!runner.includes("await joinAlreadyPlayingPrimary("),"Recuperar pantalla y reproducir nueva lista son acciones distintas")
+ assert.ok(recovery.includes("VideoPlayer.attachOutputsToLiveSession"),"Recuperar monitor sigue compartiendo el reloj original")
+ assert.ok(runner.includes("VideoPlayer.pause(oldPath,primary)"),"Evitar dos audios al cambiar a Solo audio")
+ assert.ok(s.includes('if(playlistOpen){e.preventDefault();playlistOpen=false;return}'),"Escape cierra Listas")
+ assert.ok(s.includes('settingsOpen || bibleEditorOpen || playlistOpen'),"No navegar versículos mientras se editan listas")
+});

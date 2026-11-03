@@ -648,6 +648,7 @@
             notice("Marca Primario y las salidas activas donde quieras reproducir la lista.")
             return
         }
+        const previousEntry=get(jaPlaylists).find(p=>p.id===playlistCurrentId)?.entries[playlistIndex]
         const token=++playlistToken
         playlistRunning=true
         playlistBusy=true
@@ -671,6 +672,13 @@
                 if(item.kind==="youtube")throw Error("YouTube no admite Solo audio.")
                 const ok=await playJAOnlySound(item.path,targets,()=>token===playlistToken && playlistRunning)
                 if(!ok)throw Error("No se pudo iniciar la pista sonora.")
+                // If manual Next changes a playing local/YouTube video to a
+                // sound-only entry, freeze its last visible frame rather than
+                // allowing two different soundtracks to overlap.
+                if(previousEntry && (previousEntry.kind==="youtube" || (previousEntry.kind==="video"&&!previousEntry.audioOnly))){
+                    const oldPath=previousEntry.kind==="youtube"?jaYoutubeId(previousEntry.path):previousEntry.path
+                    if(oldPath && VideoPlayer.getPlaying(oldPath,[primary]))VideoPlayer.pause(oldPath,primary)
+                }
             }else if(item.kind==="youtube"){
                 const youtubeId=jaYoutubeId(item.path)
                 if(!youtubeId)throw Error("El enlace de YouTube no es válido.")
@@ -687,29 +695,23 @@
             }else{
                 if(getMediaType(getExtension(item.path))!=="video")throw Error("El archivo ya no es un video válido.")
                 prepare(item.path)
-                // Keep the native shared-clock routing, with a fresh session
-                // for a different clip and no duplicate audio on the secondary.
-                const source=get(outputs)[primary]?.out?.background
-                if(normalizeJAContentPath(source?.path||"")===normalizeJAContentPath(item.path) &&
-                    !!VideoPlayer.getPlaying(item.path,[primary])){
-                    const handled=await joinAlreadyPlayingPrimary(item.path,targets)
-                    if(!handled)throw Error("No se pudo reconectar el video en curso.")
-                }else{
-                    const current=get(playingVideos).filter(session=>
-                        normalizeJAContentPath(session.path)===normalizeJAContentPath(item.path) &&
-                        session.linkedOutputIds.some(target=>targets.includes(target)))
-                    for(const session of current){
-                        for(const outputId of [...session.linkedOutputIds].filter(t=>targets.includes(t)))
-                            await VideoPlayer.stop(session.path,outputId)
-                    }
-                    if(token!==playlistToken)return
-                    const received=sendToJAOutputs("background",{
-                        path:item.path,type:"video",loop:false,muted:false,startAt:0
-                    },targets,{replaceScripture:true,requireAll:true})
-                    if(received.length!==targets.length)throw Error("FreeShow no confirmó las salidas del video.")
-                    clearBlackBeforePublishing(targets)
-                    rebuildOutputs()
+                // Explicit Play of a playlist entry always begins that song
+                // at 0:00, even if its file was already on air. The separate
+                // Quick Send flow still reuses live clocks for recovery.
+                const current=get(playingVideos).filter(session=>
+                    normalizeJAContentPath(session.path)===normalizeJAContentPath(item.path) &&
+                    session.linkedOutputIds.some(target=>targets.includes(target)))
+                for(const session of current){
+                    for(const outputId of [...session.linkedOutputIds].filter(t=>targets.includes(t)))
+                        await VideoPlayer.stop(session.path,outputId)
                 }
+                if(token!==playlistToken)return
+                const received=sendToJAOutputs("background",{
+                    path:item.path,type:"video",loop:false,muted:false,startAt:0
+                },targets,{replaceScripture:true,requireAll:true})
+                if(received.length!==targets.length)throw Error("FreeShow no confirmó las salidas del video.")
+                clearBlackBeforePublishing(targets)
+                rebuildOutputs()
             }
             if(token!==playlistToken)return
             playlistWaiting=false
@@ -1135,6 +1137,7 @@
     }
     function escapeConsole(e: KeyboardEvent) {
         if (e.key !== "Escape" || settingsOpen) return
+        if(playlistOpen){e.preventDefault();playlistOpen=false;return}
         if (addMediaMenu) { e.preventDefault();closeAddMediaMenu();return }
         if (expandedTarget) { e.preventDefault();closeLocalExpanded() }
     }
@@ -1153,7 +1156,7 @@
         settingsOpen = true
     }
     function operatorShortcuts(e: KeyboardEvent) {
-        if (!(e.ctrlKey || e.metaKey) || e.key !== ",") return
+        if (playlistOpen || !(e.ctrlKey || e.metaKey) || e.key !== ",") return
         if (e.altKey || e.shiftKey) return
         e.preventDefault()
         e.stopImmediatePropagation()
@@ -1917,7 +1920,7 @@
         }
     }
     function keyboardGeminiBible(e: KeyboardEvent) {
-        if (mode !== "biblia" || settingsOpen || bibleEditorOpen || !["ArrowLeft","ArrowRight"].includes(e.key)) return
+        if (mode !== "biblia" || settingsOpen || bibleEditorOpen || playlistOpen || !["ArrowLeft","ArrowRight"].includes(e.key)) return
         if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return
         const focused = document.activeElement as HTMLElement | null
         const target = e.target as HTMLElement | null
