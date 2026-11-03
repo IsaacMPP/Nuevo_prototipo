@@ -27,7 +27,11 @@
     import { send } from "../../utils/request"
     import { VideoPlayer } from "../media/video/videoPlayer"
     import { AudioPlayer } from "../../audio/audioPlayer"
-    import { playingAudio } from "../../stores"
+    import { playingAudio, playerVideos } from "../../stores"
+    import { jaPlaylists, jaReadPlaylists, jaWritePlaylists, jaNewPlaylist, jaLocalPlaylistEntry,
+        jaYoutubePlaylistEntry, jaYoutubeId, jaMoveEntry, JA_MAX_PLAYLISTS, JA_MAX_ENTRIES,
+        type JAPlaylist, type JAPlaylistEntry } from "../../utils/jaGeminiPlaylists"
+    import JaGeminiPlaylistPanel from "./JaGeminiPlaylistPanel.svelte"
     import JaGeminiAudioControls from "./JaGeminiAudioControls.svelte"
     import { videoSync } from "../media/video/videoSync"
     import PreviewOutput from "../output/preview/PreviewOutput.svelte"
@@ -131,6 +135,25 @@
     let jaAudioGeneration=0
     let jaAudioContainer: HTMLDivElement | null = null
     let jaAudioControls: JaGeminiAudioControls | null = null
+    let playlistOpen=false
+    let selectedPlaylistId=""
+    let playlistCurrentId=""
+    let playlistIndex=-1
+    let playlistRunning=false
+    let playlistBusy=false
+    let playlistWaiting=false
+    let playlistToken=0
+    let playlistMonitor:ReturnType<typeof setInterval>|null=null
+    let playlistSawProgress=false
+    let playlistNearEnd=false
+    let playlistLastPosition=0
+    let audioOnlyLocal=false
+    let jaAudioOnlyButton:HTMLButtonElement|null=null
+    let playlistCurrentFile:{path:string;source:"multimedia"|"himnario";kind:"audio"|"video"}|null=null
+    $: playlistCurrentFile = mode!=="biblia" && prepared &&
+        (geminiFileType(prepared)==="audio"||geminiFileType(prepared)==="video")
+        ? {path:prepared,source:mode==="himnario"?"himnario":"multimedia",
+            kind:geminiFileType(prepared)==="audio"?"audio":"video"} : null
     let biblePreviewRenderer: JaGeminiBiblePreview | null = null
     let biblePreviewTimer: ReturnType<typeof setTimeout> | null = null
     let biblePreviewGeneration = 0
@@ -435,6 +458,73 @@
             notice("No fue posible reproducir el audio: "+String(error))
         }finally{if(token===jaAudioGeneration)jaAudioBusy=false}
     }
+
+    // A local MP4/hymn can play through a *single* HTMLAudioElement without
+    // sending any visual background. Audio routing remains the Windows default.
+    // YouTube is deliberately excluded: its policies require visible playback.
+    async function playJAOnlySound(path:string,targets:string[],valid:()=>boolean):Promise<boolean>{
+        if(jaAudioBusy||get(outLocked))return false
+        const available=chooseOutput()
+        const primary=localStorage.getItem("ja-main-projector")||(available.length===1?available[0]:"")
+        const kind=getMediaType(getExtension(path))
+        if((kind!=="audio" && kind!=="video") || !primary ||
+            !targets.includes(primary) || targets.some(id=>!available.includes(id))){
+            notice("Solo audio requiere un archivo local y Primario entre las salidas marcadas.")
+            return false
+        }
+        if(get(playingAudio)[path] && jaAudioPath!==path){
+            notice("Esta pista ya está siendo utilizada por otro reproductor. No se interrumpió.")
+            return false
+        }
+        // The same source could already be on-screen; otherwise we risk two
+        // audible copies of its soundtrack. Keep the active video untouched.
+        const liveVideo=get(playingVideos).some(session=>
+            normalizeJAContentPath(session.path)===normalizeJAContentPath(path) &&
+            session.linkedOutputIds.includes(primary) && !session.audio.muted)
+        if(liveVideo){
+            notice("Ese vídeo ya tiene audio en Programa. Siléncialo antes de iniciar otra copia en Solo audio.")
+            return false
+        }
+        const previous=jaAudioPath
+        jaAudioBusy=true
+        try{
+            if(jaAudioPath===path && AudioPlayer.audioExists(path))AudioPlayer.stop(path)
+            const started=await AudioPlayer.start(path,{name:fileName(path)},{playMultiple:true,startPaused:true})
+            const session=AudioPlayer.getPlaying(path)
+            if(!started || !session?.audio){
+                notice("No se pudo abrir la pista sonora. Verifica que el video tenga audio compatible con Windows.")
+                return false
+            }
+            if(!valid()||get(outLocked)||targets.some(id=>!chooseOutput().includes(id))){
+                AudioPlayer.stop(path)
+                return false
+            }
+            if(previous && previous!==path && AudioPlayer.audioExists(previous))AudioPlayer.stop(previous)
+            jaAudioPath=path
+            showJAOwnedAudio(path)
+            if(AudioPlayer.isPaused(path))AudioPlayer.play(path)
+            notice("Solo audio: "+fileName(path)+". Los versículos, fondos e imágenes de Programa permanecen intactos.")
+            return true
+        }catch(error){
+            notice("No se pudo reproducir el audio del archivo: "+String(error))
+            return false
+        }finally{jaAudioBusy=false}
+    }
+    function jaOnlyAudioSend(targets:string[]):boolean{
+        const path=prepared
+        if(!audioOnlyLocal || !path || getMediaType(getExtension(path))!=="video" ||
+            (mode!=="multimedia" && mode!=="himnario"))return false
+        void playJAOnlySound(path,targets,()=>prepared===path && audioOnlyLocal)
+        return true
+    }
+    function refreshOnlyAudioButton(){
+        if(!jaAudioOnlyButton)return
+        jaAudioOnlyButton.hidden=mode==="biblia"
+        jaAudioOnlyButton.setAttribute("aria-pressed",String(audioOnlyLocal))
+        jaAudioOnlyButton.classList.toggle("ja-checked",audioOnlyLocal)
+        jaAudioOnlyButton.textContent=audioOnlyLocal?"♫ Solo audio ✓":"♫ Solo audio"
+        jaAudioOnlyButton.title="Cuando está activo, un video o himno envía únicamente su audio; Programa conserva versículos y fondos"
+    }
     /** This handles only a running video/hymn on the configured Primary.
      * If Primary is not running this exact prepared item, the ordinary new-send
      * workflow remains unchanged. Otherwise NEW destinations join the current
@@ -524,10 +614,238 @@
             refreshGroupChoices()
         }
     }
+
+    // Persist lists only when the operator edits them, never on playback ticks.
+    function updateJAPlaylist(id:string,change:(list:JAPlaylist)=>JAPlaylist){
+        jaPlaylists.update(lists=>lists.map(list=>list.id===id?change(list):list))
+        if(!jaWritePlaylists(get(jaPlaylists)))notice("No se pudo guardar la lista en esta computadora.")
+    }
+    function stopJAPlaylist(stopSound=true){
+        ++playlistToken
+        playlistRunning=false
+        playlistWaiting=false
+        playlistBusy=false
+        playlistSawProgress=false
+        playlistNearEnd=false
+        if(stopSound && jaAudioPath && AudioPlayer.audioExists(jaAudioPath)){
+            AudioPlayer.stop(jaAudioPath)
+            jaAudioPath=""
+            jaAudioControls?.$destroy()
+            jaAudioControls=null
+            if(jaAudioContainer)jaAudioContainer.hidden=true
+        }
+        // Do not stop a video already projected: it may be controlling several
+        // outputs, and the operator explicitly decides when to clear Programa.
+    }
+    async function playJAPlaylistIndex(id:string,index:number):Promise<void>{
+        const list=get(jaPlaylists).find(p=>p.id===id)
+        const item=list?.entries[index]
+        if(!item || playlistBusy)return
+        const targets=markedGroupTargets()
+        const available=chooseOutput()
+        const primary=localStorage.getItem("ja-main-projector")||(available.length===1?available[0]:"")
+        if(get(outLocked)||!primary||!targets.includes(primary)||targets.some(t=>!available.includes(t))){
+            notice("Marca Primario y las salidas activas donde quieras reproducir la lista.")
+            return
+        }
+        const token=++playlistToken
+        playlistRunning=true
+        playlistBusy=true
+        playlistWaiting=false
+        playlistCurrentId=id
+        playlistIndex=index
+        playlistSawProgress=false
+        playlistNearEnd=false
+        playlistLastPosition=0
+        selectedPlaylistId=id
+        // Every new entry owns only the audio started by this JA playlist.
+        if(jaAudioPath && jaAudioPath!==item.path && AudioPlayer.audioExists(jaAudioPath)){
+            AudioPlayer.stop(jaAudioPath)
+            jaAudioPath=""
+            jaAudioControls?.$destroy()
+            jaAudioControls=null
+            if(jaAudioContainer)jaAudioContainer.hidden=true
+        }
+        try{
+            if(item.kind==="audio"||item.audioOnly){
+                if(item.kind==="youtube")throw Error("YouTube no admite Solo audio.")
+                const ok=await playJAOnlySound(item.path,targets,()=>token===playlistToken && playlistRunning)
+                if(!ok)throw Error("No se pudo iniciar la pista sonora.")
+            }else if(item.kind==="youtube"){
+                const youtubeId=jaYoutubeId(item.path)
+                if(!youtubeId)throw Error("El enlace de YouTube no es válido.")
+                // Native FreeShow Player.svelte -> YouTube.svelte; keep iframe
+                // visible, never extract or hide YouTube audio.
+                playerVideos.update(data=>({...data,[youtubeId]:{id:youtubeId,type:"youtube",name:item.title}}))
+                const received=sendToJAOutputs("background",{
+                    id:youtubeId,type:"player",loop:false,muted:false,startAt:0
+                },targets,{replaceScripture:true,requireAll:true})
+                if(received.length!==targets.length)throw Error("No se pudo asignar YouTube a todas las pantallas.")
+                clearBlackBeforePublishing(targets)
+                rebuildOutputs()
+                notice("YouTube enviado con video visible. Si el reproductor bloquea autoplay, pulsa Play en la pantalla.")
+            }else{
+                if(getMediaType(getExtension(item.path))!=="video")throw Error("El archivo ya no es un video válido.")
+                prepare(item.path)
+                // Keep the native shared-clock routing, with a fresh session
+                // for a different clip and no duplicate audio on the secondary.
+                const source=get(outputs)[primary]?.out?.background
+                if(normalizeJAContentPath(source?.path||"")===normalizeJAContentPath(item.path) &&
+                    !!VideoPlayer.getPlaying(item.path,[primary])){
+                    const handled=await joinAlreadyPlayingPrimary(item.path,targets)
+                    if(!handled)throw Error("No se pudo reconectar el video en curso.")
+                }else{
+                    const current=get(playingVideos).filter(session=>
+                        normalizeJAContentPath(session.path)===normalizeJAContentPath(item.path) &&
+                        session.linkedOutputIds.some(target=>targets.includes(target)))
+                    for(const session of current){
+                        for(const outputId of [...session.linkedOutputIds].filter(t=>targets.includes(t)))
+                            await VideoPlayer.stop(session.path,outputId)
+                    }
+                    if(token!==playlistToken)return
+                    const received=sendToJAOutputs("background",{
+                        path:item.path,type:"video",loop:false,muted:false,startAt:0
+                    },targets,{replaceScripture:true,requireAll:true})
+                    if(received.length!==targets.length)throw Error("FreeShow no confirmó las salidas del video.")
+                    clearBlackBeforePublishing(targets)
+                    rebuildOutputs()
+                }
+            }
+            if(token!==playlistToken)return
+            playlistWaiting=false
+            notice("Playlist: "+(index+1)+"/"+list!.entries.length+" · "+item.title)
+        }catch(error){
+            if(token===playlistToken){
+                playlistRunning=false
+                notice("Lista detenida: "+String(error))
+            }
+        }finally{
+            if(token===playlistToken)playlistBusy=false
+        }
+    }
+    function advanceJAPlaylist(manual:boolean){
+        if(!playlistRunning||playlistBusy)return
+        const list=get(jaPlaylists).find(p=>p.id===playlistCurrentId)
+        if(!list)return stopJAPlaylist()
+        if(!manual && !list.autoNext){playlistWaiting=true;notice("Canto terminado. Pulsa Siguiente para continuar.");return}
+        let next=playlistIndex+1
+        if(next>=list.entries.length){
+            if(list.repeat)next=0
+            else {stopJAPlaylist(false);notice("Playlist finalizada.");return}
+        }
+        void playJAPlaylistIndex(list.id,next)
+    }
+    function watchJAPlaylist(){
+        if(!playlistRunning||playlistBusy||playlistWaiting)return
+        const list=get(jaPlaylists).find(p=>p.id===playlistCurrentId)
+        const item=list?.entries[playlistIndex]
+        if(!list||!item)return
+        // Observe just the exact native session that JA started. Never use
+        // the private silent Preview clock or unrelated global AudioPlaylist.
+        let audio:HTMLAudioElement|{currentTime:number;duration:number;paused:boolean}|null=null
+        let found=false
+        if(item.kind==="audio"||item.audioOnly){
+            const session=AudioPlayer.getPlaying(item.path)
+            if(session?.audio){audio=session.audio;found=true}
+        }else{
+            const primary=localStorage.getItem("ja-main-projector")||""
+            const key=item.kind==="youtube"?jaYoutubeId(item.path):item.path
+            const session=VideoPlayer.getPlaying(key,[primary])
+            const onAir=get(outputs)[primary]?.out?.background
+            if(session && (onAir?.path===key || onAir?.id===key)){
+                audio=session.audio;found=true
+            }
+        }
+        if(found && audio){
+            const now=Number(audio.currentTime)||0
+            const duration=Number(audio.duration)||0
+            if(now>0.35)playlistSawProgress=true
+            if(duration>0 && now>=duration-0.5 && !audio.paused)playlistNearEnd=true
+            playlistLastPosition=now
+            if(playlistNearEnd && duration>0 && now>=duration-0.1 && !audio.paused)
+                advanceJAPlaylist(false)
+            return
+        }
+        // A session disappearing unexpectedly is not a reliable end event.
+        // Only auto-advance if its final known position was near duration;
+        // otherwise stop safely, rather than skipping music accidentally.
+        if(playlistSawProgress){
+            if(playlistNearEnd)advanceJAPlaylist(false)
+            else {
+                playlistWaiting=true
+                notice("La reproducción desapareció antes de terminar. Revisa las pantallas y pulsa Siguiente.")
+            }
+        }
+    }
+    async function playlistPanelAction(event:{type:string;id?:string;name?:string;url?:string;
+        entryId?:string;index?:number;offset?:number;value?:boolean}){
+        if(event.type==="close"){playlistOpen=false;return}
+        if(event.type==="stop"){stopJAPlaylist();return}
+        if(event.type==="next"){advanceJAPlaylist(true);return}
+        if(event.type==="play"){
+            if(event.id && Number.isInteger(event.index))
+                await playJAPlaylistIndex(event.id,event.index!)
+            return
+        }
+        if(event.type==="create"){
+            if(get(jaPlaylists).length>=JA_MAX_PLAYLISTS)return notice("Límite de listas alcanzado.")
+            const list=jaNewPlaylist(event.name||"")
+            jaPlaylists.update(lists=>[...lists,list])
+            jaWritePlaylists(get(jaPlaylists))
+            selectedPlaylistId=list.id
+            return
+        }
+        if(event.type==="select"){selectedPlaylistId=event.id||"";return}
+        if(event.type==="delete" && event.id){
+            if(playlistCurrentId===event.id)stopJAPlaylist()
+            jaPlaylists.update(lists=>lists.filter(l=>l.id!==event.id))
+            jaWritePlaylists(get(jaPlaylists))
+            selectedPlaylistId=get(jaPlaylists)[0]?.id||""
+            return
+        }
+        const id=event.id||""
+        const list=get(jaPlaylists).find(p=>p.id===id)
+        if(!list)return
+        if(event.type==="autoNext"||event.type==="repeat"){
+            updateJAPlaylist(id,l=>({...l,[event.type==="autoNext"?"autoNext":"repeat"]:!!event.value}))
+            return
+        }
+        if(event.type==="addFile"){
+            const source=mode==="himnario"?"himnario":"multimedia"
+            const file=jaLocalPlaylistEntry(prepared,source)
+            if(!file)return notice("Prepara un video, himno o audio real antes de añadirlo.")
+            if(list.entries.length>=JA_MAX_ENTRIES)return notice("Límite de elementos en esta lista.")
+            updateJAPlaylist(id,l=>({...l,entries:[...l.entries,file]}))
+            return
+        }
+        if(event.type==="addYoutube"){
+            const entry=jaYoutubePlaylistEntry(event.url||"")
+            if(!entry)return notice("El enlace debe ser de YouTube con ID válido; no se añaden direcciones de otros sitios.")
+            if(list.entries.length>=JA_MAX_ENTRIES)return notice("Límite de elementos en esta lista.")
+            updateJAPlaylist(id,l=>({...l,entries:[...l.entries,entry]}))
+            return
+        }
+        if(event.type==="remove"){
+            if(playlistRunning&&playlistCurrentId===id)return notice("Detén la lista antes de cambiar sus elementos.")
+            updateJAPlaylist(id,l=>({...l,entries:l.entries.filter(e=>e.id!==event.entryId)}))
+            return
+        }
+        if(event.type==="move"){
+            if(playlistRunning&&playlistCurrentId===id)return notice("Detén la lista antes de ordenar.")
+            updateJAPlaylist(id,l=>jaMoveEntry(l,event.index??-1,event.offset??0))
+            return
+        }
+        if(event.type==="audioOnly"){
+            if(playlistRunning&&playlistCurrentId===id)return notice("Detén la lista antes de cambiar Solo audio.")
+            updateJAPlaylist(id,l=>({...l,entries:l.entries.map(entry=>
+                entry.id===event.entryId && entry.kind==="video"?{...entry,audioOnly:!!event.value}:entry)}))
+        }
+    }
     function sendToQuickTargets() {
         if(publishingGroup)return notice("Ya se está preparando un envío sincronizado.")
         const selected=markedGroupTargets()
         if(!selected.length)return notice("Marca al menos una pantalla en Envío rápido.")
+        if(jaOnlyAudioSend(selected))return
         if(selected.length>1){void sendPreparedToGroup();return}
         publishPreparedMedia()
     }
@@ -566,6 +884,7 @@
         if(!prepared)return notice("Prepara primero un vídeo o imagen en Vista previa.")
         const mediaPath=prepared
         const kind=getMediaType(getExtension(mediaPath))
+        if(jaOnlyAudioSend(targets))return
         if(kind==="audio"){void publishPreparedAudio(mediaPath,targets);return}
         // A running Primary video/hymn is the authoritative clock. Joining
         // existing content does not restart previously linked screens.
@@ -639,6 +958,7 @@
             return notice("La salida seleccionada está inactiva o bloqueada.")
         const mediaPath=prepared
         const kind=getMediaType(getExtension(mediaPath))
+        if(jaOnlyAudioSend(targets))return
         if(kind==="audio"){void publishPreparedAudio(mediaPath,[destinationId]);return}
         if(kind==="video"){
             const mainId=localStorage.getItem("ja-main-projector")||""
@@ -1081,6 +1401,13 @@
                 send.className="ja-sync-send ja-target rounded-lg border px-2 py-1 text-xs"
                 send.onclick=sendToQuickTargets
                 targets.append(send)
+                const audioToggle=document.createElement("button")
+                audioToggle.type="button"
+                audioToggle.className="ja-target ja-only-audio-toggle rounded-lg border px-2 py-1 text-xs"
+                audioToggle.onclick=()=>{audioOnlyLocal=!audioOnlyLocal;refreshOnlyAudioButton()}
+                targets.append(audioToggle)
+                jaAudioOnlyButton=audioToggle
+                refreshOnlyAudioButton()
                 const state=document.createElement("span")
                 state.className="ja-sync-state"
                 state.setAttribute("role","status")
@@ -1288,6 +1615,12 @@
         refresh.textContent = "↻ Actualizar"
         refresh.onclick = () => mode === "multimedia" ? void scanMediaFolders() : void refreshJAHymnLibrary()
         libraryToolbar.append(refresh)
+        const playlistBtn=document.createElement("button")
+        playlistBtn.type="button"
+        playlistBtn.textContent="☰ Listas"
+        playlistBtn.title="Crear playlists mixtas, añadir el archivo preparado y elegir Solo audio"
+        playlistBtn.onclick=()=>{playlistOpen=true}
+        libraryToolbar.append(playlistBtn)
         const extras = mode === "multimedia"
             ? Object.entries(get(mediaFolders)).filter(([key,f])=>key.startsWith("ja_gemini_") && !!f?.path).map(([key,f])=>({label:f.name || f.path || key,path:f.path || "",key}))
             : (get(hymnLinks)[collection] || []).map(path=>({label:path.split(/[\/\\]/).pop()||path,path,key:""}))
@@ -1447,6 +1780,7 @@
             if(node) {node.classList.toggle("hidden",module!==next);node.classList.toggle("flex",module===next)}
         }
         setupNavigation()
+        refreshOnlyAudioButton()
         if(next==="biblia") {void registerJARV1909().then(()=>{updateBibleUI();if(get(outputs)[selectedId]?.out?.slide?.id==="temp")void restoreBibleControlForOutput(selectedId);else scheduleBiblePreview()});updateBibleUI();scheduleBiblePreview()}
         else {renderLibrary();if(next==="himnario")void refreshJAHymnLibrary()}
     }
@@ -1898,6 +2232,8 @@
             button.setAttribute("aria-current",String(id===mode))
             if(id==="biblia"||id==="multimedia"||id==="himnario")
                 button.onclick=()=>showModule(id)
+            else if(id==="listas")
+                button.onclick=()=>{playlistOpen=true}
             else {button.disabled=true;button.title="Módulo pendiente de integración en JA Gemini"}
             menu.append(button)
         }
@@ -1940,6 +2276,7 @@
         biblePreviewRenderer = null
         biblePreviewReady = false
         prepared = path
+        refreshOnlyAudioButton()
         const samePlayingVideo = !!(playingPath && selectedId &&
             normalizeJAContentPath(path)===normalizeJAContentPath(playingPath) &&
             !!VideoPlayer.getPlaying(playingPath,[selectedId]))
@@ -2038,6 +2375,9 @@
         programVolume.title = "Volumen de Programa: " + Math.round(level * 100) + "%"
     }
     onMount(() => {
+        jaPlaylists.set(jaReadPlaylists())
+        selectedPlaylistId=get(jaPlaylists)[0]?.id||""
+        playlistMonitor=setInterval(watchJAPlaylist,350)
         loadJABibleAppearances()
         try {
             previewAutoplay = localStorage.getItem("ja-gemini-preview-autoplay") !== "false"
@@ -2219,6 +2559,8 @@
         rebuildOutputs()
         return () => {
             if (timer) clearTimeout(timer)
+            if(playlistMonitor)clearInterval(playlistMonitor)
+            stopJAPlaylist()
             closeLocalExpanded()
             closeAddMediaMenu()
             scanGeneration++
@@ -2252,6 +2594,18 @@
 <svelte:head><link rel="stylesheet" href="ja-gemini.css" /><link rel="stylesheet" href="ja-gemini-layout.css" /></svelte:head>
 <div class={"ja-gemini-host " + geminiBodyClasses + (compactUi ? " ja-compact-ui" : "") + (largeUi ? " ja-large-ui" : "")} bind:this={host}>
     {@html geminiHtml}
+    {#if playlistOpen}
+        <JaGeminiPlaylistPanel
+            playlists={$jaPlaylists}
+            selectedId={selectedPlaylistId}
+            runningPlaylistId={playlistCurrentId}
+            runningIndex={playlistIndex}
+            running={playlistRunning}
+            busy={playlistBusy}
+            currentFile={playlistCurrentFile}
+            primaryLabel={get(outputs)[localStorage.getItem("ja-main-projector")||""]?.name||"Primario"}
+            on:action={event=>{void playlistPanelAction(event.detail)}}/>
+    {/if}
     {#if bibleEditorOpen && mode==="biblia"}
         <JaGeminiBibleEditor outputId={selectedId} on:close={() => {bibleEditorOpen=false}}
             on:chooseBackground={chooseBibleBackground}

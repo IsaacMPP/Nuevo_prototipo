@@ -664,3 +664,51 @@ test("P3: sincronización al agregar pantalla funciona también con video pausad
  assert.ok(video.includes("if(joinExistingClock)startAt=0"),"No saltar al tiempo anterior cuando se reproduce")
  assert.ok(!render.includes("VideoPlayer.play(")&&!render.includes("VideoPlayer.stop("),"Montar otra pantalla no afecta el reloj origen")
 });
+
+test("P5: playlists tipadas para audio, video, himnos y YouTube con persistencia",()=>{
+ const m=read("engine/src/frontend/utils/jaGeminiPlaylists.ts")
+ const p=read("engine/src/frontend/components/ja/JaGeminiPlaylistPanel.svelte")
+ const s=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ assert.ok(m.includes('JA_PLAYLISTS_KEY = "ja-gemini-playlists-v1"'),"Persistencia separada de FreeShow")
+ assert.ok(m.includes('source: JAPlaylistSource')&&m.includes('audioOnly: boolean'),"Tipo de origen y modo por entrada")
+ assert.ok(m.includes('geminiFileType(path)')&&m.includes('jaYoutubeId(value:string)'),"Validación de archivos y enlaces")
+ assert.ok(m.includes('host==="youtu.be"')&&m.includes('host==="youtube.com"'),"Solo dominios de YouTube")
+ assert.ok(m.includes('e.kind==="youtube"')&&m.includes('!e.audioOnly'),"No separar audio de YouTube")
+ assert.ok(m.includes('localStorage.setItem(JA_PLAYLISTS_KEY'),"Guardar listas sin modificar archivos")
+ assert.ok(m.includes('JA_MAX_ENTRIES = 200'),"Límite de seguridad")
+ assert.ok(p.includes("Añadir archivo preparado")&&p.includes("Pegar URL de YouTube"),"Mezcla de archivos locales y YouTube")
+ assert.ok(p.includes('action("move"')&&p.includes('action("autoNext"')&&p.includes('action("repeat"'),"Orden y avance automático")
+ assert.ok(s.includes("jaPlaylists.set(jaReadPlaylists())"),"Restaurar al arrancar")
+ assert.ok(s.includes('else if(id==="listas")'),"Acceso a listas desde la navegación")
+ assert.ok(s.includes('playlistBtn.textContent="☰ Listas"'),"Acceso sin alterar tarjetas")
+ assert.ok(s.includes("<JaGeminiPlaylistPanel"),"Panel montado en Gemini")
+});
+test("P5: Solo audio de MP4 e himnos nunca borra fondo o Biblia",()=>{
+ const s=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const audio=s.split("async function playJAOnlySound(path:string,targets:string[],valid:()=>boolean)")[1].split("function jaOnlyAudioSend(")[0]
+ assert.ok(audio.includes('kind!=="audio" && kind!=="video"'),"Aceptar pista de vídeo local")
+ assert.ok(audio.includes('AudioPlayer.start(path,{name:fileName(path)},{playMultiple:true,startPaused:true})'),"Motor nativo de sonido")
+ assert.ok(audio.includes('targets.includes(primary)'),"Una sola ruta de sonido Primario")
+ assert.ok(audio.includes("liveVideo"),"Prevenir duplicar sonido de un video activo")
+ assert.ok(audio.includes("jaAudioPath!==path"),"No interrumpir otro reproductor")
+ assert.ok(audio.includes("showJAOwnedAudio(path)"),"Controles de audio reales")
+ assert.ok(!audio.includes("setOutput(")&&!audio.includes("sendToJAOutputs(")&&!audio.includes("clearSlide(")&&!audio.includes("clearBackground("),"Solo audio no altera imagen o texto")
+ assert.ok(s.includes('audioToggle.className="ja-target ja-only-audio-toggle'),"Modo rápido visible")
+ assert.ok(s.includes("if(jaOnlyAudioSend(selected))return"),"Envío rápido respeta el modo")
+});
+test("P5: avanzar mixto usa el motor existente y YouTube visible",()=>{
+ const s=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const native=read("engine/src/frontend/components/output/layers/BackgroundMedia.svelte")
+ const run=s.split("async function playJAPlaylistIndex(id:string,index:number)")[1].split("function advanceJAPlaylist(")[0]
+ assert.ok(run.includes('item.kind==="audio"||item.audioOnly'),"Lista admite pistas locales")
+ assert.ok(run.includes("playJAOnlySound(item.path,targets"),"Reproduce audio sin video")
+ assert.ok(run.includes('playerVideos.update(data=>({...data,[youtubeId]'),"Registro nativo YouTube")
+ assert.ok(run.includes('id:youtubeId,type:"player",loop:false'),"No reproducción oculta en YouTube")
+ assert.ok(native.includes('<Player {outputId} {id} on:loaded />'),"YouTube usa el iframe de FreeShow")
+ assert.ok(run.includes('type:"video",loop:false,muted:false,startAt:0'),"Video local en el reloj nativo")
+ assert.ok(run.includes('sendToJAOutputs("background"'),"Proyección por destinos marcados")
+ assert.ok(!run.includes('type:"youtube-audio"'),"No separar audio de YouTube")
+ assert.ok(s.includes('playlistMonitor=setInterval(watchJAPlaylist,350)'),"Vigilar fin de sesión")
+ assert.ok(s.includes('if(!manual && !list.autoNext)')&&s.includes('if(list.repeat)next=0'),"Manual y repetición")
+ assert.ok(s.includes('AudioPlayer.getPlaying(item.path)')&&s.includes('VideoPlayer.getPlaying(key,[primary])'),"Reconocer audio y video real")
+});
