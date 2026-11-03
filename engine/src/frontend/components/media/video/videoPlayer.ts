@@ -690,6 +690,23 @@ export class VideoPlayer {
         this.setAudioValue(path, outputId, "currentTime", time)
     }
 
+    /** Only alter a private one-screen clock. Never change all linked outputs. */
+    static setLoopForSingleOutput(path:string,outputId:string,enabled:boolean):boolean {
+        const session=this.getPlaying(path,[outputId])
+        if(!session || session.linkedOutputIds.length!==1 ||
+            session.linkedOutputIds[0]!==outputId)return false
+        playingVideos.update(entries=>{
+            if(!entries.includes(session))return entries
+            session.loop=enabled
+            const from=session.fromTime||0
+            const to=session.toTime||session.audio.duration
+            const bounded=from>0 || (to>0 && to<session.audio.duration)
+            session.audio.loop=enabled && !bounded
+            return [...entries]
+        })
+        this.initSyncClock()
+        return true
+    }
     static toggleLoop(path: string, outputId: string) {
         const playing = this.getPlaying(path, outputId ? [outputId] : undefined)
         if (!playing) return
