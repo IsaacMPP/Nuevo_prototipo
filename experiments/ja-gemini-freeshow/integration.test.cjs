@@ -345,7 +345,7 @@ test("Envío sincronizado: destinos marcados independientes de inspección y UI 
  assert.ok(shell.includes('quickGroup.onclick=()=>{void sendPreparedToGroup()}'),"Envío rápido de grupo inerte")
  assert.ok(css.includes(".ja-sync-panel"),"Estilo del panel de sincronización faltante")
  assert.ok(shell.includes("for(const id of [...syncedTargetIds])if(!available.includes(id))syncedTargetIds.delete(id)"),"No retirar monitor desconectado del grupo")
- assert.ok(shell.includes("if(count<2"),"El botón requiere mínimo 2 destinos")
+ assert.ok(shell.includes("count<2 || get(outLocked)"),"El botón requiere mínimo 2 destinos")
 });
 test("Multimedia sincronizada realiza una única emisión atómica y audio de primaria",()=>{
  const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
