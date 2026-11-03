@@ -17,7 +17,7 @@ test("El adaptador usa salidas reales de FreeShow, nunca los vídeos ficticios",
  for(const expected of ["setOutput(","PreviewOutput","videoSync(","VideoPlayer.pause(","VideoPlayer.play(","VideoPlayer.seekTo(","clearBackground(selectedId)","get(outputs)","Main.READ_FOLDER","hymnVideos"]){
   assert.ok(s.includes(expected), "Falta cableado real: "+expected);
  }
- assert.ok(s.includes("!selectedId || !available.includes(selectedId)"),"No se ha protegido el destino explícito");
+ assert.ok(s.includes("!destinationId || !available.includes(destinationId)"),"No se ha protegido el destino marcado explícito");
 });
 test("El arranque no deja llamadas a auxiliares desaparecidos",()=>{
  const source=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
@@ -166,10 +166,10 @@ test("Regresiones físicas de cuatro botones: Restablecer, Ampliar, Agregar y Li
 test("Reglas de emisión: al publicar multimedia desaparece escritura temporal sin cortar audio de otros destinos",()=>{
  const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
  assert.ok(shell.includes('setOutput("background",{'),"Debe conservar el envío nativo a una salida de FreeShow")
- assert.ok(shell.includes('},false,selectedId)'),"El envío debe nombrar la salida, no proyectar implícitamente a todas")
+ assert.ok(shell.includes('},false,destinationId)'),"El envío individual debe nombrar la salida marcada, nunca proyectar implícitamente a todas")
  assert.ok(shell.includes('if(scriptureSlide && (scriptureSlide.id==="temp" || scriptureSlide.id==="tempText"))'),"Debe limpiar solo el pasaje temporal")
- assert.ok(shell.includes('clearSlide(true,selectedId)'),"La Biblia previa debe retirarse del destino")
- assert.ok(shell.includes('clearBlackBeforePublishing([selectedId])'),"Cortina negra no puede ocultar el siguiente contenido")
+ assert.ok(shell.includes('clearSlide(true,destinationId)'),"La Biblia previa debe retirarse del destino marcado")
+ assert.ok(shell.includes('clearBlackBeforePublishing([destinationId])'),"Cortina negra no puede ocultar el siguiente contenido marcado")
  const destinations=read("engine/src/frontend/utils/jaProjectionDestinations.ts")
  assert.ok(destinations.includes('!!o.screen'),"No permitir multi-output sin asignación física")
  const publisher=shell.split('function publishPreparedMedia(')[1].split('function toggleFollowProgram()')[0]
@@ -213,8 +213,8 @@ test("S0: el envío de una salida no exige campo screen ni primaryId de JA",()=>
  const f=shell.split("function publishPreparedMedia(")[1].split("function toggleFollowProgram()")[0]
  assert.ok(f.includes("setOutput(\"background\""),"El envío único debe volver a FreeShow")
  assert.ok(!f.includes("sendToJAOutputs("),"Nunca bloquear la única salida con el router multipantalla")
- assert.ok(f.includes("get(outputs)[selectedId]?.active"),"No proyectar en salida inactiva")
- assert.ok(f.includes("!selectedId || !available.includes(selectedId)"),"No permitir difusión sin destino explícito")
+ assert.ok(f.includes("get(outputs)[destinationId]?.active"),"No proyectar en salida inactiva")
+ assert.ok(f.includes("!destinationId || !available.includes(destinationId)"),"No permitir difusión sin destino marcado")
  assert.ok(router.includes("!primaryId"),"El router de múltiples destinos exige primario; no reutilizarlo para la salida única")
 });
 test("Transiciones y controles visibles cumplen un contrato mínimo sin efectos simulados",()=>{
@@ -279,10 +279,10 @@ test("Logo personalizado reconstruye clave del renderizador y no conserva imagen
 test("Salida seleccionada mantiene control único; las secundarias empiezan sin audio",()=>{
  const s=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
  const pub=s.split("function publishPreparedMedia()")[1].split("function toggleFollowProgram()")[0]
- assert.ok(pub.includes("!selectedId || !available.includes(selectedId)"),"Se requiere salida seleccionada")
+ assert.ok(pub.includes("!destinationId || !available.includes(destinationId)"),"Se requiere salida marcada")
  assert.ok(!pub.includes("available.length!==1"),"No bloquear Programa al configurar más salidas")
- assert.ok(pub.includes("muted:available.length>1 && selectedId!==mainId"),"Secundarias deben empezar silenciadas")
- assert.ok(pub.includes('},false,selectedId)'),"Nunca hacer broadcast por omisión")
+ assert.ok(pub.includes("muted:available.length>1 && destinationId!==mainId"),"Secundarias deben empezar silenciadas")
+ assert.ok(pub.includes('},false,destinationId)'),"Nunca hacer broadcast por omisión")
 });
 
 test("Operador queda bloqueado por identificador nativo, no por número de Windows",()=>{
