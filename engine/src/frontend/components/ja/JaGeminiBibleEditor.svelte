@@ -27,7 +27,7 @@
         <button class="editor-close" type="button" aria-label="Cerrar editor bíblico" on:click={() => dispatch("close")}>✕</button>
     </header>
     <div class="editor-body">
-        <p class="editor-note">Los cambios se preparan en Vista previa. Se proyectan al pulsar Proyectar, Aplicar o avanzar con seguimiento activo.</p>
+        <p class="editor-note">Cada ajuste modifica solo su propiedad. Los demás conservan el diseño original de FreeShow. Vista previa se actualiza al instante; Programa solo cambia con Proyectar, Aplicar o seguimiento activo.</p>
         <label class="editor-field">
             <span>Fuente</span>
             <select aria-label="Fuente bíblica" value={appearance.fontFamily}

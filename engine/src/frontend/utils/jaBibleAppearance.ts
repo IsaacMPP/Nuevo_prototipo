@@ -7,6 +7,7 @@ import type { Item } from "../../types/Show"
 export const JA_BIBLE_APPEARANCE_KEY = "ja-gemini-bible-appearances-v1"
 export const JA_BIBLE_FONT_FAMILIES = ["Arial", "Aptos", "Verdana", "Tahoma", "Georgia", "Times New Roman"] as const
 export type JABibleAppearance = {
+    enabledFields: string[] // only explicitly edited properties override the native template
     fontFamily: string
     fontSize: number
     fontWeight: "normal" | "bold"
@@ -19,12 +20,16 @@ export type JABibleAppearance = {
     backgroundPath: string
 }
 export const DEFAULT_JA_BIBLE_APPEARANCE: JABibleAppearance = {
-    fontFamily:"Arial",fontSize:72,fontWeight:"normal",textColor:"#FFFFFF",
+    enabledFields:[],fontFamily:"Arial",fontSize:72,fontWeight:"normal",textColor:"#FFFFFF",
     textAlign:"center",verticalAlign:"center",shadow:true,
     backgroundMode:"color",backgroundColor:"#10182A",backgroundPath:""
 }
 export const jaBibleAppearances = writable<Record<string,JABibleAppearance>>({})
 
+const EDITABLE_FIELDS=["fontFamily","fontSize","fontWeight","textColor","textAlign","verticalAlign","shadow","backgroundMode","backgroundColor","backgroundPath"] as const
+const isEditableField=(key:string):boolean=>(EDITABLE_FIELDS as readonly string[]).includes(key)
+export const hasJABibleBackgroundOverride=(style:JABibleAppearance|undefined):boolean=>
+    !!style?.enabledFields?.some(key=>["backgroundMode","backgroundColor","backgroundPath"].includes(key))
 const safeColor=(value:unknown,defaultValue:string):string=>
     typeof value==="string" && /^#[0-9a-fA-F]{6}$/.test(value) ? value : defaultValue
 const clampSize=(value:unknown):number=> {
@@ -34,6 +39,7 @@ const clampSize=(value:unknown):number=> {
 export function normalizeJABibleAppearance(value:Partial<JABibleAppearance>|null|undefined):JABibleAppearance {
     const v=value||{}
     return {
+        enabledFields:(Array.isArray(v.enabledFields) ? v.enabledFields : Object.keys(v)).filter(key=>typeof key==="string"&&isEditableField(key)),
         fontFamily:JA_BIBLE_FONT_FAMILIES.includes(v.fontFamily as typeof JA_BIBLE_FONT_FAMILIES[number])
             ? v.fontFamily! : DEFAULT_JA_BIBLE_APPEARANCE.fontFamily,
         fontSize:clampSize(v.fontSize),
@@ -69,9 +75,11 @@ function persist():void {
 }
 export function setJABibleAppearance(id:string,patch:Partial<JABibleAppearance>):void {
     if(!id)return
-    jaBibleAppearances.update(current=>({
-        ...current,[id]:normalizeJABibleAppearance({...current[id],...patch})
-    }))
+    jaBibleAppearances.update(current=>{
+        const previous=current[id]
+        const enabledFields=[...(previous?.enabledFields||[]),...Object.keys(patch).filter(isEditableField)]
+        return {...current,[id]:normalizeJABibleAppearance({...previous,...patch,enabledFields})}
+    })
     persist()
 }
 export function resetJABibleAppearance(id:string):void {
@@ -83,32 +91,41 @@ export function resetJABibleAppearance(id:string):void {
 // including its lack of an override. Other unselected outputs are untouched.
 export function copyJABibleAppearanceToTargets(sourceId:string,targets:string[]):void {
     const source=getJABibleAppearance(sourceId)
-    jaBibleAppearances.update(current=>{
-        const next={...current}
-        for(const id of targets)if(id!==sourceId){
-            if(source)next[id]={...source}
-            else delete next[id]
+    const current=get(jaBibleAppearances)
+    const next={...current}
+    let changed=false
+    for(const id of targets)if(id!==sourceId){
+        if(source && JSON.stringify(next[id]||null)!==JSON.stringify(source)){
+            next[id]={...source}
+            changed=true
+        } else if(!source && next[id]){
+            delete next[id]
+            changed=true
         }
-        return next
-    })
-    persist()
+    }
+    if(changed){jaBibleAppearances.set(next);persist()}
 }
 export function applyJABibleAppearanceToItems(items:Item[],raw:JABibleAppearance):Item[]{
-    const appearance=normalizeJABibleAppearance(raw)
-    const vert=appearance.verticalAlign==="top"?"flex-start":appearance.verticalAlign==="bottom"?"flex-end":"center"
-    const textStyle=`font-family:"${appearance.fontFamily}";font-size:${appearance.fontSize}px;font-weight:${appearance.fontWeight};color:${appearance.textColor};text-shadow:${appearance.shadow?"2px 2px 5px rgba(0,0,0,.9)":"none"};`
+    const a=normalizeJABibleAppearance(raw)
+    const enabled=new Set(a.enabledFields)
+    const vert=a.verticalAlign==="top"?"flex-start":a.verticalAlign==="bottom"?"flex-end":"center"
+    const css=[
+        enabled.has("fontFamily") ? `font-family:"${a.fontFamily}";` : "",
+        enabled.has("fontSize") ? `font-size:${a.fontSize}px;` : "",
+        enabled.has("fontWeight") ? `font-weight:${a.fontWeight};` : "",
+        enabled.has("textColor") ? `color:${a.textColor};` : "",
+        enabled.has("shadow") ? `text-shadow:${a.shadow?"2px 2px 5px rgba(0,0,0,.9)":"none"};` : ""
+    ].join("")
     return items.map(item=>{
         if(!item?.lines?.length || (item.type && item.type!=="text"))return item
         return {
             ...item,
-            textFit:"none",
-            align:`${item.align||""};align-items:${vert};`,
+            textFit:enabled.has("fontSize")?"none" as Item["textFit"]:item.textFit,
+            align:enabled.has("verticalAlign")?`${item.align||""};align-items:${vert};`:item.align,
             lines:item.lines.map(line=>({
                 ...line,
-                align:`${line.align||""};text-align:${appearance.textAlign};`,
-                text:line.text.map(segment=>({
-                    ...segment,style:`${segment.style||""};${textStyle}`
-                }))
+                align:enabled.has("textAlign")?`${line.align||""};text-align:${a.textAlign};`:line.align,
+                text:line.text.map(segment=>({...segment,style:`${segment.style||""};${css}`}))
             }))
         }
     })

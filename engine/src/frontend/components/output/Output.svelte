@@ -231,7 +231,8 @@
     let styleTemplate: Template | null = null
     const getStyleTemplateData = () => (styleTemplate = getStyleTemplate(slide!, currentStyle))
     $: jaBibleAppearance = slide?.id==="temp" ? slide.jaBibleAppearance : undefined
-    $: templateBackground = jaBibleAppearance ? "" : styleTemplate?.settings?.backgroundPath || ""
+    $: jaBibleBackgroundOverride=!!jaBibleAppearance?.enabledFields?.some(key=>["backgroundMode","backgroundColor","backgroundPath"].includes(key))
+    $: templateBackground = jaBibleBackgroundOverride ? "" : styleTemplate?.settings?.backgroundPath || ""
 
     // lines
     let lines: { [key: string]: { start: number | null; end: number | null; linesStart?: number | null; linesEnd?: number | null; clickRevealed?: boolean } } = {}
@@ -330,7 +331,7 @@
 
     // values
     $: backgroundColor = currentOutput?.transparent ? "transparent"
-        : jaBibleAppearance ? (jaBibleAppearance.backgroundMode==="color" ? jaBibleAppearance.backgroundColor : "#000000")
+        : jaBibleBackgroundOverride ? (jaBibleAppearance?.backgroundMode==="color" ? jaBibleAppearance.backgroundColor : "#000000")
         : styleTemplate?.settings?.backgroundColor || currentSlide?.settings?.color || currentStyle?.background || slide?.settings?.backgroundColor || "black"
     // background image
     $: styleBackground = currentStyle?.clearStyleBackgroundOnText && (slide || background) ? "" : currentStyle?.backgroundImage || ""

@@ -479,3 +479,16 @@ test("Biblia: aplicar estilo en vivo no modifica pasajes ajenos ni envía una re
  assert.ok(p.includes("await refreshLiveScripture()"),"Aplicar debe usar proyección FreeShow existente")
  assert.ok(!p.includes("sendToJAOutputs("),"No enviar una nueva diapositiva a un destino implícito")
 });
+
+test("Biblia: editar un solo ajuste conserva el resto de la plantilla original",()=>{
+ const model=read("engine/src/frontend/utils/jaBibleAppearance.ts")
+ const bible=read("engine/src/frontend/components/drawer/bible/scripture.ts")
+ const output=read("engine/src/frontend/components/output/Output.svelte")
+ assert.ok(model.includes("enabledFields: string[]"),"Registrar solo propiedades cambiadas")
+ assert.ok(model.includes("enabled.has(\"fontSize\")"),"Tamaño debe ser un override opcional")
+ assert.ok(model.includes('textFit:enabled.has("fontSize")'),"No alterar auto ajuste al cambiar fondo")
+ assert.ok(model.includes("hasJABibleBackgroundOverride"),"Diferenciar fondo no editado de personalizado")
+ assert.ok(bible.includes("hasJABibleBackgroundOverride(appearance)"),"No borrar fondo de plantilla al editar otra propiedad")
+ assert.ok(output.includes("jaBibleBackgroundOverride"),"No ocultar fondo de plantilla cuando solo se cambia tipografía")
+ assert.ok(model.includes("if(changed){jaBibleAppearances.set(next);persist()}"),"No redibujar Preview innecesariamente al navegar grupo")
+});

@@ -17,7 +17,7 @@ import { trackScriptureUsage } from "../../../utils/analytics"
 import { getJADestinations } from "../../../utils/jaProjectionDestinations"
 import { jaControlledOutputId } from "../../../utils/jaControlledOutput"
 import { TemplateHelper } from "../../../utils/templates"
-import { getJABibleAppearance, copyJABibleAppearanceToTargets } from "../../../utils/jaBibleAppearance"
+import { getJABibleAppearance, copyJABibleAppearanceToTargets, hasJABibleBackgroundOverride } from "../../../utils/jaBibleAppearance"
 import { getKey } from "../../../values/keys"
 import { customActionActivation } from "../../actions/actions"
 import { getItemText } from "../../edit/scripts/textStyle"
@@ -406,8 +406,8 @@ export async function prepareGeminiScriptureDraft(outputId?:string) {
     )
     const helper = new TemplateHelper(getScriptureTemplateId())
     const appearance = getJABibleAppearance(outputId || getJAMainOutput()?.id || "")
-    const backgroundPath = appearance
-        ? appearance.backgroundMode==="image" ? appearance.backgroundPath : ""
+    const backgroundPath = hasJABibleBackgroundOverride(appearance)
+        ? appearance!.backgroundMode==="image" ? appearance!.backgroundPath : ""
         : helper.getSetting("backgroundPath") || ""
     const main = getJAMainOutput()
     const currentStyle = get(styles)[main?.style || ""] || {}
@@ -417,7 +417,7 @@ export async function prepareGeminiScriptureDraft(outputId?:string) {
         id: "temp", categoryId, scriptureReference: reference, jaBibleAppearance: appearance,
         tempItems: slides[0] || [], attributionString: getMergedAttribution(biblesContent, attributions),
         translations: biblesContent.length,
-        settings: { backgroundColor: appearance?.backgroundMode==="color" ? appearance.backgroundColor : helper.getSetting("backgroundColor") },
+        settings: { backgroundColor: hasJABibleBackgroundOverride(appearance) && appearance?.backgroundMode==="color" ? appearance.backgroundColor : helper.getSetting("backgroundColor") },
         customDynamicValues: slideDynamicValues[0]
     }
     return {
@@ -550,7 +550,7 @@ async function projectScripture(outputIds: string[], explicit: boolean, recordMa
     const slidePayload = { id: "temp", categoryId, scriptureReference: referenceSnapshot,
         jaBibleAppearance: appearance, tempItems, previousSlides, nextSlides,
         attributionString, translations: biblesContent.length,
-        settings:{...settings,backgroundColor:appearance?.backgroundMode==="color"?appearance.backgroundColor:settings.backgroundColor},
+        settings:{...settings,backgroundColor:hasJABibleBackgroundOverride(appearance) && appearance?.backgroundMode==="color"?appearance.backgroundColor:settings.backgroundColor},
         customDynamicValues: slideDynamicValues[0] }
     if (explicit) {
         // FreeShow's generic slide handler clears foreground backgrounds
@@ -578,8 +578,8 @@ async function projectScripture(outputIds: string[], explicit: boolean, recordMa
         if (name || apiId) trackScriptureUsage(name, apiId, reference)
     })
 
-    const templateBackground = appearance
-        ? appearance.backgroundMode==="image" ? appearance.backgroundPath : ""
+    const templateBackground = hasJABibleBackgroundOverride(appearance)
+        ? appearance!.backgroundMode==="image" ? appearance!.backgroundPath : ""
         : _template.getSetting("backgroundPath")
 
     // When a Bible template removes its image background (including "Restore
