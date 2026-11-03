@@ -133,3 +133,13 @@ export function jaMoveEntry(list:JAPlaylist,index:number,offset:number):JAPlayli
     next.splice(to,0,entry)
     return {...list,entries:next}
 }
+
+/** Move an entry anywhere within a list, preserving stable IDs. */
+export function jaMoveEntryTo(list:JAPlaylist,from:number,to:number):JAPlaylist{
+    if(!Number.isInteger(from)||!Number.isInteger(to)||from<0||from>=list.entries.length
+        ||to<0||to>list.entries.length)return list
+    const entries=[...list.entries]
+    const [entry]=entries.splice(from,1)
+    entries.splice(Math.min(to,entries.length),0,entry)
+    return {...list,entries}
+}

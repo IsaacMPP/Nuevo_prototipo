@@ -742,3 +742,23 @@ test("P5: modos normal, aleatorio, repetir lista/canción y migración existente
  assert.ok(p.includes('aria-pressed={current.playMode===playbackMode.id}'),"Indicador activo")
  assert.ok(p.includes('action("loopVideo"'),"Bucle video distinto al modo lista")
 });
+
+test("P5: Biblioteca integrada real y agregado rápido sin modificar reproducción",()=>{
+ const panel=read("engine/src/frontend/components/ja/JaGeminiPlaylistPanel.svelte")
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const model=read("engine/src/frontend/utils/jaGeminiPlaylists.ts")
+ assert.ok(panel.includes('role="dialog"')&&panel.includes('aria-modal="false"'),"Panel integrado no modal de pantalla completa")
+ assert.ok(panel.includes('class="dock-library"')&&panel.includes('class="dock-queue"'),"Biblioteca y cola simultáneas")
+ assert.ok(panel.includes('matches.slice(0,shown)'),"No cargar 613 canciones en el DOM")
+ assert.ok(panel.includes('on:input={()=>shown=60}'),"Búsqueda en toda la biblioteca")
+ assert.ok(panel.includes('on:click={()=>addOne(file)}'),"Añadir una canción sin preparar")
+ assert.ok(panel.includes('on:click={addChecked}'),"Añadir varios archivos")
+ assert.ok(panel.includes('on:dragstart={e=>onLibraryDrag(e,file)}')&&panel.includes('on:drop={e=>onQueueDrop(e,index)}'),"Arrastrar de biblioteca y reordenar")
+ assert.ok(shell.includes('libraryFiles={playlistLibraryFiles}'),"Usar índices de archivos reales")
+ assert.ok(shell.includes('geminiLocalFiles($hymnVideos as FileFolder[],[])'),"Himnario completo disponible desde cualquier módulo")
+ assert.ok(shell.includes('if(event.type==="addFiles")'),"Controlador de agregado directo")
+ assert.ok(shell.includes('if(event.type==="reorder")'),"Mover posiciones de cola")
+ assert.ok(model.includes("export function jaMoveEntryTo"),"Ordenar entradas sin cambiar IDs")
+ assert.ok(panel.includes("Pegar URL de YouTube"),"Conservar enlaces de YouTube")
+ assert.ok(!panel.includes("ja-media-card"),"No alterar las tarjetas originales del catálogo")
+});

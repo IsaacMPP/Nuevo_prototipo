@@ -29,7 +29,7 @@
     import { AudioPlayer } from "../../audio/audioPlayer"
     import { playingAudio, playerVideos } from "../../stores"
     import { jaPlaylists, jaReadPlaylists, jaWritePlaylists, jaNewPlaylist, jaLocalPlaylistEntry,
-        jaYoutubePlaylistEntry, jaYoutubeId, jaMoveEntry, jaShuffleOrder, jaNextIndex, jaPlaybackMode, JA_MAX_PLAYLISTS, JA_MAX_ENTRIES,
+        jaYoutubePlaylistEntry, jaYoutubeId, jaMoveEntry, jaMoveEntryTo, jaShuffleOrder, jaNextIndex, jaPlaybackMode, JA_MAX_PLAYLISTS, JA_MAX_ENTRIES,
         type JAPlaylist, type JAPlaylistEntry } from "../../utils/jaGeminiPlaylists"
     import JaGeminiPlaylistPanel from "./JaGeminiPlaylistPanel.svelte"
     import JaGeminiAudioControls from "./JaGeminiAudioControls.svelte"
@@ -150,6 +150,11 @@
     let playlistShuffleOrder:number[]=[]
     let playlistShufflePosition=0
     let playlistPaused=false
+    let playlistLibraryFiles:Array<{path:string;name:string;source:"multimedia"|"himnario";kind:"video"|"audio"}>=[]
+    $: playlistLibraryFiles=[
+        ...indexedMedia.filter(f=>f.kind==="video"||f.kind==="audio").map(f=>({path:f.path,name:f.name,source:"multimedia" as const,kind:f.kind as "video"|"audio"})),
+        ...geminiLocalFiles($hymnVideos as FileFolder[],[]).filter(f=>f.kind==="video").map(f=>({path:f.path,name:f.name,source:"himnario" as const,kind:"video" as const}))
+    ]
     let audioOnlyLocal=false
     let jaAudioOnlyButton:HTMLButtonElement|null=null
     let playlistCurrentFile:{path:string;source:"multimedia"|"himnario";kind:"audio"|"video"}|null=null
@@ -791,7 +796,8 @@
         }
     }
     async function playlistPanelAction(event:{type:string;id?:string;name?:string;url?:string;
-        entryId?:string;index?:number;offset?:number;value?:boolean;playMode?:string}){
+        entryId?:string;index?:number;offset?:number;value?:boolean;playMode?:string;
+        files?:Array<{path:string;source:"multimedia"|"himnario"}>;from?:number;to?:number}){
         if(event.type==="close"){playlistOpen=false;return}
         if(event.type==="stop"){stopJAPlaylist();return}
         if(event.type==="next"){advanceJAPlaylist(true);return}
@@ -861,6 +867,22 @@
             if(playlistRunning&&playlistCurrentId===id)return notice("Detén la lista antes de cambiar el bucle de sus videos.")
             updateJAPlaylist(id,l=>({...l,entries:l.entries.map(entry=>
                 entry.id===event.entryId && entry.kind==="video"?{...entry,loopVideo:!!event.value}:entry)}))
+            return
+        }
+        if(event.type==="addFiles"){
+            if(playlistRunning&&playlistCurrentId===id)return notice("Detén la lista antes de añadir elementos.")
+            const files=(event.files||[]).slice(0,JA_MAX_ENTRIES).map(f=>jaLocalPlaylistEntry(f.path,f.source))
+                .filter((f):f is JAPlaylistEntry=>!!f)
+            if(!files.length)return notice("No hay archivos de audio o video válidos para añadir.")
+            const room=JA_MAX_ENTRIES-list.entries.length
+            if(room<=0)return notice("Límite de elementos alcanzado.")
+            updateJAPlaylist(id,l=>({...l,entries:[...l.entries,...files.slice(0,room)]}))
+            notice("Añadidos "+Math.min(room,files.length)+" archivos reales a la lista.")
+            return
+        }
+        if(event.type==="reorder"){
+            if(playlistRunning&&playlistCurrentId===id)return notice("Detén la lista antes de ordenar.")
+            updateJAPlaylist(id,l=>jaMoveEntryTo(l,event.from??-1,event.to??-1))
             return
         }
         if(event.type==="addFile"){
@@ -2657,6 +2679,8 @@
             running={playlistRunning}
             busy={playlistBusy}
             currentFile={playlistCurrentFile}
+            libraryFiles={playlistLibraryFiles}
+            paused={playlistPaused}
             primaryLabel={get(outputs)[localStorage.getItem("ja-main-projector")||""]?.name||"Primario"}
             on:action={event=>{void playlistPanelAction(event.detail)}}/>
     {/if}
