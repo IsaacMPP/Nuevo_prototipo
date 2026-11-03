@@ -15,23 +15,28 @@ export type JABibleAppearance = {
     textAlign: "left" | "center" | "right"
     verticalAlign: "top" | "center" | "bottom"
     shadow: boolean
+    lineBackgroundOpacity: number // 0 transparent, 100 opaque; background only, never text
     backgroundMode: "color" | "image"
     backgroundColor: string
     backgroundPath: string
 }
 export const DEFAULT_JA_BIBLE_APPEARANCE: JABibleAppearance = {
     enabledFields:[],fontFamily:"Arial",fontSize:72,fontWeight:"normal",textColor:"#FFFFFF",
-    textAlign:"center",verticalAlign:"center",shadow:true,
+    textAlign:"center",verticalAlign:"center",shadow:true,lineBackgroundOpacity:65,
     backgroundMode:"color",backgroundColor:"#10182A",backgroundPath:""
 }
 export const jaBibleAppearances = writable<Record<string,JABibleAppearance>>({})
 
-const EDITABLE_FIELDS=["fontFamily","fontSize","fontWeight","textColor","textAlign","verticalAlign","shadow","backgroundMode","backgroundColor","backgroundPath"] as const
+const EDITABLE_FIELDS=["fontFamily","fontSize","fontWeight","textColor","textAlign","verticalAlign","shadow","lineBackgroundOpacity","backgroundMode","backgroundColor","backgroundPath"] as const
 const isEditableField=(key:string):boolean=>(EDITABLE_FIELDS as readonly string[]).includes(key)
 export const hasJABibleBackgroundOverride=(style:JABibleAppearance|undefined):boolean=>
     !!style?.enabledFields?.some(key=>["backgroundMode","backgroundColor","backgroundPath"].includes(key))
 const safeColor=(value:unknown,defaultValue:string):string=>
     typeof value==="string" && /^#[0-9a-fA-F]{6}$/.test(value) ? value : defaultValue
+const clampPercent=(value:unknown,fallback:number):number=>{
+    const n=Number(value)
+    return value===undefined || value===null || !Number.isFinite(n) ? fallback : Math.max(0,Math.min(100,Math.round(n)))
+}
 const clampSize=(value:unknown):number=> {
     const numeric=Number(value)
     return Number.isFinite(numeric) ? Math.max(24,Math.min(180,Math.round(numeric))) : 72
@@ -48,6 +53,7 @@ export function normalizeJABibleAppearance(value:Partial<JABibleAppearance>|null
         textAlign:v.textAlign==="left"||v.textAlign==="right"?v.textAlign:"center",
         verticalAlign:v.verticalAlign==="top"||v.verticalAlign==="bottom"?v.verticalAlign:"center",
         shadow:v.shadow!==false,
+        lineBackgroundOpacity:clampPercent(v.lineBackgroundOpacity,DEFAULT_JA_BIBLE_APPEARANCE.lineBackgroundOpacity),
         backgroundMode:v.backgroundMode==="image"?"image":"color",
         backgroundColor:safeColor(v.backgroundColor,DEFAULT_JA_BIBLE_APPEARANCE.backgroundColor),
         backgroundPath:typeof v.backgroundPath==="string" && v.backgroundPath.length<4096 &&
@@ -105,6 +111,76 @@ export function copyJABibleAppearanceToTargets(sourceId:string,targets:string[])
     }
     if(changed){jaBibleAppearances.set(next);persist()}
 }
+// Change only the paint behind Scripture, never the opacity of the entire
+// item or span (which would make the letters transparent too). Extract the
+// original solid RGB whenever possible, preserving black and tinted backdrops.
+function bibleBackdropColor(base:string|undefined,percent:number):string {
+    const alpha=(clampPercent(percent,65)/100).toFixed(2)
+    const source=(base||"").trim()
+    const hex=source.match(/^#([a-f\d]{3,4}|[a-f\d]{6}|[a-f\d]{8})$/i)
+    if(hex){
+        let digits=hex[1]
+        if(digits.length===3||digits.length===4)digits=digits.slice(0,3).split("").map(x=>x+x).join("")
+        const rgb=[0,2,4].map(start=>parseInt(digits.slice(start,start+2),16))
+        return `rgba(${rgb.join(",")},${alpha})`
+    }
+    const rgb=source.match(/^rgba?\(\s*([\d.]+)(?:\s*,\s*|\s+)([\d.]+)(?:\s*,\s*|\s+)([\d.]+)/i)
+    if(rgb){
+        const channels=rgb.slice(1,4).map(value=>Math.min(255,Math.max(0,Math.round(Number(value)||0))))
+        return `rgba(${channels.join(",")},${alpha})`
+    }
+    const named:Record<string,string>={black:"#000000",white:"#ffffff",transparent:"#000000"}
+    return source.toLowerCase() in named ? bibleBackdropColor(named[source.toLowerCase()],percent)
+        : `rgba(0,0,0,${alpha})`
+}
+function solidBackgroundInCss(style:string):string|undefined {
+    const statements=style.match(/(?:^|;)\s*(?:background-color|background)\s*:\s*[^;]+/gi)||[]
+    for(const statement of statements.reverse()){
+        const candidate=statement.slice(statement.indexOf(":")+1).trim().replace(/\s*!important\s*$/i,"")
+        if(/^(?:#[0-9a-f]{3,8}|rgba?\(|black$|white$|transparent$)/i.test(candidate))return candidate
+    }
+    return undefined
+}
+function changeCssBackdrop(style:string,percent:number):string|undefined {
+    const existing=solidBackgroundInCss(style)
+    // Append the last color declaration without removing other decoration.
+    return existing===undefined ? undefined : `${style};background-color:${bibleBackdropColor(existing,percent)};`
+}
+// Respect the actual backdrop source: FreeShow templates can paint it at
+// lineBg, item style, line alignment, or directly on a text span.
+function withVerseBackdropOpacity(item:Item,percent:number,verseKey:(key:string|undefined)=>boolean,hasVerseKeys:boolean):Item {
+    const isVerseLine=(line:NonNullable<Item["lines"]>[number])=>
+        !hasVerseKeys || line.text?.some(part=>verseKey(part.sourceDynamicKey))
+    const existingLineBg=item.specialStyle?.lineBg as string|undefined
+    if(existingLineBg && existingLineBg.trim())return {
+        ...item,specialStyle:{...item.specialStyle,lineBg:bibleBackdropColor(existingLineBg,percent)}
+    }
+    const boxStyle=changeCssBackdrop(item.style||"",percent)
+    if(boxStyle!==undefined)return {...item,style:boxStyle}
+    let found=false
+    const lines=item.lines?.map(line=>{
+        if(!isVerseLine(line))return line
+        const aligned=changeCssBackdrop(line.align||"",percent)
+        if(aligned!==undefined){found=true;return {...line,align:aligned}}
+        let painted=false
+        const segments=line.text.map(part=>{
+            if(hasVerseKeys && !verseKey(part.sourceDynamicKey))return part
+            const textStyle=changeCssBackdrop(part.style||"",percent)
+            if(textStyle===undefined)return part
+            painted=true
+            return {...part,style:textStyle}
+        })
+        if(painted){found=true;return {...line,text:segments}}
+        return line
+    })
+    if(found)return {...item,lines}
+    // Template without a background: create one on verse lines only, not on
+    // references or the entire output image. Zero percent is fully transparent.
+    return {...item,lines:lines?.map(line=>isVerseLine(line)
+        ? {...line,align:`${line.align||""};background-color:${bibleBackdropColor("#000000",percent)};`}
+        : line)}
+}
+
 export function applyJABibleAppearanceToItems(items:Item[],raw:JABibleAppearance):Item[]{
     const a=normalizeJABibleAppearance(raw)
     const enabled=new Set(a.enabledFields)
@@ -126,7 +202,7 @@ export function applyJABibleAppearanceToItems(items:Item[],raw:JABibleAppearance
         if(!item?.lines?.length || (item.type && item.type!=="text"))return item
         const hasVerses=item.lines.some(line=>line.text?.some(segment=>verseKey(segment.sourceDynamicKey)))
         if(hasVerseKeys && !hasVerses)return item
-        return {
+        const styled:Item={
             ...item,
             textFit:enabled.has("fontSize")?"none" as Item["textFit"]:item.textFit,
             align:enabled.has("verticalAlign")?`${item.align||""};align-items:${vert};`:item.align,
@@ -143,5 +219,7 @@ export function applyJABibleAppearanceToItems(items:Item[],raw:JABibleAppearance
                 }
             })
         }
+        return enabled.has("lineBackgroundOpacity")
+            ? withVerseBackdropOpacity(styled,a.lineBackgroundOpacity,verseKey,hasVerseKeys) : styled
     })
 }

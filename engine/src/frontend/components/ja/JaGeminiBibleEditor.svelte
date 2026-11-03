@@ -81,6 +81,14 @@
                 on:change={(e) => setStyle("shadow",e.currentTarget.checked)}/>
             Sombra para mejorar la lectura
         </label>
+        <label class="editor-field">
+            <span>Opacidad del rectángulo <output>{appearance.lineBackgroundOpacity}%</output></span>
+            <input type="range" min="0" max="100" step="1"
+                aria-label="Opacidad del rectángulo detrás de los versículos"
+                value={appearance.lineBackgroundOpacity}
+                on:input={(e) => setStyle("lineBackgroundOpacity",Number(e.currentTarget.value))}/>
+            <small class="editor-note">0% transparente · 100% sólido. Solo cambia el recuadro detrás de las letras, no la imagen ni el texto.</small>
+        </label>
         <div class="editor-separator"></div>
         <label class="editor-field">
             <span>Fondo de los versículos</span>

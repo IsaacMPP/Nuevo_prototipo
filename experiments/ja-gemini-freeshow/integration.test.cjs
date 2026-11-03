@@ -507,3 +507,26 @@ test("Biblia: editor bloquea navegación accidental mientras está abierto",()=>
  assert.ok(shell.includes('settingsOpen || bibleEditorOpen || bibleControlRestoring'),"Botones no deben navegar al editar")
  assert.ok(shell.includes('settingsOpen || bibleEditorOpen || !["ArrowLeft"'),"Atajos no deben navegar al editar")
 });
+
+test("Biblia: opacidad del rectángulo editada por pantalla, sin transparencia en letras",()=>{
+ const model=read("engine/src/frontend/utils/jaBibleAppearance.ts")
+ const editor=read("engine/src/frontend/components/ja/JaGeminiBibleEditor.svelte")
+ const scripture=read("engine/src/frontend/components/drawer/bible/scripture.ts")
+ const renderer=read("engine/src/frontend/components/helpers/output.ts")
+ assert.ok(model.includes("lineBackgroundOpacity: number"),"Guardar la opacidad como parte de la configuración por salida")
+ assert.ok(model.includes('lineBackgroundOpacity:clampPercent(v.lineBackgroundOpacity'),"Normalizar 0..100 incluso tras reiniciar")
+ assert.ok(model.includes('"lineBackgroundOpacity","backgroundMode"'),"Registrar un cambio aislado")
+ assert.ok(model.includes('enabled.has("lineBackgroundOpacity")'),"No modificar plantillas existentes sin editar el control")
+ assert.ok(model.includes('withVerseBackdropOpacity(styled,a.lineBackgroundOpacity,verseKey,hasVerseKeys)'),"Aplicar en los items de la diapositiva nativa")
+ assert.ok(model.includes("bibleBackdropColor(existingLineBg,percent)"),"Respetar fondos lineBg de FreeShow")
+ assert.ok(model.includes("changeCssBackdrop(item.style"),"Respetar rectángulo existente del item")
+ assert.ok(model.includes("changeCssBackdrop(line.align"),"Respetar fondo existente de la línea")
+ assert.ok(model.includes("changeCssBackdrop(part.style"),"Respetar fondo de segmento")
+ assert.ok(!model.includes("opacity:${alpha}"),"No cambiar la opacidad del elemento completo")
+ assert.ok(editor.includes('aria-label="Opacidad del rectángulo detrás de los versículos"'),"Control visible")
+ assert.ok(editor.includes('setStyle("lineBackgroundOpacity",Number(e.currentTarget.value))'),"Control conectado al guardado local por salida")
+ assert.ok(editor.includes('min="0" max="100" step="1"'),"Slider permite 0 y 100")
+ assert.ok(model.includes("copyJABibleAppearanceToTargets(sourceId:string,targets:string[])"),"Sincronización reutiliza estilo completo de Primario")
+ assert.ok(scripture.includes("jaBibleAppearance: appearance"),"Proyección lleva los ajustes a cada versículo")
+ assert.ok(renderer.includes("applyJABibleAppearanceToItems(boundItems,outSlide.jaBibleAppearance)"),"Programa usa compositor FreeShow")
+});
