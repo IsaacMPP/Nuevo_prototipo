@@ -374,9 +374,13 @@
             publishingGroup=true;refreshGroupChoices()
             try {
                 const before=activeBibleId
+                const referenceSent=JSON.stringify(get(activeScripture).reference||null)
                 await sendScriptureToJAOutputs(targets)
-                const confirmed=targets.every(id=>get(outputs)[id]?.out?.slide?.id==="temp" &&
-                    get(outputs)[id]?.out?.slide?.categoryId===before)
+                const confirmed=before===activeBibleId &&
+                    referenceSent===JSON.stringify(get(activeScripture).reference||null) &&
+                    targets.every(id=>get(outputs)[id]?.out?.slide?.id==="temp" &&
+                        get(outputs)[id]?.out?.slide?.categoryId===before &&
+                        JSON.stringify(get(outputs)[id]?.out?.slide?.scriptureReference||null)===referenceSent)
                 if(confirmed) armBibleFollow(targets,before)
                 notice(confirmed
                     ? "Biblia recibida por "+targets.length+" salidas. Confirma cada pantalla físicamente."
@@ -786,6 +790,12 @@
                     if(publishingGroup)return
                     if(syncedTargetIds.has(id))syncedTargetIds.delete(id)
                     else syncedTargetIds.add(id)
+                    // Changing the desired destinations does not redirect a
+                    // Bible already on air. Pause follow until republished.
+                    if(mode==="biblia" && bibleFollowEnabled){
+                        bibleFollowEnabled=false
+                        updateBibleFollowControls()
+                    }
                     // Preserve the familiar single-target inspection. With two
                     // or more checked outputs, keep the current Program view.
                     if(syncedTargetIds.size===1) {
@@ -1315,9 +1325,13 @@
                 // The existing Scripture router supports an explicit outputId;
                 // this does NOT broadcast to other physical screens.
                 const version=activeBibleId
+                const referenceSent=JSON.stringify(get(activeScripture).reference||null)
                 void sendScriptureToJAOutputs([destinationId]).then(()=>{
                     const result=get(outputs)[destinationId]?.out?.slide
-                    if (result?.id !== "temp" || result?.categoryId !== version)
+                    if (result?.id !== "temp" || result?.categoryId !== version ||
+                        version!==activeBibleId ||
+                        JSON.stringify(get(activeScripture).reference||null)!==referenceSent ||
+                        JSON.stringify(result?.scriptureReference||null)!==referenceSent)
                         notice("No se confirmó la Biblia en "+(get(outputs)[destinationId]?.name||destinationId)+". Comprueba la salida activa.")
                     else armBibleFollow([destinationId],version)
                 }).catch(error=>notice("Error al proyectar Biblia: "+String(error)))
