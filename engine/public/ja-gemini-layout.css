@@ -192,3 +192,22 @@ html, body, #app { height: 100%; min-height: 0; overflow: hidden; }
   background:#16284a;border:1px solid #315078;border-radius:7px;
   padding:6px 12px;color:#e9f2ff;font-size:11px;white-space:nowrap;
 }
+
+
+/* Gemini multi-output: do not spread two output cards to opposite ends of
+   a full-height column. Previews remain grouped immediately below the title. */
+.ja-gemini-host #multiscreenCardsList {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: flex-start !important;
+    align-content: flex-start !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+    padding: 4px !important;
+    overflow-y: auto !important;
+}
+.ja-gemini-host #multiscreenCardsList > .ja-screen-card {
+    flex: 0 0 auto !important;
+    min-height: 64px !important;
+    margin: 0 !important;
+}

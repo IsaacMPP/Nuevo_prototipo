@@ -53,7 +53,7 @@ test("Biblia alinea la pestaña real antes de proyectar en Gemini",()=>{
  const source=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
  assert.ok(source.includes("activeSubTab !== activeBibleId"))
  assert.ok(source.includes("get(activeScripture).reference?.verses?.[0]?.length"))
- assert.ok(source.includes('void playScripture().then('))
+ assert.ok(source.includes('void sendScriptureToJAOutputs([destinationId]).then('))
  const css=read("engine/public/ja-gemini-layout.css")
  assert.ok(css.includes('select[data-role="ja-bibles"] option'))
  assert.ok(!source.includes('dispatch("classic")'),"No mostrar atajos al diseño clásico")
@@ -235,7 +235,7 @@ test("Logo propio: selector nativo de imagen, efecto enlazado y configuración p
   'channel:"JA_GEMINI_LOGO_IMAGE"',
   'configureLogoPath(files[0])',
   'logoEffectItem()',
-  'image.src=encodeFilePath(path)',
+  'image.src=toJALogoImageURL(path)',
   'localStorage.setItem("ja-gemini-logo-path",customLogoPath)',
   'on:chooseLogo={selectLogoImage}',
   'on:logoPositionChange=',
@@ -309,3 +309,28 @@ test("La activación nativa espera creación de la ventana antes de informar est
  assert.ok(!shell.includes('send(OUTPUT,["CREATE"],{...outputSnapshot'),"CREATE por sí solo deja la ventana oculta")
  assert.ok(shell.includes('configure.onclick=()=>{settingsStartSection="screens";settingsOpen=true}'),"Configuración debe ser accesible desde Envío rápido")
 });
+
+test("Logo Windows: rutas file:/// válidas, dimensionamiento independiente de pixeles y todas las salidas",()=>{
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const type=read("engine/src/types/Effects.ts")
+ const effect=read("engine/src/frontend/components/output/effects/effectRenderer.ts")
+ assert.ok(shell.includes('encodeFilePath(path).replace(/\\\\/g,"/")'),"Normalizar barras de Windows")
+ assert.ok(shell.includes('"file:///" + encoded'),"Un path C:\\ necesita URL file:///")
+ assert.ok(shell.includes('path:toJALogoImageURL(customLogoPath)'),"Usar URL válida en ambas ventanas")
+ assert.ok(shell.includes('size:logoScale,fitWidth'),"Logo requiere ancho de lienzo en lugar de pixeles")
+ assert.ok(type.includes('fitWidth?: number'),"Opt-in para no cambiar otros efectos")
+ assert.ok(effect.includes('const desiredWidth = this.width *'),"La escala debe usar proporción del canvas")
+ assert.ok(effect.includes('if (!image?.complete || !image.naturalWidth'),"No dibujar assets sin imagen válida")
+ assert.ok(shell.includes('for(const [outputId,out] of Object.entries(get(outputs)))'),"Cambios de logo deben actualizar salidas activas")
+ const css=read("engine/public/ja-gemini-layout.css")
+ assert.ok(css.includes('justify-content: flex-start !important'),"No separar tarjetas multipantalla verticalmente")
+})
+test("Biblia Gemini envía el versículo solo a la salida seleccionada (incluso secundaria)",()=>{
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const s=shell.split('project.className="ja-bible-project"')[1].split('bar.append(project)')[0]
+ assert.ok(s.includes('const destinationId=selectedId'),"Usar salida seleccionada")
+ assert.ok(s.includes('ids.includes(destinationId)'),"Validar salida activa")
+ assert.ok(s.includes('sendScriptureToJAOutputs([destinationId])'),"Envío explícito, sin difusión")
+ assert.ok(!s.includes('ids.length !== 1'),"No prohibir dos salidas")
+ assert.ok(!s.includes('playScripture().then'),"No forzar siempre la salida principal")
+})

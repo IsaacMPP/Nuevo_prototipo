@@ -268,4 +268,6 @@ export interface RainbowItem extends EffectItem<"rainbow"> {
 export interface AssetItem extends EffectItem<"asset"> {
     path: string
     size: number
+    /** Optional canvas-width scaling for JA logo images; standard effects keep pixel scaling. */
+    fitWidth?: number
 }

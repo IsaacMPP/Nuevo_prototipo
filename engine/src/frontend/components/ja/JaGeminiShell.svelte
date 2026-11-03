@@ -14,7 +14,7 @@
     import { videoExtensions, imageExtensions, audioExtensions } from "../../values/extensions"
     import { queuedHymnThumbnail } from "../../utils/jaHymnThumbnailQueue"
     import { registerJARV1909 } from "../drawer/bible/jaBundledBible"
-    import { playScripture, prepareGeminiScriptureDraft } from "../drawer/bible/scripture"
+    import { sendScriptureToJAOutputs, prepareGeminiScriptureDraft } from "../drawer/bible/scripture"
     import Scripture from "../drawer/bible/Scripture.svelte"
     import { get } from "svelte/store"
     import { geminiHtml, geminiBodyClasses } from "./gemini-fragment.generated"
@@ -166,10 +166,23 @@
         center:{x:0.5,y:0.5},"top-left":{x:0.15,y:0.17},"top-right":{x:0.85,y:0.17},
         "bottom-left":{x:0.15,y:0.83},"bottom-right":{x:0.85,y:0.83}
     }
+    // FreeShow's asset renderer treats paths without '/' as bundled effect
+    // names. Windows paths contain '\\', so they MUST become file:/// URLs
+    // before storing the asset for both primary and secondary output windows.
+    function toJALogoImageURL(path:string):string {
+        if (!path) return "./ja-logo.png"
+        const encoded=encodeFilePath(path).replace(/\\/g,"/")
+        if (/^[a-zA-Z]:\//.test(encoded)) return "file:///" + encoded
+        if (encoded.startsWith("//")) return "file:" + encoded
+        return encoded
+    }
     function logoEffectItem(): AssetItem {
         const point=logoPositions[logoPosition] || logoPositions.center
-        return {type:"asset",path:customLogoPath?encodeFilePath(customLogoPath):"./ja-logo.png",
-            size:logoScale,x:point.x,y:point.y}
+        // The default FreeShow effect scales by source image pixels (0.3x);
+        // use a width fraction of the 1920x1080 canvas for JA logos instead.
+        const fitWidth=Math.max(0.11,Math.min(0.80,logoScale/2.5*0.80))
+        return {type:"asset",path:toJALogoImageURL(customLogoPath),
+            size:logoScale,fitWidth,x:point.x,y:point.y}
     }
     function updateLogoEffect() {
         // The canvas renderer caches its Image instance by effect item. Changing
@@ -215,7 +228,7 @@
             notice("Logo cargado: "+fileName(path)+". Utiliza el botón Logo para mostrarlo u ocultarlo.")
         }
         image.onerror=()=>{if(generation===logoRequestGeneration)notice("No se pudo abrir el logo elegido. Revisa el archivo y vuelve a seleccionarlo.")}
-        image.src=encodeFilePath(path)
+        image.src=toJALogoImageURL(path)
     }
     function selectLogoImage() {
         sendMain(Main.OPEN_FILE,{id:"ja-gemini-logo-image",channel:"JA_GEMINI_LOGO_IMAGE",
@@ -617,6 +630,8 @@
         }
         syncProgram()
         if (mode === "biblia" && biblePreviewReady && biblePreviewRenderer) biblePreviewRenderer.$set({outputId: selectedId})
+        const bibleProject=el("moduleView_biblia")?.querySelector<HTMLButtonElement>(".ja-bible-project")
+        if (bibleProject) bibleProject.textContent="▶ Proyectar en "+(get(outputs)[selectedId]?.name||"pantalla elegida")
     }
     function syncProgram() {
         if (!host) return
@@ -1005,19 +1020,23 @@
             const project=document.createElement("button")
             project.type="button"
             project.className="ja-bible-project"
-            project.textContent="▶ Proyectar en principal"
+            project.textContent="▶ Proyectar en pantalla elegida"
             project.onclick=()=>{
                 if (get(outLocked)) return notice("Las salidas están bloqueadas")
-                const ids = chooseOutput()
-                if (ids.length !== 1 || !selectedId || !get(outputs)[selectedId]?.active)
-                    return notice("Para proyectar la Biblia en esta prueba, activa una única salida principal.")
+                const ids=chooseOutput()
+                const destinationId=selectedId
+                if (!destinationId || !ids.includes(destinationId) || !get(outputs)[destinationId]?.active)
+                    return notice("Selecciona una pantalla externa activa en Envío rápido antes de proyectar la Biblia.")
                 if (!biblePreviewReady || biblePreviewReference !== JSON.stringify(get(activeScripture).reference || null))
                     return notice("Primero prepara el versículo en Vista previa; comprueba que terminó de cargar.")
                 if (!activeBibleId || !get(activeScripture).reference?.verses?.[0]?.length)
                     return notice("Selecciona primero un libro, capítulo y versículo de la Biblia.")
-                void playScripture().then(()=>{
-                    if (get(outputs)[selectedId]?.out?.slide?.id !== "temp")
-                        notice("No se confirmó el versículo en Programa. Comprueba la salida y la traducción.")
+                // The existing Scripture router supports an explicit outputId;
+                // this does NOT broadcast to other physical screens.
+                void sendScriptureToJAOutputs([destinationId]).then(()=>{
+                    const result=get(outputs)[destinationId]?.out?.slide
+                    if (result?.id !== "temp" || result?.categoryId !== activeBibleId)
+                        notice("No se confirmó la Biblia en "+(get(outputs)[destinationId]?.name||destinationId)+". Comprueba la salida activa.")
                 }).catch(error=>notice("Error al proyectar Biblia: "+String(error)))
             }
             bar.append(project)

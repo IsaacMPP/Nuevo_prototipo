@@ -236,7 +236,7 @@
                             <option value="bottom-left">Inferior izquierda</option>
                             <option value="bottom-right">Inferior derecha</option>
                         </select>
-                        <label for="ja-logo-size">Tamaño relativo: {Math.round(logoScale*100)}%</label>
+                        <label for="ja-logo-size">Ancho máximo del logo: {Math.round(Math.max(0.11,Math.min(0.80,logoScale/2.5*0.80))*100)}% de pantalla</label>
                         <input id="ja-logo-size" type="range" min="0.35" max="2.5" step="0.05" value={logoScale}
                             on:change={(event) => dispatch("logoScaleChange",{value:Number(event.currentTarget.value)})}/>
                     </div>

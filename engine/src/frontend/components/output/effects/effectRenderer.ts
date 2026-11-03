@@ -2978,32 +2978,43 @@ export class EffectRender {
     loadedImages = {}
     initAsset(item: AssetItem) {
         const imagePath = item.path.includes("/") ? item.path : `./assets/effects/${item.path}.webp`
-
         const image = new Image()
-        image.onload = imageLoaded
-
-        image.src = imagePath
         this.loadedImages[item.path] = image
-
-        const ctx = this.ctx
-        const x = this.getOffsetX(item.x)
-        const y = this.getOffsetY(item.y)
-        function imageLoaded() {
-            const width = image.width * 0.3 * item.size
-            const height = image.height * 0.3 * item.size
-            ctx.drawImage(image, x - width * 0.5, y - height * 0.5, width, height)
+        image.onload = () => {
+            // Preview renders only on demand; redraw after the image arrives.
+            // Live outputs redraw continuously through the existing renderer.
+            if (this.isPreview) this.frame(0)
         }
+        image.onerror = () => {
+            console.warn("Effect image could not be loaded")
+        }
+        image.src = imagePath
+    }
+
+    private assetBounds(item: AssetItem, image: HTMLImageElement) {
+        let width = image.naturalWidth * 0.3 * item.size
+        let height = image.naturalHeight * 0.3 * item.size
+        if (typeof item.fitWidth === "number" && Number.isFinite(item.fitWidth) && item.fitWidth > 0) {
+            // Canvas-relative width rather than the arbitrary pixel dimensions
+            // of the logo file. Preserve aspect ratio and avoid clipping.
+            const desiredWidth = this.width * Math.min(0.90, Math.max(0.05, item.fitWidth))
+            const heightForWidth = desiredWidth * (image.naturalHeight / image.naturalWidth)
+            const ratio = Math.min(1, (this.height * 0.90) / heightForWidth)
+            width = desiredWidth * ratio
+            height = heightForWidth * ratio
+        }
+        const fitted = typeof item.fitWidth === "number" && item.fitWidth > 0
+        const centerX = this.getOffsetX(item.x)
+        const centerY = this.getOffsetY(item.y)
+        const x = fitted ? Math.min(this.width - width / 2, Math.max(width / 2, centerX)) : centerX
+        const y = fitted ? Math.min(this.height - height / 2, Math.max(height / 2, centerY)) : centerY
+        return { x, y, width, height }
     }
 
     drawAsset(item: AssetItem) {
         const image = this.loadedImages[item.path]
-        if (!image) return
-
-        const ctx = this.ctx
-        const x = this.getOffsetX(item.x)
-        const y = this.getOffsetY(item.y)
-        const width = image.width * 0.3 * item.size
-        const height = image.height * 0.3 * item.size
-        ctx.drawImage(image, x - width * 0.5, y - height * 0.5, width, height)
+        if (!image?.complete || !image.naturalWidth || !image.naturalHeight) return
+        const {x,y,width,height} = this.assetBounds(item,image)
+        this.ctx.drawImage(image,x-width/2,y-height/2,width,height)
     }
 }
