@@ -417,6 +417,14 @@ function checkAudio(type: string, data: any, allOutputIds: string[], outs: strin
                 if (bgPath && bgPath !== newPath) VideoPlayer.stop(bgPath, outputId)
             })
 
+            if(data.jaReuseClockFrom && getMediaType(getExtension(newPath))==="video"){
+                // JA has already attached these outputs to the live source
+                // session. Starting another player would reset / duplicate audio.
+                const live=VideoPlayer.getPlaying(newPath,[data.jaReuseClockFrom])
+                if(!live || !outs.every(id=>live.linkedOutputIds.includes(id)))
+                    console.warn("[JA Video] Reused clock was not available for all target displays")
+                return
+            }
             VideoPlayer.start(newPath, { loop: data.loop, muted: data.muted, startAt: data.startAt || 0, isOnline: data.type === "player", hasActiveBg }, outs)
         } else {
             VideoPlayer.stopByOutputIds(outs)

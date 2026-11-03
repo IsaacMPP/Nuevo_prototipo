@@ -209,6 +209,34 @@ export class VideoPlayer {
         return true
     }
 
+    /** Link extra displays to the EXACT source session without restarting its
+     * audio clock. Used only after JA verifies real connected destinations and
+     * removes their previous independent sessions. Never merge by filename
+     * alone: a path may have several unrelated playing sessions. */
+    static attachOutputsToLiveSession(path: string, sourceOutputId: string, additionalOutputIds: string[]): boolean {
+        const source=this.getPlaying(path,[sourceOutputId])
+        const sessions=get(playingVideos)
+        if(!source || !sessions.includes(source) || this.stoppingSessions.has(source) ||
+           !source.linkedOutputIds.includes(sourceOutputId))return false
+        const pending=Array.from(new Set(additionalOutputIds)).filter(id=>id && !source.linkedOutputIds.includes(id))
+        if(!pending.length)return true
+        const current=get(outputs)
+        if(pending.some(id=>!current[id]?.active || !current[id]?.enabled ||
+            sessions.some(session=>session!==source && session.linkedOutputIds.includes(id))))
+            return false
+        playingVideos.update(entries=>{
+            if(entries.includes(source))
+                source.linkedOutputIds=[...new Set([...source.linkedOutputIds,...pending])]
+            return entries
+        })
+        if(source.audio instanceof HTMLAudioElement)
+            void this.attachToAnalyser(path,source.audio,pending).catch(error=>
+                console.warn("[JA Video] No se pudo adjuntar analizador a pantalla secundaria:",error))
+        // videoSync(path, outputId) immediately receives the same clock,
+        // including pause state and current position, for newly mounted videos.
+        this.initSyncClock()
+        return true
+    }
     static updateProperties(path: string) {
         const audio = this.getAudio(path)
         if (!audio) return

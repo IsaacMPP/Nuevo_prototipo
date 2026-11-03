@@ -435,6 +435,95 @@
             notice("No fue posible reproducir el audio: "+String(error))
         }finally{if(token===jaAudioGeneration)jaAudioBusy=false}
     }
+    /** This handles only a running video/hymn on the configured Primary.
+     * If Primary is not running this exact prepared item, the ordinary new-send
+     * workflow remains unchanged. Otherwise NEW destinations join the current
+     * native audio clock and existing destinations must never be restarted. */
+    async function joinAlreadyPlayingPrimary(mediaPath:string,targets:string[]):Promise<boolean>{
+        const current=chooseOutput()
+        const mainId=localStorage.getItem("ja-main-projector")||""
+        if(!mainId || !current.includes(mainId))return false
+        const mainBg=get(outputs)[mainId]?.out?.background
+        const bgPath=mainBg?.path||""
+        if(!bgPath || getMediaType(getExtension(bgPath))!=="video" ||
+            normalizeJAContentPath(bgPath)!==normalizeJAContentPath(mediaPath))return false
+        const source=get(playingVideos).find(s=>
+            normalizeJAContentPath(s.path)===normalizeJAContentPath(bgPath) &&
+            s.linkedOutputIds.includes(mainId))
+        if(!source)return false
+        // Source exists: errors must never fall back to a fresh 0:00 send.
+        if(publishingGroup){notice("Ya hay un envío en curso.");return true}
+        if(get(outLocked)){notice("Las salidas están bloqueadas.");return true}
+        if(!targets.length || targets.some(id=>!current.includes(id))){
+            notice("Selecciona únicamente destinos activos antes de vincular un video.");return true
+        }
+        const targetSnapshot=targets.join("|")
+        const sourcePath=source.path
+        const newTargets=targets.filter(id=>!source.linkedOutputIds.includes(id))
+        if(!newTargets.length){
+            notice("Estas pantallas ya comparten el video de Primario. No se reinició.")
+            if(selectedId===mainId && normalizeJAContentPath(prepared)===normalizeJAContentPath(mediaPath)){
+                followProgram=true;syncLinkedPreview();updatePreviewProgress()
+            }
+            return true
+        }
+        publishingGroup=true
+        refreshGroupChoices()
+        try{
+            // Explicitly replace independent clocks on NEW outputs only.
+            // Detaching one display from a previous group preserves all others.
+            for(const id of newTargets){
+                for(const session of [...get(playingVideos)].filter(s=>s.linkedOutputIds.includes(id)))
+                    await VideoPlayer.stop(session.path,id)
+            }
+            const unchanged=()=>{
+                const ids=chooseOutput()
+                const latest=get(outputs)[mainId]?.out?.background
+                return !get(outLocked) && mediaPath===prepared &&
+                    targetSnapshot===markedGroupTargets().join("|") &&
+                    targets.every(id=>ids.includes(id)) &&
+                    normalizeJAContentPath(latest?.path||"")===normalizeJAContentPath(bgPath) &&
+                    get(playingVideos).includes(source) &&
+                    source.linkedOutputIds.includes(mainId)
+            }
+            if(!unchanged()){
+                notice("Cambió el video o las pantallas durante la vinculación. No se reinició Primario.")
+                return true
+            }
+            const clock=source.audio
+            const currentTime=Number.isFinite(clock.currentTime)?Math.max(0,clock.currentTime):0
+            if(!VideoPlayer.attachOutputsToLiveSession(sourcePath,mainId,newTargets)){
+                notice("No se pudo compartir el reloj del video. Primario continúa sin cambios.")
+                return true
+            }
+            // The renderer receives the source's real clock at the moment of
+            // connection. Source/background on already linked outputs is untouched.
+            const sent=sendToJAOutputs("background",{
+                ...mainBg,path:sourcePath,type:"video",loop:!!source.loop,
+                muted:!!clock.muted,startAt:currentTime,jaReuseClockFrom:mainId
+            },newTargets,{replaceScripture:true,requireAll:true})
+            if(sent.length!==newTargets.length || !newTargets.every(id=>
+                normalizeJAContentPath(get(outputs)[id]?.out?.background?.path||"")===normalizeJAContentPath(sourcePath))){
+                for(const id of newTargets)await VideoPlayer.stop(sourcePath,id)
+                notice("No se confirmó la conexión de las nuevas pantallas. Primario sigue reproduciendo.")
+                return true
+            }
+            clearBlackBeforePublishing(newTargets)
+            // The source clock has not been stopped, re-created or seeked.
+            rebuildOutputs()
+            if(selectedId===mainId && normalizeJAContentPath(prepared)===normalizeJAContentPath(mediaPath)){
+                followProgram=true;syncLinkedPreview();updatePreviewProgress()
+            }
+            notice("Se vincularon "+newTargets.length+" pantallas al video en curso desde "+time(currentTime)+". Primario no se reinició; comprueba HDMI/spacedesk.")
+            return true
+        }catch(error){
+            notice("No se pudo vincular la reproducción existente: "+String(error))
+            return true
+        }finally{
+            publishingGroup=false
+            refreshGroupChoices()
+        }
+    }
     function sendToQuickTargets() {
         if(publishingGroup)return notice("Ya se está preparando un envío sincronizado.")
         const selected=markedGroupTargets()
@@ -478,6 +567,9 @@
         const mediaPath=prepared
         const kind=getMediaType(getExtension(mediaPath))
         if(kind==="audio"){void publishPreparedAudio(mediaPath,targets);return}
+        // A running Primary video/hymn is the authoritative clock. Joining
+        // existing content does not restart previously linked screens.
+        if(kind==="video" && await joinAlreadyPlayingPrimary(mediaPath,targets))return
         const idSnapshot=targets.join("|")
         publishingGroup=true;refreshGroupChoices()
         try {
@@ -548,6 +640,15 @@
         const mediaPath=prepared
         const kind=getMediaType(getExtension(mediaPath))
         if(kind==="audio"){void publishPreparedAudio(mediaPath,[destinationId]);return}
+        if(kind==="video"){
+            const mainId=localStorage.getItem("ja-main-projector")||""
+            const bg=get(outputs)[mainId]?.out?.background
+            if(bg && normalizeJAContentPath(bg.path||"")===normalizeJAContentPath(mediaPath) &&
+                !!VideoPlayer.getPlaying(mediaPath,[mainId])){
+                void joinAlreadyPlayingPrimary(mediaPath,[destinationId])
+                return
+            }
+        }
         // No sobreescribir transiciones globales ni estilos: restaurar exactamente
         // la ruta nativa que sí publicaba archivos antes de la regresión.
         try {
@@ -805,7 +906,25 @@
         if(!chooseOutput().includes(id))return
         selectedId=id
         rebuildOutputs()
-        if(mode==="biblia")void restoreBibleControlForOutput(id)
+        if(mode==="biblia"){
+            void restoreBibleControlForOutput(id)
+            return
+        }
+        // A screen card is also an inspection control: restore its on-air
+        // video/image into PRIVATE Preview. Never emit, seek or pause Program.
+        const bg=get(outputs)[id]?.out?.background
+        const path=bg?.path || ""
+        const kind=path?getMediaType(getExtension(path)):""
+        if(kind!=="video" && kind!=="image")return
+        const same=normalizeJAContentPath(prepared)===normalizeJAContentPath(path)
+        if(!same){
+            prepare(path)
+            notice("Vista previa recuperada de "+(get(outputs)[id]?.name||id)+". Programa no cambió.")
+        }else if(kind==="video" && !!VideoPlayer.getPlaying(path,[id])){
+            followProgram=true
+            syncLinkedPreview()
+            updatePreviewProgress()
+        }
     }
     // This recovers on-air Scripture into the private native picker, without emitting.
     async function restoreBibleControlForOutput(id: string) {

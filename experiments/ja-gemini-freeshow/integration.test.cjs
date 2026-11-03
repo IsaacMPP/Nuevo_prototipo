@@ -615,3 +615,38 @@ test("Multimedia: solo una pestaña Videos/Imágenes/Audio queda resaltada",()=>
  assert.ok(source.includes('typeFilter: GeminiMediaType | "all" = "video"'),"Conservar Videos como pestaña inicial")
  assert.ok(source.includes('item.className="ja-media-card p-2 min-w-0 rounded-lg bg-[#0a1938] border border-[#24446f] text-left hover:border-cyan-400"'),"No rediseñar miniaturas")
 });
+
+test("P3 video: seleccionar pantalla recupera Preview sin modificar su video en Programa",()=>{
+ const s=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const inspect=s.split("function inspectOutput(id: string)")[1].split("async function restoreBibleControlForOutput")[0]
+ assert.ok(s.includes("card.onclick = () => inspectOutput(id)"),"La tarjeta inspecciona la salida real")
+ assert.ok(inspect.includes('const path=bg?.path || ""'),"Leer archivo real de la pantalla")
+ assert.ok(inspect.includes('kind!=="video" && kind!=="image"'),"No confundir vídeos con Biblia u otras capas")
+ assert.ok(inspect.includes("prepare(path)"),"Recuperar vídeo o imagen en Vista previa")
+ assert.ok(inspect.includes("followProgram=true"),"Reenganchar Vista previa al video en vivo")
+ assert.ok(!inspect.includes("setOutput(")&&!inspect.includes("VideoPlayer.seekTo(")&&!inspect.includes("VideoPlayer.stop("),"Inspeccionar no cambia Programa ni reloj")
+});
+test("P3 video: añadir nuevos destinos al reloj de Primario sin reiniciarlo",()=>{
+ const s=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const player=read("engine/src/frontend/components/media/video/videoPlayer.ts")
+ const out=read("engine/src/frontend/components/helpers/output.ts")
+ const join=s.split("async function joinAlreadyPlayingPrimary(mediaPath:string,targets:string[])")[1].split("function sendToQuickTargets()")[0]
+ const attach=player.split("static attachOutputsToLiveSession(")[1].split("static updateProperties(")[0]
+ assert.ok(join.includes('localStorage.getItem("ja-main-projector")'),"Confirmar fuente principal")
+ assert.ok(join.includes("newTargets=targets.filter(id=>!source.linkedOutputIds.includes(id))"),"Solo las pantallas nuevas reciben contenido")
+ assert.ok(join.includes("await VideoPlayer.stop(session.path,id)"),"Liberar solamente el reloj anterior del nuevo destino")
+ assert.ok(join.includes("VideoPlayer.attachOutputsToLiveSession(sourcePath,mainId,newTargets)"),"Compartir reloj nativo exacto")
+ assert.ok(join.includes("startAt:currentTime,jaReuseClockFrom:mainId"),"Incorporar los nuevos monitores en el tiempo actual")
+ assert.ok(join.includes("targetSnapshot===markedGroupTargets().join"),"No usar selección obsoleta")
+ assert.ok(join.includes("get(playingVideos).includes(source)"),"Evitar reloj de un archivo sustituido")
+ assert.ok(!join.includes("VideoPlayer.stop(sourcePath,mainId)"),"Nunca detener reloj origen")
+ assert.ok(!join.includes("VideoPlayer.seekTo("), "No rebobinar origen")
+ assert.ok(!join.includes("startAt:0"),"No volver al comienzo")
+ assert.ok(attach.includes("source.linkedOutputIds=[...new Set("),"Reutilizar exactamente el objeto sesión")
+ assert.ok(attach.includes("this.initSyncClock()"),"Replicar tiempo y pausa para los nuevos outputs")
+ assert.ok(!attach.includes("this.start(")&&!attach.includes("audio.currentTime="),"Nunca crear reloj nuevo ni mover fuente")
+ assert.ok(out.includes('if(data.jaReuseClockFrom && getMediaType(getExtension(newPath))==="video")'),"FreeShow no debe iniciar un audio nuevo")
+ assert.ok(out.includes('if(!live || !outs.every(id=>live.linkedOutputIds.includes(id)))'),"Verificar sesión antes de omitir audio nuevo")
+ assert.ok(s.includes('if(kind==="video" && await joinAlreadyPlayingPrimary(mediaPath,targets))return'),"Enviar grupo debe probar primero reconexión viva")
+ assert.ok(s.includes('void joinAlreadyPlayingPrimary(mediaPath,[destinationId])'),"Enviar a un destino también debe poder recuperar reloj")
+});
