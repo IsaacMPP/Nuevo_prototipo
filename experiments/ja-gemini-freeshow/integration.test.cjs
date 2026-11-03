@@ -578,7 +578,7 @@ test("Multimedia P3: videos, imágenes y audio se gestionan por rutas reales ais
  const audio=read("engine/src/frontend/components/ja/JaGeminiAudioControls.svelte")
  const css=read("engine/public/ja-gemini-layout.css")
  const extensions=read("engine/src/frontend/values/extensions.ts")
- const onlyAudio=shell.split("async function publishPreparedAudio(path:string,targets:string[])")[1].split("function sendToQuickTargets()")[0]
+ const onlyAudio=shell.split("async function publishPreparedAudio(path:string,targets:string[])")[1].split("async function joinAlreadyPlayingPrimary(")[0]
  assert.ok(shell.includes('import { AudioPlayer } from "../../audio/audioPlayer"'),"Debe usar motor de audio FreeShow")
  assert.ok(onlyAudio.includes("AudioPlayer.start(path,{name:fileName(path)},{playMultiple:true,startPaused:true})"),"No borrar sesiones ajenas al iniciar audio")
  assert.ok(onlyAudio.includes("jaAudioPath")&&onlyAudio.includes("AudioPlayer.stop(previous)"),"Solo reemplazar pista de JA")
