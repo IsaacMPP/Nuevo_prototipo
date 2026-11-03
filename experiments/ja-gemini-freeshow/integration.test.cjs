@@ -345,6 +345,8 @@ test("Envío rápido multiselección reemplaza el panel grande sin ocultar tarje
  assert.ok(shell.includes('target.setAttribute("aria-label","Incluir "'),"No se identifican los destinos con accesibilidad")
  assert.ok(shell.includes('if(syncedTargetIds.has(id))syncedTargetIds.delete(id)'),"Botón de cada pantalla no es reversible")
  assert.ok(shell.includes('target.onclick=()=>{'),"Los destinos no tienen controlador")
+ assert.ok(shell.includes('if(syncedTargetIds.size===1)'),"Una sola pantalla marcada debe actualizar el monitor inspeccionado")
+ assert.ok(shell.includes('selectedId=[...syncedTargetIds][0]'),"No se conserva la selección individual del operador")
  assert.ok(shell.includes('send.onclick=sendToQuickTargets'),"Acción rápida desconectada")
  assert.ok(!shell.includes('group.id="jaSyncPanel"'),"No se debe conservar bloque de sincronización en Multipantalla")
  assert.ok(!shell.includes('list?.append(group)'),"Multipantalla solo presenta tarjetas")
