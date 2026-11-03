@@ -787,3 +787,11 @@ test("P5: Solo audio global y controles de bucle por salida aislados",()=>{
  assert.ok(shell.includes("getRememberedLoop(destinationId,mediaPath)"),"Enviar individual respeta bucle propio")
  assert.ok(shell.includes("getRememberedLoop(mainId,mediaPath)"),"Grupo usa bucle Primario")
 });
+
+test("P5: bucle de video dentro de lista no provoca avance automático",()=>{
+ const s=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const monitor=s.split("function watchJAPlaylist()")[1].split("async function playlistPanelAction(")[0]
+ assert.ok(monitor.includes('if(item.kind==="video" && !item.audioOnly && item.loopVideo===true)'),"Loop del logo no equivale a la canción siguiente")
+ assert.ok(monitor.includes('playlistNearEnd=false'),"No avanzar accidentalmente al cruzar fin en bucle")
+ assert.ok(monitor.includes('return'),"Seguir video en bucle hasta Siguiente manual")
+});

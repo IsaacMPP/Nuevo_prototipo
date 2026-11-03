@@ -785,6 +785,13 @@
             const now=Number(audio.currentTime)||0
             const duration=Number(audio.duration)||0
             if(now>0.35)playlistSawProgress=true
+            // Video loop and playlist progression are different controls:
+            // a looping logo/animation stays on screen until manual Next.
+            if(item.kind==="video" && !item.audioOnly && item.loopVideo===true){
+                playlistLastPosition=now
+                playlistNearEnd=false
+                return
+            }
             if(duration>0 && now>=duration-0.5 && !audio.paused)playlistNearEnd=true
             playlistLastPosition=now
             if(playlistNearEnd && duration>0 && now>=duration-0.1 && !audio.paused)
