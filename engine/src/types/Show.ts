@@ -606,6 +606,7 @@ export interface OutBackground {
     type?: MediaType
     // video / player
     startAt?: number
+    jaReuseClockFrom?: string // JA: a new display inherits the source's running native video clock
     muted?: boolean
     loop?: boolean
     softLoop?: number

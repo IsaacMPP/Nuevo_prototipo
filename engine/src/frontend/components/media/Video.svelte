@@ -13,6 +13,7 @@
     export let videoData: any = { paused: false, loop: false, softLoop: 0 }
     export let videoTime: number = 0
     export let startAt = 0
+    export let joinExistingClock = false // opt-in; no changes to ordinary video playback
 
     export let mediaStyle: MediaStyle = {}
     export let animationStyle = ""
@@ -80,8 +81,14 @@
 
         // a mirror can mount while the video is already playing, so start directly at the current playing time, instead of waiting on videoSync
         const playingKey = `${syncPath || path}_${outputId}`
-        const playingTime = mirror ? $playingVideoState[playingKey]?.currentTime || 0 : 0
-        if (video && playingTime) video.currentTime = playingTime
+        const stateTime = $playingVideoState[playingKey]?.currentTime
+        // If the source is PAUSED, VideoPlayer stops ticking; without this
+        // initial seek a newly added output stays at frame 0 indefinitely.
+        // All ordinary videos keep their existing initialization behavior.
+        const playingTime = mirror || joinExistingClock
+            ? (Number.isFinite(stateTime) ? Number(stateTime) : startAt || 0) : 0
+        if (video && playingTime>0) video.currentTime = playingTime
+        if(joinExistingClock)startAt=0 // don't seek backwards again on 'playing'
 
         dispatch("loaded", true)
     }

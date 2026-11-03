@@ -650,3 +650,17 @@ test("P3 video: añadir nuevos destinos al reloj de Primario sin reiniciarlo",()
  assert.ok(s.includes('if(kind==="video" && await joinAlreadyPlayingPrimary(mediaPath,targets))return'),"Enviar grupo debe probar primero reconexión viva")
  assert.ok(s.includes('void joinAlreadyPlayingPrimary(mediaPath,[destinationId])'),"Enviar a un destino también debe poder recuperar reloj")
 });
+
+test("P3: sincronización al agregar pantalla funciona también con video pausado",()=>{
+ const model=read("engine/src/types/Show.ts")
+ const media=read("engine/src/frontend/components/output/layers/Media.svelte")
+ const video=read("engine/src/frontend/components/media/Video.svelte")
+ const render=video.split("function loaded()")[1].split("onMount(",1)[0]
+ assert.ok(model.includes("jaReuseClockFrom?: string"),"La diapositiva debe transportar el marcador de reloj existente")
+ assert.ok(media.includes("joinExistingClock={!!data.jaReuseClockFrom}"),"Solo los videos nuevos del grupo usan la preparación del reloj")
+ assert.ok(video.includes("export let joinExistingClock = false"),"No cambiar video normal")
+ assert.ok(video.includes("const stateTime = $playingVideoState[playingKey]?.currentTime"),"Leer fotograma actual incluso en pausa")
+ assert.ok(video.includes("if (video && playingTime>0) video.currentTime = playingTime"),"Al montar mostrar fotograma que ya está en Primario")
+ assert.ok(video.includes("if(joinExistingClock)startAt=0"),"No saltar al tiempo anterior cuando se reproduce")
+ assert.ok(!render.includes("VideoPlayer.play(")&&!render.includes("VideoPlayer.stop("),"Montar otra pantalla no afecta el reloj origen")
+});
