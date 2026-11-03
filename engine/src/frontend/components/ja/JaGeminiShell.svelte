@@ -1026,7 +1026,7 @@
                 localStorage.getItem("ja-main-projector")!==mainId)
                 return notice("Cambió la configuración mientras se preparaba el envío; no se ha publicado el grupo.")
             const sent=sendToJAOutputs("background",{
-                path:mediaPath,type:kind,loop:false,
+                path:mediaPath,type:kind,loop:kind==="video"?getRememberedLoop(mainId,mediaPath):false,
                 // Audio de una única sesión: solo la salida principal es audible.
                 muted:!targets.includes(mainId),startAt:0
             },targets,{replaceScripture:true,requireAll:true})
@@ -1102,7 +1102,7 @@
                 return notice("Selecciona la salida principal en Configuración JA antes de emitir con varios monitores.")
             // Secondary screens cannot emit duplicated audio by default.
             setOutput("background",{
-                path:mediaPath,type:kind,loop:false,muted:available.length>1 && destinationId!==mainId,startAt:0
+                path:mediaPath,type:kind,loop:kind==="video"?getRememberedLoop(destinationId,mediaPath):false,muted:available.length>1 && destinationId!==mainId,startAt:0
             },false,destinationId)
             const actual=get(outputs)[destinationId]?.out?.background
             // La actualización del store indica recepción interna, NO que
@@ -1483,6 +1483,12 @@
                 const state = document.createElement("span")
                 state.className = "ja-screen-state block text-[10px] text-slate-300 truncate"
                 info.append(header,state)
+                const loopBadge=document.createElement("span")
+                loopBadge.className="ja-loop-badge text-[10px] text-amber-200"
+                loopBadge.dataset.loopOutput=id
+                loopBadge.textContent="↻ Bucle"
+                loopBadge.hidden=true
+                info.append(loopBadge)
                 const badge = document.createElement("span")
                 badge.className = "ja-screen-badge text-[10px] px-2 py-1 rounded-xl whitespace-nowrap"
                 info.append(badge)
@@ -1682,6 +1688,7 @@
         const badge = el("programBadgeText")
         if (badge) badge.textContent = output ? (path ? "Programa · Activo" : "Programa · Sin emisión") : "Programa · Sin salida"
         updateTransport()
+        updateProgramLoopButton()
         // La primera prueba no cambia automáticamente salidas no seleccionadas.
         if (available.length !== 1) disable("btnPreviewToAll", "Enviar a todos: se evaluará después de aislar sesiones")
     }
@@ -2606,6 +2613,18 @@
         selectedPlaylistId=get(jaPlaylists)[0]?.id||""
         playlistMonitor=setInterval(watchJAPlaylist,350)
         loadJABibleAppearances()
+        try{
+            const parsed=JSON.parse(localStorage.getItem(VIDEO_LOOP_STORAGE)||"{}")
+            if(parsed && typeof parsed==="object"&&!Array.isArray(parsed)){
+                const safe:Record<string,Record<string,boolean>>={}
+                for(const [id,paths] of Object.entries(parsed).slice(0,32)){
+                    if(id.length>128||!paths||typeof paths!=="object"||Array.isArray(paths))continue
+                    safe[id]=Object.fromEntries(Object.entries(paths).slice(-100)
+                        .filter(([path,value])=>path.length<4096&&typeof value==="boolean"))
+                }
+                videoLoopPrefs=safe
+            }
+        }catch{}
         try {
             previewAutoplay = localStorage.getItem("ja-gemini-preview-autoplay") !== "false"
             compactUi = localStorage.getItem("ja-gemini-compact-ui") === "true"
@@ -2697,6 +2716,13 @@
             clear.onclick = clearProgram
             programButtons.append(clear)
             cleanup.push(() => clear.remove())
+            programLoopButton=document.createElement("button")
+            programLoopButton.type="button"
+            programLoopButton.className="ja-video-loop-button text-xs border rounded px-2 py-1"
+            programLoopButton.onclick=()=>{void changeLoopForSelectedOutput()}
+            programButtons.append(programLoopButton)
+            cleanup.push(()=>programLoopButton?.remove())
+            updateProgramLoopButton()
             const mute = document.createElement("button")
             mute.type = "button"; mute.textContent = "🔊"
             mute.title = "Silenciar/reactivar vídeo de Programa"
@@ -2765,7 +2791,7 @@
             cleanup.push(()=>grid.removeEventListener("scroll",listener))
         }
         const uOutputs = outputs.subscribe(() => { rebuildOutputs(); renderRealHeader(); if(mode==="biblia")updateBibleFollowControls() })
-        const uPlayingForGroup = playingVideos.subscribe(() => { if(host)refreshGroupChoices() })
+        const uPlayingForGroup = playingVideos.subscribe(() => { if(host){refreshGroupChoices();updateProgramLoopButton()} })
         const uGroupLock = outLocked.subscribe(() => { if(host)refreshGroupChoices() })
         const uSaved = saved.subscribe(() => renderRealHeader())
         const uFolders = mediaFolders.subscribe(() => { void scanMediaFolders() })

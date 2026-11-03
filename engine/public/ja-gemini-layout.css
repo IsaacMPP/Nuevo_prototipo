@@ -292,3 +292,8 @@ html, body, #app { height: 100%; min-height: 0; overflow: hidden; }
 .ja-gemini-host .ja-card-quick-add:hover,
 .ja-gemini-host .ja-card-quick-add:focus-visible{outline:2px solid #4cd1fd;background:#2872a8}
 .ja-gemini-host .ja-global-music{color:#ffe4a8;background:#233b5b;border-color:#b18f4b}
+
+.ja-gemini-host .ja-video-loop-button{background:#16335b;color:#d0e3ff;border-color:#4a668a}
+.ja-gemini-host .ja-video-loop-button[aria-pressed="true"]{background:#236b95;color:#fff;border-color:#4cd1fd}
+.ja-gemini-host .ja-video-loop-button:disabled{opacity:.4;cursor:not-allowed}
+.ja-gemini-host .ja-loop-badge[hidden]{display:none}
