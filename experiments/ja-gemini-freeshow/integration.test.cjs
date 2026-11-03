@@ -388,3 +388,23 @@ test("El mismo grupo puede recibir Biblia sin alterar destinos no marcados",()=>
  assert.ok(fn.includes("biblePreviewReady"),"No emitir Biblia antes de preparar vista previa")
  assert.ok(!fn.includes("sendScriptureToJAOutputs(available)"),"No emitir Biblia a todas por omisión")
 });
+
+test("Biblia: flechas y botones Anterior/Siguiente controlan Preview y seguimiento nativo en salidas en vivo",()=>{
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const scripture=read("engine/src/frontend/components/drawer/bible/scripture.ts")
+ assert.ok(shell.includes('getLiveScriptureOutputIds, refreshLiveScripture'),"Navegación debe usar seguimiento nativo")
+ assert.ok(shell.includes('previous.className="ja-bible-prev"') && shell.includes('next.className="ja-bible-next"'),"Faltan controles visibles")
+ assert.ok(shell.includes('previous.onclick=()=>enqueueBibleNavigation(true)'))
+ assert.ok(shell.includes('next.onclick=()=>enqueueBibleNavigation(false)'))
+ assert.ok(shell.includes('enqueueBibleNavigation(e.key === "ArrowLeft")'),"Flechas deben usar el mismo controlador")
+ assert.ok(shell.includes('let bibleFollowEnabled = false'),"El seguimiento no debe arrancar sin publicar")
+ assert.ok(shell.includes('if(confirmed) armBibleFollow(targets,before)'),"Seguir al grupo solo tras proyectar")
+ assert.ok(shell.includes('else armBibleFollow([destinationId],version)'),"Seguir a salida individual solo tras proyectar")
+ assert.ok(shell.includes('const draft=await prepareGeminiScriptureDraft()'),"Componer Preview antes de publicar siguiente versículo")
+ assert.ok(shell.includes('await refreshLiveScripture()'),"La flecha debe actualizar Programa cuando esté siguiendo")
+ assert.ok(shell.includes('bibleFollowGroupStillLive() && !get(outLocked)'),"Nunca actualizar Programa sin grupo real y desbloqueado")
+ assert.ok(shell.includes('bibleFollowTargets.every(id=>actual.includes(id))'),"Navegar solo grupo original aún activo")
+ assert.ok(shell.includes('bibleFollowEnabled=false') && shell.includes('versions.onchange=()=>'),"Cambiar traducción no debe enviar por accidente")
+ assert.ok(shell.includes('bibleNavigationQueue.length>=8'),"Evitar ráfagas que saturen el motor")
+ assert.ok(scripture.includes('export async function refreshLiveScripture()'),"No reinventar proyección de Biblia")
+});

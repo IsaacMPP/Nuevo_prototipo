@@ -14,7 +14,7 @@
     import { videoExtensions, imageExtensions, audioExtensions } from "../../values/extensions"
     import { queuedHymnThumbnail } from "../../utils/jaHymnThumbnailQueue"
     import { registerJARV1909 } from "../drawer/bible/jaBundledBible"
-    import { sendScriptureToJAOutputs, prepareGeminiScriptureDraft } from "../drawer/bible/scripture"
+    import { sendScriptureToJAOutputs, prepareGeminiScriptureDraft, getLiveScriptureOutputIds, refreshLiveScripture } from "../drawer/bible/scripture"
     import Scripture from "../drawer/bible/Scripture.svelte"
     import { get } from "svelte/store"
     import { geminiHtml, geminiBodyClasses } from "./gemini-fragment.generated"
@@ -117,6 +117,14 @@
     let biblePreviewGeneration = 0
     let biblePreviewReady = false
     let biblePreviewReference = ""
+    // Live follow is armed only after an explicitly confirmed Bible projection.
+    // Clicking a verse still edits private Preview; only operator arrow controls
+    // may advance a live Bible on the exact on-air destination group.
+    let bibleFollowTargets: string[] = []
+    let bibleFollowVersion = ""
+    let bibleFollowEnabled = false
+    let bibleNavigationBusy = false
+    const bibleNavigationQueue: boolean[] = []
     let timer: ReturnType<typeof setTimeout> | null = null
     let videoState = { paused: true, muted: false, currentTime: 0, duration: 0 }
 
@@ -369,6 +377,7 @@
                 await sendScriptureToJAOutputs(targets)
                 const confirmed=targets.every(id=>get(outputs)[id]?.out?.slide?.id==="temp" &&
                     get(outputs)[id]?.out?.slide?.categoryId===before)
+                if(confirmed) armBibleFollow(targets,before)
                 notice(confirmed
                     ? "Biblia recibida por "+targets.length+" salidas. Confirma cada pantalla físicamente."
                     : "No se confirmó la Biblia en todas las salidas. Comprueba las asignaciones.")
@@ -1105,6 +1114,8 @@
     }
     function showModule(next: "multimedia" | "himnario" | "biblia") {
         if (mode === "biblia" && next !== "biblia") {
+            bibleFollowEnabled=false
+            bibleNavigationQueue.length=0
             scriptureView?.$destroy();scriptureView=null
             scriptureTarget=null
             el("moduleView_biblia")?.replaceChildren()
@@ -1162,6 +1173,82 @@
             notice("No se pudo preparar Vista previa bíblica: " + String(error))
         }
     }
+
+    function bibleFollowGroupStillLive(): boolean {
+        if(!bibleFollowTargets.length || !bibleFollowVersion || activeBibleId!==bibleFollowVersion)return false
+        const actual=getLiveScriptureOutputIds()
+        if(actual.length!==bibleFollowTargets.length || !bibleFollowTargets.every(id=>actual.includes(id)))return false
+        const current=get(outputs)
+        return bibleFollowTargets.every(id=>current[id]?.active && current[id]?.out?.slide?.id==="temp" &&
+            current[id]?.out?.slide?.categoryId===bibleFollowVersion)
+    }
+    function updateBibleFollowControls() {
+        if(mode!=="biblia")return
+        const follow=el("moduleView_biblia")?.querySelector<HTMLButtonElement>(".ja-bible-follow")
+        if(follow){
+            const live=bibleFollowGroupStillLive()
+            follow.setAttribute("aria-pressed",String(bibleFollowEnabled && live))
+            follow.disabled=bibleNavigationBusy
+            follow.textContent=bibleFollowEnabled && live
+                ? "● Seguir en Programa ("+bibleFollowTargets.length+")"
+                : live ? "○ Seguir en Programa: apagado" : "○ Vista previa solamente"
+            follow.title=live
+                ? "Activa o pausa el seguimiento de versículos en las pantallas donde ya se proyectó la Biblia"
+                : "Proyecta primero un versículo para habilitar el seguimiento en vivo"
+        }
+        for(const nav of el("moduleView_biblia")?.querySelectorAll<HTMLButtonElement>(".ja-bible-prev,.ja-bible-next")||[])
+            nav.disabled=!scriptureView || bibleNavigationQueue.length>=8
+    }
+    function armBibleFollow(targets: string[], version: string) {
+        const actual=getLiveScriptureOutputIds()
+        bibleFollowTargets=[...targets]
+        bibleFollowVersion=version
+        bibleFollowEnabled=targets.length>0 && actual.length===targets.length && targets.every(id=>actual.includes(id))
+        updateBibleFollowControls()
+        if(!bibleFollowEnabled)
+            notice("Biblia proyectada, pero todavía no se confirmó el seguimiento nativo de versículos.")
+    }
+    function enqueueBibleNavigation(moveLeft: boolean) {
+        if(mode!=="biblia" || !scriptureView || settingsOpen)return
+        if(bibleNavigationQueue.length>=8)return notice("Hay demasiados cambios pendientes; comprueba la salida.")
+        bibleNavigationQueue.push(moveLeft)
+        void runBibleNavigation()
+    }
+    async function runBibleNavigation() {
+        if(bibleNavigationBusy)return
+        bibleNavigationBusy=true
+        updateBibleFollowControls()
+        try {
+            while(bibleNavigationQueue.length && mode==="biblia" && scriptureView){
+                const moveLeft=bibleNavigationQueue.shift()!
+                const before=JSON.stringify(get(activeScripture).reference||null)
+                const follow=bibleFollowEnabled && bibleFollowGroupStillLive() && !get(outLocked)
+                await scriptureView.navigatePreparedVerse(moveLeft)
+                if(mode!=="biblia")break
+                const after=JSON.stringify(get(activeScripture).reference||null)
+                if(before===after)continue
+                if(!follow || !bibleFollowEnabled)continue
+                // Prepare the exact Bible reference privately before an on-air
+                // update; never project a stale result after a rapid selection.
+                const version=activeBibleId
+                const draft=await prepareGeminiScriptureDraft()
+                if(!draft || version!==activeBibleId || after!==JSON.stringify(get(activeScripture).reference||null))
+                    continue
+                if(!bibleFollowEnabled || get(outLocked) || !bibleFollowGroupStillLive()) {
+                    bibleFollowEnabled=false
+                    updateBibleFollowControls()
+                    continue
+                }
+                await refreshLiveScripture()
+            }
+        }catch(error){
+            bibleNavigationQueue.length=0
+            notice("Error al cambiar el versículo: "+String(error))
+        }finally{
+            bibleNavigationBusy=false
+            updateBibleFollowControls()
+        }
+    }
     function keyboardGeminiBible(e: KeyboardEvent) {
         if (mode !== "biblia" || settingsOpen || !["ArrowLeft","ArrowRight"].includes(e.key)) return
         if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return
@@ -1172,7 +1259,7 @@
         if (!scriptureView) return
         e.preventDefault()
         e.stopImmediatePropagation()
-        void (scriptureView as any).navigatePreparedVerse(e.key === "ArrowLeft").catch((error: unknown) => notice("No se pudo cambiar de versículo: " + String(error)))
+        enqueueBibleNavigation(e.key === "ArrowLeft")
     }
     function updateBibleUI() {
         if (mode !== "biblia") return
@@ -1193,6 +1280,9 @@
             versions.setAttribute("aria-label","Seleccionar traducción bíblica instalada")
             versions.dataset.role="ja-bibles"
             versions.onchange=()=>{
+                bibleFollowEnabled=false
+                bibleFollowTargets=[]
+                bibleFollowVersion=""
                 activeBibleId=versions.value
                 drawerTabsData.update(data => ({...data,scripture:{...data.scripture,activeSubTab:activeBibleId}}))
                 scriptureView?.$set({active:activeBibleId})
@@ -1224,13 +1314,41 @@
                     return notice("Selecciona primero un libro, capítulo y versículo de la Biblia.")
                 // The existing Scripture router supports an explicit outputId;
                 // this does NOT broadcast to other physical screens.
+                const version=activeBibleId
                 void sendScriptureToJAOutputs([destinationId]).then(()=>{
                     const result=get(outputs)[destinationId]?.out?.slide
-                    if (result?.id !== "temp" || result?.categoryId !== activeBibleId)
+                    if (result?.id !== "temp" || result?.categoryId !== version)
                         notice("No se confirmó la Biblia en "+(get(outputs)[destinationId]?.name||destinationId)+". Comprueba la salida activa.")
+                    else armBibleFollow([destinationId],version)
                 }).catch(error=>notice("Error al proyectar Biblia: "+String(error)))
             }
             bar.append(project)
+            const previous=document.createElement("button")
+            previous.type="button"
+            previous.className="ja-bible-prev"
+            previous.textContent="← Anterior"
+            previous.title="Versículo anterior: Vista previa y, si se habilitó, Programa"
+            previous.onclick=()=>enqueueBibleNavigation(true)
+            bar.append(previous)
+            const next=document.createElement("button")
+            next.type="button"
+            next.className="ja-bible-next"
+            next.textContent="Siguiente →"
+            next.title="Versículo siguiente: Vista previa y, si se habilitó, Programa"
+            next.onclick=()=>enqueueBibleNavigation(false)
+            bar.append(next)
+            const liveFollow=document.createElement("button")
+            liveFollow.type="button"
+            liveFollow.className="ja-bible-follow"
+            liveFollow.setAttribute("aria-pressed","false")
+            liveFollow.onclick=()=>{
+                if(bibleNavigationBusy)return
+                if(!bibleFollowGroupStillLive())
+                    return notice("Primero proyecta un pasaje en las pantallas donde quieras avanzar versículos.")
+                bibleFollowEnabled=!bibleFollowEnabled
+                updateBibleFollowControls()
+            }
+            bar.append(liveFollow)
             area.append(bar)
             scriptureTarget=document.createElement("div")
             scriptureTarget.className="ja-bible-content"
@@ -1263,6 +1381,7 @@
         if (activeBibleId && scriptureTarget) {
             if (!scriptureView) { scriptureTarget.replaceChildren(); scriptureView=new Scripture({target:scriptureTarget,props:{active:activeBibleId,searchValue:"",geminiPreviewOnly:true}}) }
             else scriptureView.$set({active:activeBibleId})
+            updateBibleFollowControls()
         } else {
             scriptureTarget.textContent="Todavía no hay una Biblia local válida. Verifica RV1909 en Biblias instaladas."
         }
@@ -1666,7 +1785,7 @@
         hymnSearch?.addEventListener("input", renderLibrary)
         mediaSearch?.addEventListener("input", renderLibrary)
         cleanup.push(() => hymnSearch?.removeEventListener("input", renderLibrary), () => mediaSearch?.removeEventListener("input", renderLibrary))
-        const uOutputs = outputs.subscribe(() => { rebuildOutputs(); renderRealHeader() })
+        const uOutputs = outputs.subscribe(() => { rebuildOutputs(); renderRealHeader(); if(mode==="biblia")updateBibleFollowControls() })
         const uPlayingForGroup = playingVideos.subscribe(() => { if(host)refreshGroupChoices() })
         const uGroupLock = outLocked.subscribe(() => { if(host)refreshGroupChoices() })
         const uSaved = saved.subscribe(() => renderRealHeader())
