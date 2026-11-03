@@ -412,6 +412,7 @@ export async function prepareGeminiScriptureDraft(outputId?:string) {
     const main = getJAMainOutput()
     const currentStyle = get(styles)[main?.style || ""] || {}
     const mediaStyle = backgroundPath ? getMediaStyle(get(media)[backgroundPath], currentStyle) : {}
+    if(appearance?.backgroundMode==="image" && backgroundPath)mediaStyle.fit="cover"
     const slide = {
         id: "temp", categoryId, scriptureReference: reference, jaBibleAppearance: appearance,
         tempItems: slides[0] || [], attributionString: getMergedAttribution(biblesContent, attributions),
@@ -599,11 +600,13 @@ async function projectScripture(outputIds: string[], explicit: boolean, recordMa
             if (!isLatestForTargets() || !target?.active || !target.enabled || getJAMainOutput()?.id !== mainOutput.id || target.out?.slide?.id !== "temp") return false
             const currentStyle = get(styles)[target.style || ""] || {}
             const mediaStyle = getMediaStyle(get(media)[templateBackground], currentStyle)
+            if(appearance?.backgroundMode==="image")mediaStyle.fit="cover"
             sendToJAOutputs("background", { path: templateBackground, loop: true, muted: true, ...mediaStyle }, [outputId])
         }
     } else {
         const currentStyle = get(styles)[mainOutput.style || ""] || {}
         const mediaStyle = getMediaStyle(get(media)[templateBackground], currentStyle)
+        if(appearance?.backgroundMode==="image")mediaStyle.fit="cover"
         setOutput("background", { path: templateBackground, loop: true, muted: true, ...mediaStyle }, false, mainOutput.id)
     }
     return true

@@ -91,8 +91,8 @@ test("Biblia Gemini prepara en un renderizador FreeShow aislado y no actualiza P
  assert.ok(shell.includes("geminiPreviewOnly:true"),"Navegador no está aislado de Programa")
  assert.ok(navigator.includes("!geminiPreviewOnly && hasLiveScriptureOutput"),"Selección puede actualizar Programa sin autorizar")
  assert.ok(navigator.includes("export async function navigatePreparedVerse"),"Falta navegación privada")
- assert.ok(scripture.includes("export async function prepareGeminiScriptureDraft()"),"Falta composición de plantilla real")
- const factory=scripture.split("export async function prepareGeminiScriptureDraft()")[1].split("// Ordinary")[0]
+ assert.ok(scripture.includes("export async function prepareGeminiScriptureDraft(outputId?:string)"),"Falta composición de plantilla real por salida")
+ const factory=scripture.split("export async function prepareGeminiScriptureDraft(outputId?:string)")[1].split("// Ordinary")[0]
  assert.ok(!factory.includes("setOutput(") && !factory.includes("sendToJAOutputs("),"El borrador nunca debe emitir")
  assert.ok(preview.includes("outOverride={prepared}"),"Vista previa debe aislar contenido sin escribir en outputs")
 })
@@ -441,4 +441,41 @@ test("Biblia: vista superior sincronizada con inferior y cancelación de flechas
  assert.ok(shell.includes("updateBibleViewButtons()"))
  assert.ok(shell.includes("routeGeneration!==bibleControlGeneration"))
  assert.ok(shell.includes("bibleControlRestoring"))
+});
+
+test("Biblia: editor real aplica el mismo estilo en Vista previa, Programa y navegación",()=>{
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const editor=read("engine/src/frontend/components/ja/JaGeminiBibleEditor.svelte")
+ const bible=read("engine/src/frontend/components/drawer/bible/scripture.ts")
+ const renderer=read("engine/src/frontend/components/output/Output.svelte")
+ const output=read("engine/src/frontend/components/helpers/output.ts")
+ const model=read("engine/src/frontend/utils/jaBibleAppearance.ts")
+ const schema=read("engine/src/types/Show.ts")
+ assert.ok(shell.includes('editorButton.textContent="✎ Editar apariencia"'),"Editor no visible en Biblia")
+ assert.ok(shell.includes("<JaGeminiBibleEditor outputId={selectedId}"),"Editor no recibe destino inspeccionado")
+ assert.ok(shell.includes("loadJABibleAppearances()"),"No se hidratan estilos guardados")
+ assert.ok(shell.includes("jaBibleAppearances.subscribe"),"Los cambios de edición no actualizan Vista previa")
+ assert.ok(shell.includes("prepareGeminiScriptureDraft(selectedId)"),"Preview usa un estilo global incorrecto")
+ assert.ok(editor.includes('setJABibleAppearance(outputId'),"Editor no guarda estilos por pantalla")
+ for(const field of ["fontFamily","fontSize","fontWeight","textColor","textAlign","verticalAlign","shadow","backgroundMode","backgroundColor","backgroundPath"])
+    assert.ok(editor.includes(field),"Falta opción visible "+field)
+ assert.ok(model.includes("localStorage.setItem(JA_BIBLE_APPEARANCE_KEY"),"Sin persistencia local por salida")
+ assert.ok(schema.includes("jaBibleAppearance?: JABibleAppearance"),"No se transporta estilo dentro de diapositiva")
+ assert.ok(output.includes("applyJABibleAppearanceToItems(boundItems,outSlide.jaBibleAppearance)"),"Render nativo ignora estilos")
+ assert.ok(bible.includes('jaBibleAppearance: appearance'),"No hay apariencia en la diapositiva proyectada")
+ assert.ok(renderer.includes('jaBibleAppearance = slide?.id==="temp"'),"No se compone fondo personalizable")
+ assert.ok(bible.includes("const appearance = getJABibleAppearance(outputIds.length>1 ? mainOutput.id : outputIds[0])"),"Grupo no hereda estilo principal")
+ assert.ok(bible.includes("copyJABibleAppearanceToTargets(mainOutput.id,outputIds)"),"Estilo grupal no se conserva")
+ assert.ok(bible.includes('if(appearance?.backgroundMode==="image")mediaStyle.fit="cover"'),"Fondo de imagen no llena área")
+ assert.ok(!model.includes("templates.update("),"Editor nunca debe mutar plantillas globales")
+});
+test("Biblia: aplicar estilo en vivo no modifica pasajes ajenos ni envía una referencia distinta",()=>{
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const p=shell.split("async function applyBibleStyleToProgram()")[1].split("function updateBibleUI()")[0]
+ assert.ok(p.includes("getLiveScriptureOutputIds()"),"Debe usar grupo nativo seleccionado")
+ assert.ok(p.includes('live.includes(selectedId)'),"No editar salida ajena")
+ assert.ok(p.includes("scriptureReference"),"Confirmar que el versículo sigue proyectado")
+ assert.ok(p.includes("biblePreviewReady"),"No enviar antes de renderizar")
+ assert.ok(p.includes("await refreshLiveScripture()"),"Aplicar debe usar proyección FreeShow existente")
+ assert.ok(!p.includes("sendToJAOutputs("),"No enviar una nueva diapositiva a un destino implícito")
 });

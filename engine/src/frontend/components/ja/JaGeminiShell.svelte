@@ -29,6 +29,8 @@
     import { videoSync } from "../media/video/videoSync"
     import PreviewOutput from "../output/preview/PreviewOutput.svelte"
     import JaGeminiBiblePreview from "./JaGeminiBiblePreview.svelte"
+    import JaGeminiBibleEditor from "./JaGeminiBibleEditor.svelte"
+    import { jaBibleAppearances, loadJABibleAppearances, setJABibleAppearance } from "../../utils/jaBibleAppearance"
     import JaGeminiSettings from "./JaGeminiSettings.svelte"
 
     let host: HTMLDivElement
@@ -124,6 +126,9 @@
     let bibleFollowTargets: string[] = []
     let bibleFollowVersion = ""
     let bibleFollowEnabled = false
+    let bibleEditorOpen = false
+    let bibleBackgroundPickerTarget = ""
+    let bibleStyleApplyBusy = false
     let bibleControlGeneration = 0
     let bibleControlRestoring = false
     let bibleNavigationBusy = false
@@ -1191,6 +1196,7 @@
     }
     function showModule(next: "multimedia" | "himnario" | "biblia") {
         if (mode === "biblia" && next !== "biblia") {
+            bibleEditorOpen=false
             bibleFollowEnabled=false
             bibleNavigationQueue.length=0
             scriptureView?.$destroy();scriptureView=null
@@ -1219,7 +1225,7 @@
         const before = JSON.stringify(get(activeScripture).reference || null)
         const bibleId = activeBibleId
         try {
-            const draft = await prepareGeminiScriptureDraft()
+            const draft = await prepareGeminiScriptureDraft(selectedId)
             if (generation !== biblePreviewGeneration || mode !== "biblia" ||
                 bibleId !== activeBibleId || before !== JSON.stringify(get(activeScripture).reference || null)) return
             const target = el("previewCanvasContent")
@@ -1350,6 +1356,31 @@
         e.stopImmediatePropagation()
         enqueueBibleNavigation(e.key === "ArrowLeft")
     }
+    function chooseBibleBackground(){
+        if(!selectedId || !chooseOutput().includes(selectedId))return notice("Selecciona una salida antes de elegir fondo bíblico.")
+        bibleBackgroundPickerTarget=selectedId
+        sendMain(Main.OPEN_FILE,{id:"ja-gemini-bible-background",channel:"JA_GEMINI_BIBLE_BACKGROUND",
+            title:"Elegir imagen de fondo para Biblia",multiple:false,read:false,
+            filter:{name:"Imágenes PNG, JPG o WEBP",extensions:["png","jpg","jpeg","webp"]}})
+    }
+    async function applyBibleStyleToProgram(){
+        if(bibleStyleApplyBusy || bibleControlRestoring || bibleNavigationBusy)return
+        if(get(outLocked))return notice("Las salidas están bloqueadas")
+        const live=getLiveScriptureOutputIds()
+        const reference=JSON.stringify(get(activeScripture).reference||null)
+        if(!live.length || !live.includes(selectedId))
+            return notice("Primero proyecta una Biblia en esta pantalla para aplicar el estilo en vivo.")
+        if(live.some(id=>JSON.stringify(get(outputs)[id]?.out?.slide?.scriptureReference||null)!==reference))
+            return notice("Vista previa contiene otro versículo. Proyéctalo explícitamente antes de aplicar estilos.")
+        if(!biblePreviewReady || biblePreviewReference!==reference)
+            return notice("Espera a que termine de prepararse la Vista previa.")
+        bibleStyleApplyBusy=true
+        try{
+            await refreshLiveScripture()
+            notice(live.length>1?"Estilo de Primario aplicado al grupo bíblico.":"Estilo aplicado a la pantalla seleccionada.")
+        }catch(error){notice("No se pudo aplicar el estilo en Programa: "+String(error))}
+        finally{bibleStyleApplyBusy=false}
+    }
     function updateBibleUI() {
         if (mode !== "biblia") return
         const area = el("moduleView_biblia")
@@ -1446,6 +1477,13 @@
                 updateBibleFollowControls()
             }
             bar.append(liveFollow)
+            const editorButton=document.createElement("button")
+            editorButton.type="button"
+            editorButton.className="ja-bible-edit-style"
+            editorButton.textContent="✎ Editar apariencia"
+            editorButton.title="Fuente, tamaño, color, alineación y fondo por pantalla"
+            editorButton.onclick=()=>{if(!selectedId)return notice("Activa una pantalla antes de editar.");bibleEditorOpen=!bibleEditorOpen}
+            bar.append(editorButton)
             area.append(bar)
             scriptureTarget=document.createElement("div")
             scriptureTarget.className="ja-bible-content"
@@ -1524,6 +1562,17 @@
     }
     function installFolderPicker() {
         const fileToken = receiveToMain(ToMain.OPEN_FILE2, ({channel,files}) => {
+            if(channel === "JA_GEMINI_BIBLE_BACKGROUND") {
+                const destination=bibleBackgroundPickerTarget
+                bibleBackgroundPickerTarget=""
+                if(!destination || destination!==selectedId || !get(outputs)[destination]?.active)return
+                const path=Array.isArray(files)&&typeof files[0]==="string"?files[0]:""
+                if(path && /\.(png|jpe?g|webp)$/i.test(path)){
+                    setJABibleAppearance(destination,{backgroundMode:"image",backgroundPath:path})
+                    notice("Imagen de fondo preparada para "+(get(outputs)[destination]?.name||destination))
+                }
+                return
+            }
             if(channel === "JA_GEMINI_LOGO_IMAGE") {
                 if(Array.isArray(files) && typeof files[0] === "string") configureLogoPath(files[0])
                 return
@@ -1736,6 +1785,7 @@
         programVolume.title = "Volumen de Programa: " + Math.round(level * 100) + "%"
     }
     onMount(() => {
+        loadJABibleAppearances()
         try {
             previewAutoplay = localStorage.getItem("ja-gemini-preview-autoplay") !== "false"
             compactUi = localStorage.getItem("ja-gemini-compact-ui") === "true"
@@ -1890,13 +1940,14 @@
         const uBibleTemplate = templates.subscribe(() => { if(mode==="biblia")scheduleBiblePreview() })
         const uBibleSettings = scriptureSettings.subscribe(() => { if(mode==="biblia")scheduleBiblePreview() })
         const uBibleMode = scriptureMode.subscribe(() => { if(mode==="biblia")updateBibleViewButtons() })
+        const uBibleAppearance = jaBibleAppearances.subscribe(() => { if(mode==="biblia")scheduleBiblePreview() })
         window.addEventListener("keydown", keyboardGeminiBible, true)
         cleanup.push(() => window.removeEventListener("keydown", keyboardGeminiBible, true))
         const uHymn = hymnVideos.subscribe(() => { if(mode==="himnario")renderLibrary() })
         const uCollections = hymnCollectionPaths.subscribe(() => { if(mode==="himnario")renderLibrary() })
         const uRoots = hymnSourcePaths.subscribe(() => { void scanMediaFolders() })
         const uStatuses = hymnSourceStatus.subscribe(() => { if(mode==="himnario")renderToolbar() })
-        cleanup.push(uOutputs, uPlayingForGroup, uGroupLock, uSaved, uFolders, uBibles, uScriptureDraft, uBibleTab, uBibleTemplate, uBibleSettings, uBibleMode, uHymn, uCollections, uRoots, uStatuses)
+        cleanup.push(uOutputs, uPlayingForGroup, uGroupLock, uSaved, uFolders, uBibles, uScriptureDraft, uBibleTab, uBibleTemplate, uBibleSettings, uBibleMode, uBibleAppearance, uHymn, uCollections, uRoots, uStatuses)
         rebuildOutputs()
         return () => {
             if (timer) clearTimeout(timer)
@@ -1926,6 +1977,11 @@
 <svelte:head><link rel="stylesheet" href="ja-gemini.css" /><link rel="stylesheet" href="ja-gemini-layout.css" /></svelte:head>
 <div class={"ja-gemini-host " + geminiBodyClasses + (compactUi ? " ja-compact-ui" : "") + (largeUi ? " ja-large-ui" : "")} bind:this={host}>
     {@html geminiHtml}
+    {#if bibleEditorOpen && mode==="biblia"}
+        <JaGeminiBibleEditor outputId={selectedId} on:close={() => {bibleEditorOpen=false}}
+            on:chooseBackground={chooseBibleBackground}
+            on:applyToProgram={() => {void applyBibleStyleToProgram()}}/>
+    {/if}
     {#if settingsOpen}
         <JaGeminiSettings
             selectedOutputId={selectedId}
