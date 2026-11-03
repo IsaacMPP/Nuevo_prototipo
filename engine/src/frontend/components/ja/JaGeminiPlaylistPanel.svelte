@@ -75,8 +75,18 @@
                 <div class="playlist-options">
                     <label><input type="checkbox" checked={current.autoNext}
                         on:change={e=>action("autoNext",{id:current.id,value:e.currentTarget.checked})}/> Reproducir siguiente automáticamente</label>
-                    <label><input type="checkbox" checked={current.repeat}
-                        on:change={e=>action("repeat",{id:current.id,value:e.currentTarget.checked})}/> Repetir lista</label>
+                    <div class="playlist-modes" role="group" aria-label="Modo de reproducción">
+                        {#each [
+                            {id:"normal",label:"Normal",icon:"☷"},
+                            {id:"shuffle",label:"Aleatorio",icon:"🔀"},
+                            {id:"repeat-all",label:"Repetir lista",icon:"🔁"},
+                            {id:"repeat-one",label:"Repetir canción",icon:"🔂"}
+                        ] as playbackMode (playbackMode.id)}
+                            <button type="button" class:active={current.playMode===playbackMode.id}
+                                aria-pressed={current.playMode===playbackMode.id} title={playbackMode.label}
+                                on:click={()=>action("playMode",{id:current.id,playMode:playbackMode.id})}>{playbackMode.icon} {playbackMode.label}</button>
+                        {/each}
+                    </div>
                 </div>
                 <div class="playlist-list" role="list">
                     {#each current.entries as entry, index (entry.id)}
@@ -89,6 +99,12 @@
                                         on:change={e=>action("audioOnly",{id:current.id,entryId:entry.id,value:e.currentTarget.checked})}/>
                                     Solo audio
                                 </label>
+                                {#if !entry.audioOnly}
+                                    <label class="playlist-audio-toggle" title="Bucle del video proyectado, independiente de repetir lista">
+                                        <input type="checkbox" checked={entry.loopVideo===true}
+                                            on:change={e=>action("loopVideo",{id:current.id,entryId:entry.id,value:e.currentTarget.checked})}/> Bucle video
+                                    </label>
+                                {/if}
                             {:else if entry.kind==="audio"}
                                 <span class="playlist-audio-note">Solo audio</span>
                             {:else}
@@ -111,7 +127,9 @@
                 <footer class="playlist-footer">
                     <button type="button" class="primary" disabled={!current.entries.length||busy}
                         on:click={() => action("play",{id:current.id,index:0})}>▶ Reproducir lista</button>
-                    <button type="button" disabled={!running||busy} on:click={() => action("next")}>Siguiente →</button>
+                    <button type="button" disabled={!running||busy} title="Anterior" on:click={() => action("previous")}>⏮ Anterior</button>
+                    <button type="button" disabled={!running||busy} title="Reproducir o pausar" on:click={() => action("togglePause")}>⏯ Pausar / Continuar</button>
+                    <button type="button" disabled={!running||busy} on:click={() => action("next")}>Siguiente ⏭</button>
                     <button type="button" disabled={!running} on:click={() => action("stop")}>■ Detener lista</button>
                 </footer>
                 <small class="playlist-explain">«Solo audio» funciona con archivos locales de video e himnos: no cambia lo proyectado. YouTube se reproduce con su video visible y requiere conexión; algunos videos pueden bloquear la reproducción automática.</small>
@@ -141,7 +159,10 @@
     .playlist-name strong{font-size:16px}.playlist-name small{display:block;margin-top:4px}
     .danger-link{background:transparent;color:#f0adad}.playlist-add{display:grid;grid-template-columns:1fr 1.5fr;gap:9px}
     .playlist-add form{display:flex;gap:7px;min-width:0}.playlist-add form button{white-space:nowrap}
-    .playlist-options{display:flex;flex-wrap:wrap;gap:15px;color:#d9e5fa}.playlist-options label,.playlist-audio-toggle{display:flex;align-items:center;gap:6px}
+    .playlist-options{display:flex;flex-wrap:wrap;gap:12px;color:#d9e5fa;align-items:center}.playlist-options label,.playlist-audio-toggle{display:flex;align-items:center;gap:6px}
+    .playlist-modes{display:flex;align-items:center;flex-wrap:wrap;gap:5px}
+    .playlist-modes button{padding:5px 8px;font-size:11px;background:#152c50}
+    .playlist-modes button.active{border-color:#4cd1fd;background:#22649b;color:#fff}
     input[type="checkbox"]{accent-color:#4cd1fd}.playlist-list{flex:1;overflow:auto;min-height:80px;display:flex;flex-direction:column;gap:6px}
     .playlist-list article{display:flex;align-items:center;gap:10px;padding:9px;background:#101f40;border:1px solid #294774;border-radius:8px}
     .playlist-list article.playing{border-color:#f1bd28;background:#23304a}

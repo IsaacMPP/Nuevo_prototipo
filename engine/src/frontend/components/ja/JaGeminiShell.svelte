@@ -29,7 +29,7 @@
     import { AudioPlayer } from "../../audio/audioPlayer"
     import { playingAudio, playerVideos } from "../../stores"
     import { jaPlaylists, jaReadPlaylists, jaWritePlaylists, jaNewPlaylist, jaLocalPlaylistEntry,
-        jaYoutubePlaylistEntry, jaYoutubeId, jaMoveEntry, JA_MAX_PLAYLISTS, JA_MAX_ENTRIES,
+        jaYoutubePlaylistEntry, jaYoutubeId, jaMoveEntry, jaShuffleOrder, jaNextIndex, jaPlaybackMode, JA_MAX_PLAYLISTS, JA_MAX_ENTRIES,
         type JAPlaylist, type JAPlaylistEntry } from "../../utils/jaGeminiPlaylists"
     import JaGeminiPlaylistPanel from "./JaGeminiPlaylistPanel.svelte"
     import JaGeminiAudioControls from "./JaGeminiAudioControls.svelte"
@@ -147,6 +147,9 @@
     let playlistSawProgress=false
     let playlistNearEnd=false
     let playlistLastPosition=0
+    let playlistShuffleOrder:number[]=[]
+    let playlistShufflePosition=0
+    let playlistPaused=false
     let audioOnlyLocal=false
     let jaAudioOnlyButton:HTMLButtonElement|null=null
     let playlistCurrentFile:{path:string;source:"multimedia"|"himnario";kind:"audio"|"video"}|null=null
@@ -627,6 +630,9 @@
         playlistBusy=false
         playlistSawProgress=false
         playlistNearEnd=false
+        playlistShuffleOrder=[]
+        playlistShufflePosition=0
+        playlistPaused=false
         if(stopSound && jaAudioPath && AudioPlayer.audioExists(jaAudioPath)){
             AudioPlayer.stop(jaAudioPath)
             jaAudioPath=""
@@ -637,7 +643,7 @@
         // Do not stop a video already projected: it may be controlling several
         // outputs, and the operator explicitly decides when to clear Programa.
     }
-    async function playJAPlaylistIndex(id:string,index:number):Promise<void>{
+    async function playJAPlaylistIndex(id:string,index:number,fromQueue=false):Promise<void>{
         const list=get(jaPlaylists).find(p=>p.id===id)
         const item=list?.entries[index]
         if(!item || playlistBusy)return
@@ -647,6 +653,11 @@
         if(get(outLocked)||!primary||!targets.includes(primary)||targets.some(t=>!available.includes(t))){
             notice("Marca Primario y las salidas activas donde quieras reproducir la lista.")
             return
+        }
+        if(!fromQueue || playlistCurrentId!==id){
+            playlistShuffleOrder=list.playMode==="shuffle"
+                ? jaShuffleOrder(list.entries.length,index) : []
+            playlistShufflePosition=0
         }
         const previousEntry=get(jaPlaylists).find(p=>p.id===playlistCurrentId)?.entries[playlistIndex]
         const token=++playlistToken
@@ -658,6 +669,7 @@
         playlistSawProgress=false
         playlistNearEnd=false
         playlistLastPosition=0
+        playlistPaused=false
         selectedPlaylistId=id
         // Every new entry owns only the audio started by this JA playlist.
         if(jaAudioPath && jaAudioPath!==item.path && AudioPlayer.audioExists(jaAudioPath)){
@@ -707,7 +719,7 @@
                 }
                 if(token!==playlistToken)return
                 const received=sendToJAOutputs("background",{
-                    path:item.path,type:"video",loop:false,muted:false,startAt:0
+                    path:item.path,type:"video",loop:item.loopVideo===true,muted:false,startAt:0
                 },targets,{replaceScripture:true,requireAll:true})
                 if(received.length!==targets.length)throw Error("FreeShow no confirmó las salidas del video.")
                 clearBlackBeforePublishing(targets)
@@ -730,15 +742,14 @@
         const list=get(jaPlaylists).find(p=>p.id===playlistCurrentId)
         if(!list)return stopJAPlaylist()
         if(!manual && !list.autoNext){playlistWaiting=true;notice("Canto terminado. Pulsa Siguiente para continuar.");return}
-        let next=playlistIndex+1
-        if(next>=list.entries.length){
-            if(list.repeat)next=0
-            else {stopJAPlaylist(false);notice("Playlist finalizada.");return}
-        }
-        void playJAPlaylistIndex(list.id,next)
+        const next=jaNextIndex(jaPlaybackMode(list.playMode,list.repeat),list.entries.length,
+            playlistIndex,manual,playlistShuffleOrder,playlistShufflePosition)
+        if(next.index<0){stopJAPlaylist(false);notice("Playlist finalizada.");return}
+        playlistShufflePosition=next.position
+        void playJAPlaylistIndex(list.id,next.index,true)
     }
     function watchJAPlaylist(){
-        if(!playlistRunning||playlistBusy||playlistWaiting)return
+        if(!playlistRunning||playlistBusy||playlistWaiting||playlistPaused)return
         const list=get(jaPlaylists).find(p=>p.id===playlistCurrentId)
         const item=list?.entries[playlistIndex]
         if(!list||!item)return
@@ -780,10 +791,39 @@
         }
     }
     async function playlistPanelAction(event:{type:string;id?:string;name?:string;url?:string;
-        entryId?:string;index?:number;offset?:number;value?:boolean}){
+        entryId?:string;index?:number;offset?:number;value?:boolean;playMode?:string}){
         if(event.type==="close"){playlistOpen=false;return}
         if(event.type==="stop"){stopJAPlaylist();return}
         if(event.type==="next"){advanceJAPlaylist(true);return}
+        if(event.type==="previous"){
+            if(!playlistRunning || playlistBusy)return
+            const list=get(jaPlaylists).find(p=>p.id===playlistCurrentId)
+            if(!list)return
+            if(list.playMode==="shuffle"){
+                const pos=Math.max(0,playlistShufflePosition-1)
+                playlistShufflePosition=pos
+                void playJAPlaylistIndex(list.id,playlistShuffleOrder[pos]??playlistIndex,true)
+            }else void playJAPlaylistIndex(list.id,Math.max(0,playlistIndex-1),true)
+            return
+        }
+        if(event.type==="togglePause"){
+            if(!playlistRunning)return
+            const entry=get(jaPlaylists).find(p=>p.id===playlistCurrentId)?.entries[playlistIndex]
+            const main=localStorage.getItem("ja-main-projector")||""
+            if(!entry)return
+            if(entry.kind==="audio"||entry.audioOnly){
+                if(!AudioPlayer.audioExists(entry.path))return notice("La pista de audio no está activa.")
+                if(AudioPlayer.isPaused(entry.path)){AudioPlayer.play(entry.path);playlistPaused=false}
+                else {AudioPlayer.pause(entry.path);playlistPaused=true}
+            }else{
+                const path=entry.kind==="youtube"?jaYoutubeId(entry.path):entry.path
+                const video=VideoPlayer.getPlaying(path,[main])
+                if(!video)return notice("Este reproductor no ofrece pausa remota. Usa sus controles visibles.")
+                if(video.audio.paused){VideoPlayer.play(path,main);playlistPaused=false}
+                else {VideoPlayer.pause(path,main);playlistPaused=true}
+            }
+            return
+        }
         if(event.type==="play"){
             if(event.id && Number.isInteger(event.index))
                 await playJAPlaylistIndex(event.id,event.index!)
@@ -808,8 +848,19 @@
         const id=event.id||""
         const list=get(jaPlaylists).find(p=>p.id===id)
         if(!list)return
-        if(event.type==="autoNext"||event.type==="repeat"){
-            updateJAPlaylist(id,l=>({...l,[event.type==="autoNext"?"autoNext":"repeat"]:!!event.value}))
+        if(event.type==="autoNext"){
+            updateJAPlaylist(id,l=>({...l,autoNext:!!event.value}))
+            return
+        }
+        if(event.type==="playMode"){
+            if(playlistRunning&&playlistCurrentId===id)return notice("Detén la lista antes de cambiar el modo de recorrido.")
+            updateJAPlaylist(id,l=>({...l,playMode:jaPlaybackMode(event.playMode),repeat:event.playMode==="repeat-all"}))
+            return
+        }
+        if(event.type==="loopVideo"){
+            if(playlistRunning&&playlistCurrentId===id)return notice("Detén la lista antes de cambiar el bucle de sus videos.")
+            updateJAPlaylist(id,l=>({...l,entries:l.entries.map(entry=>
+                entry.id===event.entryId && entry.kind==="video"?{...entry,loopVideo:!!event.value}:entry)}))
             return
         }
         if(event.type==="addFile"){

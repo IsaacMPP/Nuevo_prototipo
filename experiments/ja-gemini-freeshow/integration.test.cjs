@@ -677,7 +677,7 @@ test("P5: playlists tipadas para audio, video, himnos y YouTube con persistencia
  assert.ok(m.includes('localStorage.setItem(JA_PLAYLISTS_KEY'),"Guardar listas sin modificar archivos")
  assert.ok(m.includes('JA_MAX_ENTRIES = 200'),"Límite de seguridad")
  assert.ok(p.includes("Añadir archivo preparado")&&p.includes("Pegar URL de YouTube"),"Mezcla de archivos locales y YouTube")
- assert.ok(p.includes('action("move"')&&p.includes('action("autoNext"')&&p.includes('action("repeat"'),"Orden y avance automático")
+ assert.ok(p.includes('action("move"')&&p.includes('action("autoNext"')&&p.includes('action("playMode"'),"Orden, avance automático y modos")
  assert.ok(s.includes("jaPlaylists.set(jaReadPlaylists())"),"Restaurar al arrancar")
  assert.ok(s.includes('else if(id==="listas")'),"Acceso a listas desde la navegación")
  assert.ok(s.includes('playlistBtn.textContent="☰ Listas"'),"Acceso sin alterar tarjetas")
@@ -705,11 +705,11 @@ test("P5: avanzar mixto usa el motor existente y YouTube visible",()=>{
  assert.ok(run.includes('playerVideos.update(data=>({...data,[youtubeId]'),"Registro nativo YouTube")
  assert.ok(run.includes('id:youtubeId,type:"player",loop:false'),"No reproducción oculta en YouTube")
  assert.ok(native.includes('<Player {outputId} {id} on:loaded />'),"YouTube usa el iframe de FreeShow")
- assert.ok(run.includes('type:"video",loop:false,muted:false,startAt:0'),"Video local en el reloj nativo")
+ assert.ok(run.includes('type:"video",loop:item.loopVideo===true,muted:false,startAt:0'),"Video local con bucle por elemento")
  assert.ok(run.includes('sendToJAOutputs("background"'),"Proyección por destinos marcados")
  assert.ok(!run.includes('type:"youtube-audio"'),"No separar audio de YouTube")
  assert.ok(s.includes('playlistMonitor=setInterval(watchJAPlaylist,350)'),"Vigilar fin de sesión")
- assert.ok(s.includes('if(!manual && !list.autoNext)')&&s.includes('if(list.repeat)next=0'),"Manual y repetición")
+ assert.ok(s.includes('if(!manual && !list.autoNext)')&&s.includes('jaNextIndex(jaPlaybackMode(list.playMode,list.repeat)'),"Manual y modos repetición")
  assert.ok(s.includes('AudioPlayer.getPlaying(item.path)')&&s.includes('VideoPlayer.getPlaying(key,[primary])'),"Reconocer audio y video real")
 });
 
@@ -724,4 +724,21 @@ test("P5: Play nuevo inicia en cero sin perjudicar recuperación de reloj ni ata
  assert.ok(runner.includes("VideoPlayer.pause(oldPath,primary)"),"Evitar dos audios al cambiar a Solo audio")
  assert.ok(s.includes('if(playlistOpen){e.preventDefault();playlistOpen=false;return}'),"Escape cierra Listas")
  assert.ok(s.includes('settingsOpen || bibleEditorOpen || playlistOpen'),"No navegar versículos mientras se editan listas")
+});
+
+test("P5: modos normal, aleatorio, repetir lista/canción y migración existente",()=>{
+ const m=read("engine/src/frontend/utils/jaGeminiPlaylists.ts")
+ const s=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const p=read("engine/src/frontend/components/ja/JaGeminiPlaylistPanel.svelte")
+ assert.ok(m.includes('JA_PLAYBACK_MODES: JAPlaybackMode[] = ["normal","repeat-all","shuffle","repeat-one"]'))
+ assert.ok(m.includes('playMode:jaPlaybackMode(v.playMode,v.repeat===true)'),"Importar listas antiguas sin perder repetir lista")
+ assert.ok(m.includes('return [start,...order]'),"Aleatorio recorre todos sin repetir")
+ assert.ok(m.includes('if(!manual && mode==="repeat-one")'),"Siguiente manual ignora repetir canción")
+ assert.ok(s.includes("playlistShufflePosition=next.position"),"Seguir orden aleatorio real")
+ assert.ok(s.includes('void playJAPlaylistIndex(list.id,next.index,true)'),"Motor usa índice real")
+ assert.ok(s.includes('if(event.type==="togglePause")'),"Pausa nativa")
+ assert.ok(p.includes('label:"Normal"')&&p.includes('label:"Aleatorio"'))
+ assert.ok(p.includes('label:"Repetir lista"')&&p.includes('label:"Repetir canción"'))
+ assert.ok(p.includes('aria-pressed={current.playMode===playbackMode.id}'),"Indicador activo")
+ assert.ok(p.includes('action("loopVideo"'),"Bucle video distinto al modo lista")
 });
