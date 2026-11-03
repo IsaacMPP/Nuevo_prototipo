@@ -154,13 +154,14 @@ export function clearTemporaryScriptureOnJAOutputs(outputIds: string[]): void {
     if (targets.length) clearSlide(true, targets)
 }
 
-// A deliberate multi-destination send. This is a fan-out of the same
-// projection action, not temporal synchronization of independent videos.
-// Video clock sync/group transport remains a separate M1-05 requirement.
-export function sendToJAOutputs(type: string, data: any, outputIds: string[], options: { replaceScripture?: boolean } = {}): string[] {
+// Intentional multi-destination send: a single setOutput dispatch shares one
+// VideoPlayer.start() session and therefore Play/Pause/Seek across targets.
+// It does NOT synchronize independently started videos or disconnected displays.
+export function sendToJAOutputs(type: string, data: any, outputIds: string[], options: { replaceScripture?: boolean; requireAll?: boolean } = {}): string[] {
     const primaryId = typeof localStorage === "undefined" ? "" : localStorage.getItem("ja-main-projector") || ""
-    const valid = Array.from(new Set(outputIds)).filter((id) => !!makeJAProjectionRequest(type, data, id, primaryId, get(outputs)))
-    if (!valid.length) return []
+    const requested = Array.from(new Set(outputIds))
+    const valid = requested.filter((id) => !!makeJAProjectionRequest(type, data, id, primaryId, get(outputs)))
+    if (!valid.length || (options.requireAll && valid.length!==requested.length)) return []
     if (type === "background" && options.replaceScripture && data) clearTemporaryScriptureOnJAOutputs(valid)
     // One native FreeShow dispatch creates one media clock for all destinations.
     // Unlike repeated single sends, this intentionally links group transport.

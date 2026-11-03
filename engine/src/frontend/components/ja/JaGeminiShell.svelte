@@ -21,7 +21,7 @@
     import { activeScripture, effects, mediaFolders, outputs, outLocked, playingVideos, saved, scriptures, scriptureMode, scriptureSettings, templates, drawerTabsData } from "../../stores"
     import { encodeFilePath, getExtension, getMediaType } from "../helpers/media"
     import { clearBackground, clearSlide } from "../output/clear"
-    import { addOutput, setOutput, toggleOutputs } from "../helpers/output"
+    import { addOutput, sendToJAOutputs, setOutput, toggleOutputs } from "../helpers/output"
     import { OUTPUT } from "../../../types/Channels"
     import { send } from "../../utils/request"
     import { VideoPlayer } from "../media/video/videoPlayer"
@@ -48,6 +48,9 @@
     let largeUi = false
     let prepared = ""
     let selectedId = ""
+    // Checked group destinations are independent of the single inspected output.
+    let syncedTargetIds = new Set<string>()
+    let publishingGroup = false
     let mode: "multimedia" | "himnario" | "biblia" = "multimedia"
     let scriptureView: Scripture | null = null
     let scriptureTarget: HTMLElement | null = null
@@ -287,6 +290,105 @@
     // El validador JA de múltiples destinos exige asignación física de monitor
     // y primario persistido; ese requisito NO debe bloquear la salida única
     // que FreeShow ya podía controlar. No usar este método para fan-out.
+
+    function markedGroupTargets(): string[] {
+        const current=chooseOutput()
+        return current.filter(id=>syncedTargetIds.has(id))
+    }
+    function refreshGroupChoices() {
+        const count=markedGroupTargets().length
+        for(const choice of host?.querySelectorAll<HTMLInputElement>(".ja-sync-choice") || []) {
+            choice.checked=syncedTargetIds.has(choice.value)
+            choice.disabled=publishingGroup
+        }
+        for(const button of host?.querySelectorAll<HTMLButtonElement>(".ja-sync-send") || []) {
+            button.disabled=publishingGroup || count<2 || get(outLocked)
+            button.textContent=publishingGroup ? "Enviando…" : "▶ Enviar sincronizado ("+count+")"
+            button.title=count<2 ? "Marca al menos dos pantallas externas para enviar el mismo contenido" :
+                "Enviar el contenido preparado a las "+count+" pantallas marcadas con un único reloj de vídeo"
+        }
+        const all=host?.querySelector<HTMLButtonElement>(".ja-sync-all")
+        if(all)all.disabled=publishingGroup
+    }
+    async function sendPreparedToGroup() {
+        if(publishingGroup)return
+        const targets=markedGroupTargets()
+        if(targets.length<2)return notice("Marca al menos dos pantallas en Multipantalla.")
+        if(get(outLocked))return notice("Las salidas están bloqueadas.")
+        const available=chooseOutput()
+        const mainId=localStorage.getItem("ja-main-projector") || ""
+        if(!mainId || !available.includes(mainId))
+            return notice("Configura primero una salida principal real para mantener el audio controlado.")
+        if(mode==="biblia") {
+            if(!biblePreviewReady || biblePreviewReference!==JSON.stringify(get(activeScripture).reference||null))
+                return notice("Prepara y comprueba el versículo en Vista previa antes de enviar al grupo.")
+            if(!activeBibleId || !get(activeScripture).reference?.verses?.[0]?.length)
+                return notice("Selecciona un versículo antes de enviarlo a varias pantallas.")
+            publishingGroup=true;refreshGroupChoices()
+            try {
+                const before=activeBibleId
+                await sendScriptureToJAOutputs(targets)
+                const confirmed=targets.every(id=>get(outputs)[id]?.out?.slide?.id==="temp" &&
+                    get(outputs)[id]?.out?.slide?.categoryId===before)
+                notice(confirmed
+                    ? "Biblia recibida por "+targets.length+" salidas. Confirma cada pantalla físicamente."
+                    : "No se confirmó la Biblia en todas las salidas. Comprueba las asignaciones.")
+            }catch(error){notice("Error al enviar Biblia al grupo: "+String(error))}
+            finally{publishingGroup=false;refreshGroupChoices()}
+            return
+        }
+        if(!prepared)return notice("Prepara primero un vídeo o imagen en Vista previa.")
+        const mediaPath=prepared
+        const kind=getMediaType(getExtension(mediaPath))
+        const idSnapshot=targets.join("|")
+        publishingGroup=true;refreshGroupChoices()
+        try {
+            // Re-enviar un vídeo que ya existe en uno de los destinos puede
+            // reutilizar solamente su antigua sesión y dejar el resto sin
+            // sincronizar. Separarlo ANTES de la publicación es intencional.
+            if(kind==="video") {
+                const previousSessions=get(playingVideos).filter(session=>
+                    normalizeJAContentPath(session.path)===normalizeJAContentPath(mediaPath) &&
+                    session.linkedOutputIds.some(id=>targets.includes(id)))
+                for(const session of previousSessions) {
+                    for(const id of [...session.linkedOutputIds].filter(id=>targets.includes(id)))
+                        await VideoPlayer.stop(session.path,id)
+                }
+            }
+            const live=chooseOutput()
+            if(get(outLocked) || mediaPath!==prepared || idSnapshot!==markedGroupTargets().join("|") ||
+                !targets.every(id=>live.includes(id)) || !live.includes(mainId) ||
+                localStorage.getItem("ja-main-projector")!==mainId)
+                return notice("Cambió la configuración mientras se preparaba el envío; no se ha publicado el grupo.")
+            const sent=sendToJAOutputs("background",{
+                path:mediaPath,type:kind,loop:false,
+                // Audio de una única sesión: solo la salida principal es audible.
+                muted:!targets.includes(mainId),startAt:0
+            },targets,{replaceScripture:true,requireAll:true})
+            if(sent.length!==targets.length)
+                return notice("No se pudo enviar a todos los destinos. Revisa las salidas antes de repetir.")
+            clearBlackBeforePublishing(targets)
+            const received=targets.every(id=>get(outputs)[id]?.out?.background?.path===mediaPath)
+            if(!targets.includes(selectedId))selectedId=targets.includes(mainId)?mainId:targets[0]
+            if(previewMedia && kind==="video" && targets.includes(selectedId)){
+                previewMedia.pause()
+                try{previewMedia.currentTime=0}catch{}
+                previewMedia.muted=true
+                followProgram=true
+            }else followProgram=false
+            rebuildOutputs()
+            updatePreviewProgress()
+            notice(received
+                ? "Contenido recibido por "+targets.length+" salidas con reloj compartido. Verifica HDMI, spacedesk y audio."
+                : "FreeShow no confirmó el contenido en todas las salidas. Revisa cada destino.")
+        }catch(error){
+            followProgram=false
+            notice("Error al enviar contenido sincronizado: "+String(error))
+        }finally{
+            publishingGroup=false
+            refreshGroupChoices()
+        }
+    }
     function publishPreparedMedia() {
         if(mode==="biblia") {
             const button=el("moduleView_biblia")?.querySelector<HTMLButtonElement>(".ja-bible-project")
@@ -557,6 +659,8 @@
         const list = el("multiscreenCardsList")
         const targets = el("quickTargetButtons")
         const outputMap = get(outputs)
+        // Never retain a disconnected destination inside a marked group.
+        for(const id of [...syncedTargetIds])if(!available.includes(id))syncedTargetIds.delete(id)
         // Reconstruct only when monitors/active flags change, not every playback tick.
         const structure = available.map(id=>id+":"+!!outputMap[id]?.active+":"+(outputMap[id]?.screen||"")+":"+(outputMap[id]?.name||"")).join("|")
         if (structure !== screenStructure) {
@@ -577,6 +681,64 @@
                     configure.className="ja-target rounded-lg border px-2 py-1 text-xs"
                     configure.onclick=()=>{settingsStartSection="screens";settingsOpen=true}
                     targets.append(configure)
+                }
+            }
+            if(available.length>=2){
+                const group=document.createElement("div")
+                group.className="ja-sync-panel"
+                group.id="jaSyncPanel"
+                const title=document.createElement("strong")
+                title.textContent="Sincronizar el mismo contenido"
+                group.append(title)
+                const hint=document.createElement("span")
+                hint.className="ja-sync-hint"
+                hint.textContent="Marca las pantallas. Enviar sincronizado no cambia las que dejes sin marcar. Audio solo por la salida principal."
+                group.append(hint)
+                const choices=document.createElement("div")
+                choices.className="ja-sync-options"
+                for(const id of available){
+                    const label=document.createElement("label")
+                    label.className="ja-sync-option"
+                    const check=document.createElement("input")
+                    check.type="checkbox"
+                    check.className="ja-sync-choice"
+                    check.value=id
+                    check.checked=syncedTargetIds.has(id)
+                    check.setAttribute("aria-label","Incluir "+(outputMap[id].name||id)+" en envío sincronizado")
+                    check.onchange=()=>{
+                        if(check.checked)syncedTargetIds.add(id)
+                        else syncedTargetIds.delete(id)
+                        refreshGroupChoices()
+                    }
+                    const name=document.createElement("span")
+                    name.textContent=outputMap[id].name||id
+                    label.append(check,name)
+                    choices.append(label)
+                }
+                group.append(choices)
+                const actions=document.createElement("div")
+                actions.className="ja-sync-actions"
+                const selectAll=document.createElement("button")
+                selectAll.type="button"
+                selectAll.className="ja-sync-all"
+                selectAll.textContent="Marcar todas"
+                selectAll.onclick=()=>{
+                    for(const id of available)syncedTargetIds.add(id)
+                    refreshGroupChoices()
+                }
+                const sendGroup=document.createElement("button")
+                sendGroup.type="button"
+                sendGroup.className="ja-sync-send"
+                sendGroup.onclick=()=>{void sendPreparedToGroup()}
+                actions.append(selectAll,sendGroup)
+                group.append(actions)
+                list?.append(group)
+                if(targets){
+                    const quickGroup=document.createElement("button")
+                    quickGroup.type="button"
+                    quickGroup.className="ja-sync-send ja-target rounded-lg border px-2 py-1 text-xs"
+                    quickGroup.onclick=()=>{void sendPreparedToGroup()}
+                    targets.append(quickGroup)
                 }
             }
             for (const id of available) {
@@ -616,6 +778,7 @@
                 targets?.append(target)
             }
         }
+        refreshGroupChoices()
         for (const id of available) {
             const output = outputMap[id]
             const state = list?.querySelector<HTMLElement>('[data-output="' + CSS.escape(id) + '"]')

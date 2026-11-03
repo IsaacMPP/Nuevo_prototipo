@@ -189,3 +189,16 @@ En Windows se detectaron 3 monitores (TuLink 1920×1080, integrado 1920×1080 y 
 - Sin modificaciones a la lógica de sincronización de vídeos ni a las ramas protegidas.
 
 **Ensayo físico obligatorio:** logo PNG real (incluido archivo de pocas dimensiones) en Primario y secundaria, 10–80% de ancho aproximado y esquinas, cambio en caliente, fondo/audio sin interferencias; Biblia Génesis 1:3 en cada destino sin cambiar el otro; verificar tarjetas compactas. CI verde no certifica que los controladores gráficos ni el esquema file: permitan todas las rutas; capturar errores y no cerrar incidencias antes de validar Windows.
+
+## M1 — Envío sincronizado a grupo explícito (2 noviembre 2026)
+El operador confirmó físicamente que la última versión proyecta logo personalizado y Biblia en salidas individuales. Se activa una nueva función separada: **marcar varias salidas en Multipantalla y pulsar «Enviar sincronizado»**. Se reutiliza el mismo reproductor nativo; NO se crean timers paralelos ni se duplican ventanas de audio.
+
+**Contrato:** la salida inspeccionada en Programa sigue elegida por `selectedId` y Quick Play/Cortar continúan emitiendo de forma individual. Las casillas de sincronización se almacenan por IDs externos reales en memoria y se descartan si una pantalla se desconecta. Nunca se autoelige un segundo monitor ni la laptop. Solo el operador puede confirmar el envío grupal.
+
+**Publicación multimedia:** se verifica mainId actual, grupo de al menos dos IDs activos, archivo preparado y desbloqueo. Si el mismo vídeo ya se estaba reproduciendo en alguno de los destinos del grupo, se detacha/detiene su reloj previo **antes** de crear una sesión grupal (evitar que `VideoPlayer.start` recicle solo una parte del grupo). Se revalidan rutas, destino y estado tras awaits. `sendToJAOutputs('background',...targets,{replaceScripture:true,requireAll:true})` usa un único `setOutput` y un único `VideoPlayer.start(...,outs)`; eso sincroniza los transportes. Solamente una salida JA principal da audio si pertenece al grupo. Si no, toda la sesión queda silenciada. Imágenes se distribuyen sin transporte temporal y sin modificar pantallas ajenas.
+
+**Biblia:** el mismo selector puede dirigir el pasaje preparado mediante `sendScriptureToJAOutputs(targets)`, con seguimiento de selección bíblica existente. Flechas, saltos y cambios de capítulos deben probarse físicamente.
+
+**Seguridad:** se añadió validación atómica opcional en el router; si una de las salidas marcadas ya no es válida, se cancela todo el envío antes de afectar salidas. Ningún envío implícito a todas; la pantalla del operador sigue excluida. La interfaz explicita que marcar pantallas **no cambia** el contenido actual hasta enviar.
+
+**Matriz física obligatoria:** HDMI+spacedesk con MP4 mismo instante, Play/Pause/Seek en ambos, audio solo principal, salida secundaria sin audio, vídeo A en ambos luego B solo secundaria sin cortar A/audio, volver a grupo A tras sesión previa, imágenes sincronizadas, Biblia grupal seguida de flechas, desconectar pantalla durante preparación, no tocar la laptop. Comparar retardo perceptible con grabación; no prometer fotogramas idénticos en hardware virtual. No considerar validada sin prueba.

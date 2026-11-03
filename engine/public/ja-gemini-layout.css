@@ -211,3 +211,26 @@ html, body, #app { height: 100%; min-height: 0; overflow: hidden; }
     min-height: 64px !important;
     margin: 0 !important;
 }
+
+
+/* JA grouped playback: checkbox selection is independent of the inspected
+   single-output target. Keep cards grouped without overloading the top strip. */
+.ja-gemini-host .ja-sync-panel{
+    flex:0 0 auto;display:flex;flex-direction:column;align-items:stretch;
+    gap:7px;padding:10px 11px;border-radius:9px;
+    background:#112b4d;border:1px solid #345a83;color:#eff6ff;
+}
+.ja-gemini-host .ja-sync-panel strong{font-size:12px}
+.ja-gemini-host .ja-sync-hint{font-size:10px;line-height:1.35;color:#c4d8eb}
+.ja-gemini-host .ja-sync-options{display:flex;gap:6px;flex-wrap:wrap}
+.ja-gemini-host .ja-sync-option{display:flex;align-items:center;gap:5px;cursor:pointer;
+    padding:5px 8px;border:1px solid #426289;border-radius:7px;font-size:11px}
+.ja-gemini-host .ja-sync-option:has(input:checked){background:#3a3616;border-color:#e0ae11}
+.ja-gemini-host .ja-sync-option input{accent-color:#eec120}
+.ja-gemini-host .ja-sync-actions{display:flex;gap:7px;flex-wrap:wrap}
+.ja-gemini-host .ja-sync-actions button{border:1px solid #4c6c95;border-radius:6px;
+    padding:6px 9px;font-size:11px;background:#203d63;color:#fff}
+.ja-gemini-host .ja-sync-actions .ja-sync-send{background:#78600d;border-color:#edc031}
+.ja-gemini-host .ja-sync-send:disabled,.ja-gemini-host .ja-sync-all:disabled{
+    opacity:.42;cursor:not-allowed
+}

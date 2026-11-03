@@ -334,3 +334,38 @@ test("Biblia Gemini envía el versículo solo a la salida seleccionada (incluso 
  assert.ok(!s.includes('ids.length !== 1'),"No prohibir dos salidas")
  assert.ok(!s.includes('playScripture().then'),"No forzar siempre la salida principal")
 })
+
+test("Envío sincronizado: destinos marcados independientes de inspección y UI conectada",()=>{
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const css=read("engine/public/ja-gemini-layout.css")
+ assert.ok(shell.includes("let syncedTargetIds = new Set<string>()"),"No existe selección independiente del grupo")
+ assert.ok(shell.includes('check.type="checkbox"'),"No hay casillas de selección")
+ assert.ok(shell.includes('check.onchange=()=>'),"Casilla de grupo no conectada")
+ assert.ok(shell.includes('sendGroup.onclick=()=>{void sendPreparedToGroup()}'),"Botón de envío de grupo inerte")
+ assert.ok(shell.includes('quickGroup.onclick=()=>{void sendPreparedToGroup()}'),"Envío rápido de grupo inerte")
+ assert.ok(css.includes(".ja-sync-panel"),"Estilo del panel de sincronización faltante")
+ assert.ok(shell.includes("for(const id of [...syncedTargetIds])if(!available.includes(id))syncedTargetIds.delete(id)"),"No retirar monitor desconectado del grupo")
+ assert.ok(shell.includes("if(count<2"),"El botón requiere mínimo 2 destinos")
+});
+test("Multimedia sincronizada realiza una única emisión atómica y audio de primaria",()=>{
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const helpers=read("engine/src/frontend/components/helpers/output.ts")
+ const fn=shell.split("async function sendPreparedToGroup()")[1].split("function publishPreparedMedia()")[0]
+ assert.ok(fn.includes('sendToJAOutputs("background",{'),"Debe usar el motor nativo multipantalla")
+ assert.ok(fn.includes('},targets,{replaceScripture:true,requireAll:true})'),"La emisión debe ser atómica y sustituir solo pasajes de destinos elegidos")
+ assert.ok(fn.includes('muted:!targets.includes(mainId)'),"No activar audio fuera de la principal")
+ assert.ok(fn.includes("await VideoPlayer.stop(session.path,id)"),"Un vídeo ya activo debe reiniciarse en sesión compartida")
+ assert.ok(fn.includes("!targets.every(id=>live.includes(id))"),"Revalidar monitor tras detener sesión anterior")
+ assert.ok(fn.includes("mediaPath!==prepared"),"No proyectar una selección cambiada mientras se prepara")
+ assert.ok(helpers.includes("options.requireAll && valid.length!==requested.length"),"El router puede enviar parcialmente a un grupo inválido")
+ const video=read("engine/src/frontend/components/media/video/videoPlayer.ts")
+ assert.ok(video.includes("linkedOutputIds: linkedOutputIds || []"),"La sesión de VideoPlayer debe ser compartida")
+ assert.ok(video.includes("if (jaPrimary && outputId !== jaPrimary) return true"),"Las salidas secundarias deben seguir silenciadas")
+});
+test("El mismo grupo puede recibir Biblia sin alterar destinos no marcados",()=>{
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const fn=shell.split("async function sendPreparedToGroup()")[1].split("function publishPreparedMedia()")[0]
+ assert.ok(fn.includes("await sendScriptureToJAOutputs(targets)"),"La Biblia debe usar el mismo grupo de destinos")
+ assert.ok(fn.includes("biblePreviewReady"),"No emitir Biblia antes de preparar vista previa")
+ assert.ok(!fn.includes("sendScriptureToJAOutputs(available)"),"No emitir Biblia a todas por omisión")
+});
