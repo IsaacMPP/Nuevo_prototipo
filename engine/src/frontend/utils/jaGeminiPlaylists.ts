@@ -6,6 +6,35 @@ import { geminiFileType } from "./jaGeminiLibrary"
 
 export type JAPlaylistSource = "multimedia" | "himnario" | "youtube"
 export type JAPlaylistKind = "video" | "audio" | "youtube"
+export type JAPlaybackMode = "normal" | "repeat-all" | "repeat-one" | "shuffle"
+export const JA_PLAYBACK_MODES: JAPlaybackMode[] = ["normal","repeat-all","shuffle","repeat-one"]
+export function jaPlaybackMode(value:unknown,legacyRepeat=false):JAPlaybackMode {
+    return JA_PLAYBACK_MODES.includes(value as JAPlaybackMode)
+        ? value as JAPlaybackMode : legacyRepeat ? "repeat-all" : "normal"
+}
+// Real Fisher-Yates queue: once per item and selected item starts the run.
+export function jaShuffleOrder(length:number,startIndex:number,random:()=>number=Math.random):number[]{
+    if(!Number.isInteger(length)||length<1||length>JA_MAX_ENTRIES)return []
+    const start=Math.max(0,Math.min(length-1,startIndex))
+    const order=Array.from({length},(_,i)=>i).filter(i=>i!==start)
+    for(let i=order.length-1;i>0;i--){
+        const j=Math.max(0,Math.min(i,Math.floor(random()*(i+1))))
+        ;[order[i],order[j]]=[order[j],order[i]]
+    }
+    return [start,...order]
+}
+export function jaNextIndex(mode:JAPlaybackMode,length:number,current:number,manual=false,
+    shuffled:number[]=[],shufflePosition=0):{index:number;position:number}{
+    if(length<1)return {index:-1,position:0}
+    if(!manual && mode==="repeat-one")return {index:current,position:shufflePosition}
+    if(mode==="shuffle"){
+        const next=shufflePosition+1
+        return next<shuffled.length?{index:shuffled[next],position:next}:{index:-1,position:shufflePosition}
+    }
+    const next=current+1
+    if(next>=length)return {index:mode==="repeat-all"?0:-1,position:0}
+    return {index:next,position:0}
+}
 export type JAPlaylistEntry = {
     id: string
     source: JAPlaylistSource
@@ -13,13 +42,15 @@ export type JAPlaylistEntry = {
     path: string
     title: string
     audioOnly: boolean
+    loopVideo?: boolean // projected video loop, independent of playlist mode
 }
 export type JAPlaylist = {
     id: string
     name: string
     entries: JAPlaylistEntry[]
     autoNext: boolean
-    repeat: boolean
+    repeat: boolean // persisted legacy preference
+    playMode: JAPlaybackMode
 }
 export const JA_PLAYLISTS_KEY = "ja-gemini-playlists-v1"
 export const JA_MAX_PLAYLISTS = 40
@@ -47,19 +78,19 @@ export function jaYoutubeId(value:string):string {
     }catch{return ""}
 }
 export function jaNewPlaylist(name:string):JAPlaylist {
-    return {id:newId(),name:shortText(name,80)||"Nueva lista",entries:[],autoNext:true,repeat:false}
+    return {id:newId(),name:shortText(name,80)||"Nueva lista",entries:[],autoNext:true,repeat:false,playMode:"normal"}
 }
 export function jaLocalPlaylistEntry(path:string,source:"multimedia"|"himnario"):JAPlaylistEntry|null {
     const kind=geminiFileType(path)
     if(kind!=="video"&&kind!=="audio")return null
     return {id:newId(),source,kind,path,title:path.split(/[\/\\]/).pop()||path,
-        audioOnly:kind==="audio"}
+        audioOnly:kind==="audio",loopVideo:false}
 }
 export function jaYoutubePlaylistEntry(url:string):JAPlaylistEntry|null {
     const id=jaYoutubeId(url)
     if(!id)return null
     return {id:newId(),source:"youtube",kind:"youtube",
-        path:"https://www.youtube.com/watch?v="+id,title:"YouTube · "+id,audioOnly:false}
+        path:"https://www.youtube.com/watch?v="+id,title:"YouTube · "+id,audioOnly:false,loopVideo:false}
 }
 export function jaPlaylistEntryValid(entry:unknown):entry is JAPlaylistEntry {
     if(!entry||typeof entry!=="object")return false
@@ -81,9 +112,10 @@ export function jaReadPlaylists():JAPlaylist[]{
             typeof v.id==="string"&&v.id.length<101 && typeof v.name==="string").map(v=>({
             id:v.id,name:shortText(v.name,80)||"Lista",
             autoNext:v.autoNext!==false,repeat:v.repeat===true,
+            playMode:jaPlaybackMode(v.playMode,v.repeat===true),
             entries:Array.isArray(v.entries)
                 ? v.entries.slice(0,JA_MAX_ENTRIES).filter(jaPlaylistEntryValid)
-                    .map((e:JAPlaylistEntry)=>({...e})) : []
+                    .map((e:JAPlaylistEntry)=>({...e,loopVideo:e.kind==="video" && e.loopVideo===true})) : []
         }))
     }catch{return []}
 }
