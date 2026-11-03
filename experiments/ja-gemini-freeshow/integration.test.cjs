@@ -737,9 +737,9 @@ test("P5: modos normal, aleatorio, repetir lista/canción y migración existente
  assert.ok(s.includes("playlistShufflePosition=next.position"),"Seguir orden aleatorio real")
  assert.ok(s.includes('void playJAPlaylistIndex(list.id,next.index,true)'),"Motor usa índice real")
  assert.ok(s.includes('if(event.type==="togglePause")'),"Pausa nativa")
- assert.ok(p.includes('label:"Normal"')&&p.includes('label:"Aleatorio"'))
- assert.ok(p.includes('label:"Repetir lista"')&&p.includes('label:"Repetir canción"'))
- assert.ok(p.includes('aria-pressed={current.playMode===playbackMode.id}'),"Indicador activo")
+ assert.ok(p.includes('n:"Normal"')&&p.includes('n:"Aleatorio"'))
+ assert.ok(p.includes('n:"Repetir lista"')&&p.includes('n:"Repetir canción"'))
+ assert.ok(p.includes('aria-pressed={playlist.playMode===mode.v}'),"Indicador activo")
  assert.ok(p.includes('action("loopVideo"'),"Bucle video distinto al modo lista")
 });
 
@@ -761,4 +761,29 @@ test("P5: Biblioteca integrada real y agregado rápido sin modificar reproducci�
  assert.ok(model.includes("export function jaMoveEntryTo"),"Ordenar entradas sin cambiar IDs")
  assert.ok(panel.includes("Pegar URL de YouTube"),"Conservar enlaces de YouTube")
  assert.ok(!panel.includes("ja-media-card"),"No alterar las tarjetas originales del catálogo")
+});
+
+test("P5: Solo audio global y controles de bucle por salida aislados",()=>{
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const quick=read("engine/src/frontend/components/ja/JaGeminiQuickAudioPanel.svelte")
+ const video=read("engine/src/frontend/components/media/video/videoPlayer.ts")
+ const css=read("engine/public/ja-gemini-layout.css")
+ const audio=shell.split("async function playBackgroundAudioAnywhere(path:string)")[1].split("function stopBackgroundAudioAnywhere()")[0]
+ const loop=shell.split("async function changeLoopForSelectedOutput()")[1].split("function syncProgram()")[0]
+ assert.ok(shell.includes('music.textContent="♫ Música de fondo"'),"Acceso desde cualquier módulo")
+ assert.ok(shell.includes("<JaGeminiQuickAudioPanel files={playlistLibraryFiles}"),"Buscar sin cambiar de módulo")
+ assert.ok(audio.includes("playJAOnlySound(path,[main]"),"Reproductor nativo solo audio")
+ assert.ok(!audio.includes("setOutput(")&&!audio.includes("prepare("),"Biblia y Programa no cambian con música")
+ assert.ok(quick.includes('on:click={()=>dispatch("play",{path:file.path})}'),"Añadir música directamente")
+ assert.ok(shell.includes('addFileDirectToPlaylist(file.path,mode==="himnario"?"himnario":"multimedia")'),"Botón de agregar a lista")
+ assert.ok(css.includes(".ja-card-quick-add"),"Conservar tamaño de miniaturas")
+ assert.ok(shell.includes('const VIDEO_LOOP_STORAGE="ja-gemini-per-screen-video-loop-v1"'),"Persistir por salida")
+ assert.ok(shell.includes('programLoopButton.textContent=loopBusy?"↻ Preparando…"'),"Mostrar bucle activo/inactivo")
+ assert.ok(loop.includes("await VideoPlayer.stop(path,outputId)"),"Separar reloj solo en destino requerido")
+ assert.ok(loop.includes("startAt:currentTime"),"No rebobinar")
+ assert.ok(loop.includes("VideoPlayer.setLoopForSingleOutput(path,id,newLoop)"),"Cambiar un solo reloj")
+ assert.ok(!loop.includes('setOutput("background"'),"No interrumpir contenido ya proyectado")
+ assert.ok(video.includes("static setLoopForSingleOutput("), "Motor exige sesión individual")
+ assert.ok(shell.includes("getRememberedLoop(destinationId,mediaPath)"),"Enviar individual respeta bucle propio")
+ assert.ok(shell.includes("getRememberedLoop(mainId,mediaPath)"),"Grupo usa bucle Primario")
 });
