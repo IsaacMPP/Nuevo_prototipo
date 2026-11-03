@@ -32,6 +32,7 @@
         jaYoutubePlaylistEntry, jaYoutubeId, jaMoveEntry, jaMoveEntryTo, jaShuffleOrder, jaNextIndex, jaPlaybackMode, JA_MAX_PLAYLISTS, JA_MAX_ENTRIES,
         type JAPlaylist, type JAPlaylistEntry } from "../../utils/jaGeminiPlaylists"
     import JaGeminiPlaylistPanel from "./JaGeminiPlaylistPanel.svelte"
+    import JaGeminiQuickAudioPanel from "./JaGeminiQuickAudioPanel.svelte"
     import JaGeminiAudioControls from "./JaGeminiAudioControls.svelte"
     import { videoSync } from "../media/video/videoSync"
     import PreviewOutput from "../output/preview/PreviewOutput.svelte"
@@ -136,6 +137,8 @@
     let jaAudioContainer: HTMLDivElement | null = null
     let jaAudioControls: JaGeminiAudioControls | null = null
     let playlistOpen=false
+    let quickAudioOpen=false
+    let quickAudioToken=0
     let selectedPlaylistId=""
     let playlistCurrentId=""
     let playlistIndex=-1
@@ -916,6 +919,40 @@
                 entry.id===event.entryId && entry.kind==="video"?{...entry,audioOnly:!!event.value}:entry)}))
         }
     }
+    // A real, independent music channel accessible even while showing Bible.
+    // Never sends to Program or changes any on-air visuals.
+    async function playBackgroundAudioAnywhere(path:string){
+        const main=localStorage.getItem("ja-main-projector")||""
+        if(get(outLocked))return notice("Las salidas están bloqueadas.")
+        if(!main || !chooseOutput().includes(main))
+            return notice("Configura Primario antes de reproducir música de fondo.")
+        if(get(playingVideos).some(s=>s.linkedOutputIds.includes(main) && !s.audio.muted && !s.audio.paused))
+            return notice("Existe un video con sonido en Primario; siléncialo antes de agregar música de fondo.")
+        if(!playlistLibraryFiles.some(f=>f.path===path&&(f.kind==="audio"||f.kind==="video")))
+            return notice("La pista no está disponible en las carpetas reales vinculadas.")
+        if(playlistRunning)stopJAPlaylist()
+        const generation=++quickAudioToken
+        await playJAOnlySound(path,[main],()=>generation===quickAudioToken &&
+            !get(outLocked) && chooseOutput().includes(main))
+    }
+    function stopBackgroundAudioAnywhere(){
+        ++quickAudioToken
+        if(jaAudioPath && AudioPlayer.audioExists(jaAudioPath))AudioPlayer.stop(jaAudioPath)
+        jaAudioPath=""
+        jaAudioControls?.$destroy()
+        jaAudioControls=null
+        if(jaAudioContainer)jaAudioContainer.hidden=true
+    }
+    function addFileDirectToPlaylist(path:string,source:"multimedia"|"himnario"){
+        const list=get(jaPlaylists).find(x=>x.id===selectedPlaylistId)
+        if(!list){playlistOpen=true;return notice("Crea o elige una lista antes de añadir una canción.")}
+        if(playlistRunning&&playlistCurrentId===list.id)return notice("Detén la lista para editarla.")
+        const entry=jaLocalPlaylistEntry(path,source)
+        if(!entry)return notice("Selecciona un video, audio o himno real.")
+        if(list.entries.length>=JA_MAX_ENTRIES)return notice("Lista completa.")
+        updateJAPlaylist(list.id,x=>({...x,entries:[...x.entries,entry]}))
+        notice("Añadido a "+list.name+": "+entry.title)
+    }
     function sendToQuickTargets() {
         if(publishingGroup)return notice("Ya se está preparando un envío sincronizado.")
         const selected=markedGroupTargets()
@@ -1489,6 +1526,13 @@
                 state.setAttribute("role","status")
                 state.setAttribute("aria-live","polite")
                 targets.append(state)
+                const music=document.createElement("button")
+                music.type="button"
+                music.className="ja-target ja-global-music rounded-lg border px-2 py-1 text-xs"
+                music.textContent="♫ Música de fondo"
+                music.title="Buscar Solo audio desde Biblia, Himnario o Multimedia"
+                music.onclick=()=>{quickAudioOpen=!quickAudioOpen}
+                targets.append(music)
             }
         }
         refreshGroupChoices()
@@ -1790,6 +1834,25 @@
             label.textContent=file.name
             item.append(visual,label)
             item.onclick=()=>prepare(file.path)
+            if(file.kind==="video"||file.kind==="audio"){
+                item.style.position="relative"
+                const plus=document.createElement("span")
+                plus.className="ja-card-quick-add"
+                plus.setAttribute("role","button")
+                plus.setAttribute("aria-label","Añadir "+file.name+" a lista")
+                plus.tabIndex=0
+                plus.title="Añadir sin preparar ni proyectar"
+                plus.textContent="+"
+                const action=(e:Event)=>{
+                    e.preventDefault();e.stopPropagation()
+                    addFileDirectToPlaylist(file.path,mode==="himnario"?"himnario":"multimedia")
+                }
+                plus.onclick=action
+                plus.onkeydown=(e:KeyboardEvent)=>{
+                    if(e.key==="Enter"||e.key===" ")action(e)
+                }
+                item.append(plus)
+            }
             area.append(item)
             showNativeThumbnail(visual,file)
         }
@@ -2670,6 +2733,12 @@
 <svelte:head><link rel="stylesheet" href="ja-gemini.css" /><link rel="stylesheet" href="ja-gemini-layout.css" /></svelte:head>
 <div class={"ja-gemini-host " + geminiBodyClasses + (compactUi ? " ja-compact-ui" : "") + (largeUi ? " ja-large-ui" : "")} bind:this={host}>
     {@html geminiHtml}
+    {#if quickAudioOpen}
+        <JaGeminiQuickAudioPanel files={playlistLibraryFiles} currentPath={jaAudioPath}
+            busy={jaAudioBusy} on:close={()=>quickAudioOpen=false}
+            on:play={event=>{void playBackgroundAudioAnywhere(event.detail.path)}}
+            on:stop={stopBackgroundAudioAnywhere}/>
+    {/if}
     {#if playlistOpen}
         <JaGeminiPlaylistPanel
             playlists={$jaPlaylists}

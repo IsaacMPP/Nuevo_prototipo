@@ -281,3 +281,14 @@ html, body, #app { height: 100%; min-height: 0; overflow: hidden; }
     .ja-gemini-host .ja-native-audio-heading{flex-wrap:wrap}
     .ja-gemini-host .ja-native-audio-actions{flex-wrap:wrap}
 }
+
+/* Add to a saved list without changing the approved card image dimensions. */
+.ja-gemini-host .ja-card-quick-add{
+    position:absolute;top:8px;right:8px;z-index:2;
+    padding:3px 8px;border-radius:6px;line-height:1;font-size:18px;
+    font-weight:750;color:#fff;background:#18517e;border:1px solid #70bbec;
+    cursor:pointer;box-shadow:0 2px 8px #0009;
+}
+.ja-gemini-host .ja-card-quick-add:hover,
+.ja-gemini-host .ja-card-quick-add:focus-visible{outline:2px solid #4cd1fd;background:#2872a8}
+.ja-gemini-host .ja-global-music{color:#ffe4a8;background:#233b5b;border-color:#b18f4b}

@@ -29,6 +29,11 @@
     const action=(type:string,data:Record<string,unknown>={})=>dispatch("action",{type,...data})
     const kindName=(entry:JAPlaylistEntry)=>entry.kind==="youtube"?"YouTube":entry.source==="himnario"?"Himnario":entry.kind==="audio"?"Audio":"Video"
     const fileKey=(f:LibraryItem)=>f.source+"|"+f.path
+    function chooseCategory(value:string){
+        if(value==="all"||value==="video"||value==="himnario"||value==="audio")category=value
+        shown=60
+    }
+    function dropAtEnd(event:DragEvent){onQueueDrop(event,playlist?.entries.length||0)}
     function toggleFile(f:LibraryItem){
         const next=new Set(chosen),key=fileKey(f)
         if(next.has(key))next.delete(key);else next.add(key)
@@ -98,7 +103,7 @@
             <div class="dock-filter" role="group" aria-label="Filtrar biblioteca">
                 {#each [{v:"all",n:"Todos"},{v:"video",n:"Videos"},{v:"himnario",n:"Himnario"},{v:"audio",n:"Audio"}] as item}
                     <button type="button" class:active={category===item.v} aria-pressed={category===item.v}
-                        on:click={()=>{category=item.v as typeof category;shown=60}}>{item.n}</button>
+                        on:click={()=>chooseCategory(item.v)}>{item.n}</button>
                 {/each}
             </div>
             <div class="dock-library-rows">
@@ -182,7 +187,7 @@
                     {#if !playlist.entries.length}
                         <p class="empty">Pulsa + en la biblioteca, arrastra una canción o selecciona varios archivos.</p>
                     {/if}
-                    <div class="queue-drop-end" on:dragover|preventDefault on:drop={e=>onQueueDrop(e,playlist!.entries.length)}>
+                    <div class="queue-drop-end" on:dragover|preventDefault on:drop={dropAtEnd}>
                         Soltar aquí para añadir archivos
                     </div>
                 </div>
