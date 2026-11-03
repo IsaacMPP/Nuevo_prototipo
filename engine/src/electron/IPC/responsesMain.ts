@@ -119,7 +119,18 @@ export const mainResponses: MainResponses = {
     // OUTPUT
     [Main.GET_SCREENS]: () => getScreens(),
     [Main.GET_WINDOWS]: () => getScreens("window"),
-    [Main.GET_DISPLAYS]: () => screen.getAllDisplays(),
+    [Main.GET_DISPLAYS]: () => {
+        const displays = screen.getAllDisplays()
+        // Reserve the actual laptop's integrated display first; when an internal
+        // display is not reported (desktop/virtual drivers), reserve the monitor
+        // holding the JA console. This is NOT the same as blindly using item 0.
+        const integrated = displays.find(display => display.internal)
+        const operator = integrated ||
+            (getMainWindow() ? screen.getDisplayMatching(getMainWindow()!.getBounds()) : screen.getPrimaryDisplay())
+        return displays.map(display => ({
+            ...display, jaOperatorDisplay: display.id === operator.id
+        }))
+    },
     [Main.GET_GRAPHICS_DEVICES]: async () => await listGraphicsDevices(),
     [Main.OUTPUT]: (_, e) => (e.sender.id === getMainWindow()?.webContents.id ? "false" : "true"),
     // MEDIA

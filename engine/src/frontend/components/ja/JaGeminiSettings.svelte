@@ -18,11 +18,13 @@
     const dispatch = createEventDispatcher()
     let section = startSection
     let hymnCollection = "Himnario Adventista"
-    type JaDisplay = {id:number;label?:string;internal?:boolean;bounds:{x:number;y:number;width:number;height:number}}
+    type JaDisplay = {id:number;label?:string;internal?:boolean;jaOperatorDisplay?:boolean;bounds:{x:number;y:number;width:number;height:number}}
+    const isOperatorDisplay = (display: JaDisplay) => display.jaOperatorDisplay === true || (display.internal === true && !physicalDisplays.some(d=>d.jaOperatorDisplay))
+    $: operatorDisplayId = String(physicalDisplays.find(isOperatorDisplay)?.id ?? "")
+    let operatorDisplayId = ""
     let physicalDisplays: JaDisplay[] = []
     let displaysLoading = false
     let displaysError = ""
-    let screenDestination = ""
     let selectedPhysicalDisplayId = ""
     async function refreshWindowsDisplays(){
         displaysLoading = true
@@ -30,10 +32,10 @@
         try{
             const nativeDisplays = await requestMain(Main.GET_DISPLAYS)
             physicalDisplays = (nativeDisplays || []).filter(d=>d && d.bounds && Number.isFinite(d.id))
-                .map(d=>({id:d.id,label:d.label,internal:d.internal,bounds:d.bounds}))
+                .map(d=>({id:d.id,label:d.label,internal:d.internal,jaOperatorDisplay:(d as typeof d & {jaOperatorDisplay?:boolean}).jaOperatorDisplay,bounds:d.bounds}))
                 .sort((a,b)=>a.bounds.x-b.bounds.x)
             if(!physicalDisplays.some(d=>String(d.id)===selectedPhysicalDisplayId))
-                selectedPhysicalDisplayId = physicalDisplays.find(d=>!d.internal)?.id?.toString() || ""
+                selectedPhysicalDisplayId = physicalDisplays.find(d=>!isOperatorDisplay(d))?.id?.toString() || ""
         }catch(error){
             displaysError = "No se pudo consultar Windows: "+String(error)
         }finally{displaysLoading=false}
@@ -42,24 +44,23 @@
         if(!physicalDisplays.length)return
         send(OUTPUT,["IDENTIFY_SCREENS"],physicalDisplays)
     }
-    function assignExistingOutput(){
+    function activateSelectedDisplay(){
         const display=physicalDisplays.find(d=>String(d.id)===selectedPhysicalDisplayId)
-        if(!display || !screenDestination)return
-        const output=$outputs[screenDestination]
-        if(!output || output.stageOutput || !output.enabled)return
-        const currentOwner=Object.entries($outputs).find(([id,o])=>id!==screenDestination && o.enabled && String(o.screen)===String(display.id))
-        if(currentOwner)return window.alert("Este monitor ya está asignado a "+(currentOwner[1].name||currentOwner[0]))
-        if(!window.confirm("¿Mover la salida "+(output.name||screenDestination)+" al monitor "+(display.label||display.id)+"? Esto puede cambiar inmediatamente dónde se proyecta el contenido en vivo."))return
-        dispatch("assignDisplay",{outputId:screenDestination,displayId:display.id,bounds:display.bounds})
-    }
-    function createAssignedOutput(){
-        const display=physicalDisplays.find(d=>String(d.id)===selectedPhysicalDisplayId)
-        if(!display)return
-        if(display.internal && !window.confirm("Este dispositivo parece ser un monitor integrado. ¿Seguro que quieres una salida de proyección encima de la consola de JA?"))return
-        const currentOwner=Object.entries($outputs).find(([,o])=>o.enabled && String(o.screen)===String(display.id))
-        if(currentOwner)return window.alert("Este monitor ya tiene una salida asignada: "+(currentOwner[1].name||currentOwner[0]))
-        if(!window.confirm("¿Crear una salida de FreeShow en "+(display.label||"monitor "+display.id)+"? Esta acción abre una ventana de proyección en el monitor elegido."))return
-        dispatch("createDisplayOutput",{displayId:display.id,bounds:display.bounds,name:display.label||"Monitor "+display.id})
+        if(!display || isOperatorDisplay(display))return
+        const alreadyAssigned = Object.entries($outputs).find(([,o])=>o.enabled && String(o.screen)===String(display.id))
+        if(alreadyAssigned){
+            if(!window.confirm("¿Activar la salida "+(alreadyAssigned[1].name||alreadyAssigned[0])+" en este monitor externo? No se enviará contenido nuevo."))return
+            dispatch("activateDisplay",{outputId:alreadyAssigned[0],displayId:display.id})
+            return
+        }
+        const availableOutput=Object.entries($outputs).find(([,o])=>o.enabled && !o.stageOutput && !o.screen)
+        if(availableOutput){
+            if(!window.confirm("¿Asignar y activar "+(availableOutput[1].name||availableOutput[0])+" en "+(display.label||"Pantalla externa")+"? La pantalla de la laptop seguirá reservada."))return
+            dispatch("assignDisplay",{outputId:availableOutput[0],displayId:display.id,bounds:display.bounds})
+            return
+        }
+        if(!window.confirm("¿Crear y activar una salida nueva en "+(display.label||"este monitor externo")+"? La nueva pantalla iniciará sin contenido."))return
+        dispatch("createDisplayOutput",{displayId:display.id,bounds:display.bounds,name:display.label||"Pantalla externa"})
     }
     onMount(()=>{void refreshWindowsDisplays()})
     const sections = [
@@ -129,14 +130,14 @@
                     }}>Restablecer preferencias de interfaz</button>
                 {:else if section === "screens"}
                     <h3>Pantallas y salidas</h3>
-                    <p class="intro">Selecciona qué salida configurada deseas inspeccionar. Elegirla no mueve ni reemplaza contenido proyectado.</p>
+                    <p class="intro">La laptop se reserva para controlar JA. Las salidas de proyección se activan únicamente en pantallas externas.</p>
                     <div class="status-counter">Salidas configuradas en JA: <strong>{configuredOutputs.length}</strong></div>
                     {#if configuredOutputs.length}
                         <div class="ja-settings-outputs">
                             {#each configuredOutputs as [id, output] (id)}
-                                <button type="button" aria-pressed={selectedOutputId===id} disabled={!output.active} on:click={() => dispatch("selectOutput",{id})}>
+                                <button type="button" aria-pressed={selectedOutputId===id} disabled={!output.active || !output.screen || String(output.screen)===operatorDisplayId} on:click={() => dispatch("selectOutput",{id})}>
                                     <span>{output.name || "Salida " + id}</span>
-                                    <small>{output.active ? (selectedOutputId===id ? "Inspeccionada" : "Activa") : "Inactiva"} · {id}</small>
+                                    <small>{!output.screen ? "Sin monitor asignado" : String(output.screen)===operatorDisplayId ? "Bloqueada: monitor del operador" : output.active ? (selectedOutputId===id ? "Inspeccionada" : "Configurada") : "Inactiva"} · {id}</small>
                                 </button>
                             {/each}
                         </div>
@@ -154,11 +155,13 @@
                         {#if displaysLoading}<p class="info">Consultando monitores de Windows…</p>{/if}
                         <div class="ja-settings-outputs" role="group" aria-label="Monitores físicos detectados">
                             {#each physicalDisplays as display, index (display.id)}
-                                <button type="button" aria-pressed={selectedPhysicalDisplayId===String(display.id)}
-                                    on:click={() => (selectedPhysicalDisplayId=String(display.id))}>
+                                <button type="button" aria-pressed={!isOperatorDisplay(display) && selectedPhysicalDisplayId===String(display.id)}
+                                    disabled={isOperatorDisplay(display)}
+                                    title={isOperatorDisplay(display)?"Reservada permanentemente para la consola JA": "Seleccionar destino externo"}
+                                    on:click={() => {if(!isOperatorDisplay(display))selectedPhysicalDisplayId=String(display.id)}}>
                                     <span>Pantalla {index+1} · {display.label||"Monitor sin modelo informado"}</span>
-                                    <small>{display.bounds.width} × {display.bounds.height} · {display.internal?"Integrada":"Externa o virtual"} · ID {display.id}</small>
-                                    <small>{Object.values($outputs).find(o=>o.enabled&&String(o.screen)===String(display.id))?.name||"Sin salida JA asignada"}</small>
+                                    <small>{display.bounds.width} × {display.bounds.height} · {isOperatorDisplay(display)?"LAPTOP · SOLO OPERADOR":display.internal?"Integrada":"Externa o virtual"} · ID {display.id}</small>
+                                    <small>{isOperatorDisplay(display)?"No elegible para proyección":Object.values($outputs).find(o=>o.enabled&&String(o.screen)===String(display.id))?.name||"Sin salida JA asignada"}</small>
                                 </button>
                             {/each}
                         </div>
@@ -166,18 +169,11 @@
                             <p class="info">Windows no devolvió monitores. Comprueba la conexión y pulsa Actualizar detección.</p>
                         {/if}
                         <div class="ja-settings-actions">
-                            <button type="button" disabled={!selectedPhysicalDisplayId} on:click={createAssignedOutput}>Crear salida en monitor elegido</button>
+                            <button type="button" disabled={!selectedPhysicalDisplayId || selectedPhysicalDisplayId===operatorDisplayId} on:click={activateSelectedDisplay}>Activar proyección en pantalla seleccionada</button>
                         </div>
-                        <div class="ja-settings-actions">
-                            <label for="ja-output-to-assign">Asignar una salida existente</label>
-                            <select id="ja-output-to-assign" bind:value={screenDestination}>
-                                <option value="">Seleccionar salida JA…</option>
-                                {#each configuredOutputs as [id,output] (id)}<option value={id}>{output.name||id}</option>{/each}
-                            </select>
-                            <button type="button" disabled={!screenDestination||!selectedPhysicalDisplayId} on:click={assignExistingOutput}>Asignar a monitor elegido</button>
-                        </div>
+                        <p class="info">Un solo botón: reutiliza una salida sin monitor, reactiva una existente o crea otra si es necesario. No cambia el contenido actual hasta que el operador lo envíe.</p>
                     </div>
-                    <p class="info">Una pantalla de Windows puede ser HDMI o virtual (spacedesk); su etiqueta o modelo depende del controlador. Crear y asignar requiere confirmación. La detección no altera Programa. El envío simultáneo y el audio independiente siguen pendientes de validación física.</p>
+                    <p class="info">La pantalla de la laptop está reservada. HDMI y spacedesk pueden activarse por separado. Verifica cada ventana física y su audio antes de usarla en un servicio; no se emite automáticamente a todas.</p>
                 {:else if section === "libraries"}
                     <h3>Archivos y bibliotecas</h3>
                     <p class="intro">Vincula carpetas reales sin mover ni borrar archivos de origen.</p>

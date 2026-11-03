@@ -21,7 +21,7 @@
     import { activeScripture, effects, mediaFolders, outputs, outLocked, playingVideos, saved, scriptures, scriptureMode, scriptureSettings, templates, drawerTabsData } from "../../stores"
     import { encodeFilePath, getExtension, getMediaType } from "../helpers/media"
     import { clearBackground, clearSlide } from "../output/clear"
-    import { addOutput, setOutput } from "../helpers/output"
+    import { addOutput, setOutput, toggleOutputs } from "../helpers/output"
     import { OUTPUT } from "../../../types/Channels"
     import { send } from "../../utils/request"
     import { VideoPlayer } from "../media/video/videoPlayer"
@@ -54,6 +54,36 @@
     let activeBibleId = ""
     let screenRenderers: PreviewOutput[] = []
     let screenStructure = ""
+    let operatorDisplayId = ""
+    let knownExternalDisplayIds = new Set<string>()
+    let displaysChecked = false
+    async function refreshDisplaySafety(){
+        try {
+            const displays=await requestMain(Main.GET_DISPLAYS)
+            const operator=displays?.find(d=>(d as typeof d & {jaOperatorDisplay?:boolean}).jaOperatorDisplay) ||
+                displays?.find(d=>d.internal)
+            operatorDisplayId=operator ? String(operator.id) : ""
+            knownExternalDisplayIds=new Set((displays||[])
+                .filter(d=>operatorDisplayId && String(d.id)!==operatorDisplayId)
+                .map(d=>String(d.id)))
+            displaysChecked=true
+            screenStructure=""
+            rebuildOutputs()
+        } catch(error){
+            displaysChecked=true
+            knownExternalDisplayIds=new Set()
+            notice("No fue posible identificar la pantalla de control; se bloquearon nuevos envíos por seguridad.")
+        }
+    }
+    async function validateExternalDisplay(displayId:number){
+        const displays=await requestMain(Main.GET_DISPLAYS)
+        const operator=displays?.find(d=>(d as typeof d & {jaOperatorDisplay?:boolean}).jaOperatorDisplay) ||
+            displays?.find(d=>d.internal)
+        const requested=displays?.find(d=>d.id===displayId)
+        if(!operator || !requested || operator.id===requested.id)return null
+        return requested
+    }
+
     let collection = "Himnario Adventista"
     let typeFilter: GeminiMediaType | "all" = "video"
     let indexedMedia: GeminiFile[] = []
@@ -450,48 +480,60 @@
         settingsStartSection = "general"
         settingsOpen = !settingsOpen
     }
-    function assignMonitorToOutput(displayId: number, bounds: {x:number;y:number;width:number;height:number}, outputId: string) {
-        const current = get(outputs)
-        const target = current[outputId]
-        if (!target || !target.enabled || target.stageOutput || !Number.isFinite(displayId))
-            return notice("No se puede asignar la salida o monitor solicitado")
-        if (Object.entries(current).some(([id,o])=>id!==outputId && o.enabled && o.screen===String(displayId)))
-            return notice("El monitor ya está asignado a otra salida.")
-        outputs.update(a=>({...a,[outputId]:{...a[outputId],screen:String(displayId),bounds:{...bounds}}}))
-        send(OUTPUT,["UPDATE_BOUNDS"],{id:outputId,bounds})
-        if (!localStorage.getItem("ja-main-projector"))localStorage.setItem("ja-main-projector",outputId)
-        screenStructure = ""
-        rebuildOutputs()
-        notice("Salida "+(target.name||outputId)+" asignada al monitor "+displayId+". Comprueba visualmente antes de emitir.")
+    async function assignMonitorToOutput(displayId:number, _bounds:{x:number;y:number;width:number;height:number}, outputId:string){
+        const targetDisplay=await validateExternalDisplay(displayId)
+        if(!targetDisplay)return notice("La laptop está reservada como consola. Selecciona una pantalla externa válida.")
+        const current=get(outputs),target=current[outputId]
+        if(!target || !target.enabled || target.stageOutput)return notice("Salida JA no disponible")
+        if(Object.entries(current).some(([id,o])=>id!==outputId && o.enabled && o.screen===String(displayId)))
+            return notice("Esta pantalla ya pertenece a otra salida")
+        const bounds=targetDisplay.bounds
+        outputs.update(a=>({...a,[outputId]:{...a[outputId],screen:String(displayId),
+            bounds:{...bounds},boundsLocked:true,enabled:true}}))
+        if(!localStorage.getItem("ja-main-projector") || !get(outputs)[localStorage.getItem("ja-main-projector")||""]?.screen)
+            localStorage.setItem("ja-main-projector",outputId)
+        // CREATE alone leaves the window hidden. Toggle is a separate, required
+        // operation and the native backend now waits for window creation.
+        toggleOutputs([outputId],{state:true})
+        selectedId=outputId
+        void refreshDisplaySafety()
+        notice("Activando "+(target.name||outputId)+" en la pantalla externa. Confirma que la ventana aparece allí.")
     }
-    function createPhysicalOutput(displayId: number, bounds: {x:number;y:number;width:number;height:number}, name: string) {
-        if (!Number.isFinite(displayId) || get(outLocked))return notice("No se puede crear una salida mientras esté bloqueada.")
+    async function createPhysicalOutput(displayId:number,_bounds:{x:number;y:number;width:number;height:number},name:string){
+        const targetDisplay=await validateExternalDisplay(displayId)
+        if(!targetDisplay || get(outLocked))return notice("No se puede crear una salida en la laptop ni estando bloqueada")
         if(Object.values(get(outputs)).some(o=>o.enabled && o.screen===String(displayId)))
-            return notice("Este monitor ya tiene una salida JA.")
-        const previousMain=chooseOutput()[0] || ""
-        if(previousMain && !localStorage.getItem("ja-main-projector"))
-            localStorage.setItem("ja-main-projector",previousMain)
-        const outputId=addOutput(false,"",false,name)
-        if(!outputId)return notice("FreeShow no pudo registrar la nueva salida")
-        let outputSnapshot: any = null
-        outputs.update(a=>{
-            const output=a[outputId]
-            if(!output)return a
-            outputSnapshot={...output,enabled:true,active:true,screen:String(displayId),
-                bounds:{...bounds},boundsLocked:true,alwaysOnTop:true}
-            return {...a,[outputId]:outputSnapshot}
-        })
-        if(!outputSnapshot)return notice("No se pudo preparar la salida "+name)
-        // CREATE es la ruta nativa de FreeShow. La nueva salida comienza vacía:
-        // NO se copia Programa ni se emite audio a monitores recién creados.
-        send(OUTPUT,["CREATE"],{...outputSnapshot,id:outputId})
-        screenStructure=""
-        rebuildOutputs()
-        notice("Salida creada para "+name+". Selecciónala en Envío rápido; verifica que la pantalla física muestra la ventana correspondiente.")
+            return notice("El monitor ya tiene una salida asignada")
+        const existingPrimary=chooseOutput()[0] ||
+            Object.entries(get(outputs)).find(([,out])=>out.enabled && !!out.screen && out.screen!==operatorDisplayId)?.[0] || ""
+        if(existingPrimary && !localStorage.getItem("ja-main-projector"))
+            localStorage.setItem("ja-main-projector",existingPrimary)
+        const id=addOutput(false,"",false,name)
+        if(!id)return notice("FreeShow no pudo registrar la salida")
+        const bounds=targetDisplay.bounds
+        outputs.update(a=>({
+            ...a,[id]:{...a[id],enabled:true,active:true,
+                screen:String(displayId),bounds:{...bounds},boundsLocked:true,alwaysOnTop:true}
+        }))
+        toggleOutputs([id],{state:true})
+        selectedId=id
+        void refreshDisplaySafety()
+        notice("Activando salida en "+name+". No se enviará contenido hasta que pulses Quick Play.")
+    }
+    async function activateConfiguredOutput(outputId:string,displayId:number){
+        const d=await validateExternalDisplay(displayId)
+        const output=get(outputs)[outputId]
+        if(!d || !output || !output.enabled || output.screen!==String(displayId))
+            return notice("La asignación ha cambiado. Actualiza la detección y vuelve a intentarlo.")
+        toggleOutputs([outputId],{state:true})
+        selectedId=outputId
+        void refreshDisplaySafety()
+        notice("Solicitada activación de "+(output.name||outputId)+". Comprueba el monitor externo.")
     }
     function chooseOutput() {
         const available = Object.entries(get(outputs))
-            .filter(([, value]) => value && value.enabled && !value.stageOutput)
+            .filter(([, value]) => value && value.enabled && value.active && !value.stageOutput &&
+                !!value.screen && knownExternalDisplayIds.has(String(value.screen)))
             .map(([id]) => id)
         if (!available.includes(selectedId)) selectedId = available[0] || ""
         return available
@@ -503,7 +545,7 @@
         const targets = el("quickTargetButtons")
         const outputMap = get(outputs)
         // Reconstruct only when monitors/active flags change, not every playback tick.
-        const structure = available.map(id=>id+":"+!!outputMap[id]?.active).join("|")
+        const structure = available.map(id=>id+":"+!!outputMap[id]?.active+":"+(outputMap[id]?.screen||"")+":"+(outputMap[id]?.name||"")).join("|")
         if (structure !== screenStructure) {
             screenStructure = structure
             for (const component of screenRenderers) component.$destroy()
@@ -511,8 +553,18 @@
             list?.replaceChildren()
             targets?.replaceChildren()
             if (!available.length) {
-                if (list) list.textContent = "Sin salidas configuradas. Abre Configuración JA."
-                if (targets) targets.textContent = "Sin salida configurada"
+                if (list) list.textContent = displaysChecked
+                    ? "No hay pantallas externas activadas. Abre Configuración JA → Pantallas y salidas."
+                    : "Detectando pantallas de Windows…"
+                if (targets) {
+                    const configure=document.createElement("button")
+                    configure.type="button"
+                    configure.textContent=displaysChecked ? "Configurar pantallas externas" : "Detectando monitores…"
+                    configure.disabled=!displaysChecked
+                    configure.className="ja-target rounded-lg border px-2 py-1 text-xs"
+                    configure.onclick=()=>{settingsStartSection="screens";settingsOpen=true}
+                    targets.append(configure)
+                }
             }
             for (const id of available) {
                 const value = outputMap[id]
@@ -1275,6 +1327,7 @@
             selectedMediaPaths = Array.isArray(storedFiles) ? storedFiles.filter((p):p is string => typeof p==="string" && !!geminiFileType(p)).slice(0,5000) : []
         } catch {}
         setupNavigation()
+        void refreshDisplaySafety()
         collectMockText()
         removeInertGeminiControls()
         connectMediaTypeFilters()
@@ -1479,8 +1532,9 @@
             }}
             on:close={() => { settingsOpen = false }}
             on:selectOutput={(event) => { selectedId = event.detail.id; rebuildOutputs() }}
-            on:assignDisplay={(event) => assignMonitorToOutput(event.detail.displayId,event.detail.bounds,event.detail.outputId)}
-            on:createDisplayOutput={(event) => createPhysicalOutput(event.detail.displayId,event.detail.bounds,event.detail.name)}
+            on:assignDisplay={(event) => { void assignMonitorToOutput(event.detail.displayId,event.detail.bounds,event.detail.outputId) }}
+            on:createDisplayOutput={(event) => { void createPhysicalOutput(event.detail.displayId,event.detail.bounds,event.detail.name) }}
+            on:activateDisplay={(event) => { void activateConfiguredOutput(event.detail.outputId,event.detail.displayId) }}
             on:linkMedia={() => sendMain(Main.OPEN_FOLDER, {channel:"JA_GEMINI_MEDIA_FOLDER",title:"Vincular carpeta Multimedia"})}
             on:linkHymn={(event) => {
                 collection = event.detail.collection

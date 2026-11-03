@@ -282,3 +282,28 @@ test("Salida seleccionada mantiene control único; las secundarias empiezan sin 
  assert.ok(pub.includes("muted:available.length>1 && selectedId!==mainId"),"Secundarias deben empezar silenciadas")
  assert.ok(pub.includes('},false,selectedId)'),"Nunca hacer broadcast por omisión")
 });
+
+test("Operador queda bloqueado por identificador nativo, no por número de Windows",()=>{
+ const main=read("engine/src/electron/IPC/responsesMain.ts")
+ const settings=read("engine/src/frontend/components/ja/JaGeminiSettings.svelte")
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ assert.ok(main.includes("jaOperatorDisplay: display.id === operator.id"))
+ assert.ok(main.includes("displays.find(display => display.internal)"))
+ assert.ok(main.includes("screen.getDisplayMatching(getMainWindow()!.getBounds())"))
+ assert.ok(settings.includes("disabled={isOperatorDisplay(display)}"),"Laptop debe ser no seleccionable")
+ assert.ok(settings.includes('if(!display || isOperatorDisplay(display))return'),"Bloquear operador también en controlador")
+ assert.ok(shell.includes('if(!operator || !requested || operator.id===requested.id)return null'),"Proteger nuevamente en ejecución")
+ assert.ok(shell.includes('knownExternalDisplayIds.has(String(value.screen))'),"Quick targets no debe listar outputs sin monitor externo")
+});
+test("La activación nativa espera creación de la ventana antes de informar estado",()=>{
+ const native=read("engine/src/electron/output/helpers/OutputVisibility.ts")
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ assert.ok(native.includes("static async toggleOutputs("))
+ assert.ok(native.includes("await OutputVisibility.toggleOutput("))
+ assert.ok(native.includes("await OutputHelper.Lifecycle.createOutput(output)"))
+ assert.ok(shell.includes('toggleOutputs([outputId],{state:true})'))
+ assert.ok(shell.includes('toggleOutputs([id],{state:true})'))
+ assert.ok(shell.includes("Activando salida en "))
+ assert.ok(!shell.includes('send(OUTPUT,["CREATE"],{...outputSnapshot'),"CREATE por sí solo deja la ventana oculta")
+ assert.ok(shell.includes('configure.onclick=()=>{settingsStartSection="screens";settingsOpen=true}'),"Configuración debe ser accesible desde Envío rápido")
+});

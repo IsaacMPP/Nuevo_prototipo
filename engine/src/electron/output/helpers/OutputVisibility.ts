@@ -8,25 +8,28 @@ import { setOutputAlwaysOnTop } from "./OutputAlwaysOnTop"
 import { OutputBounds } from "./OutputBounds"
 
 export class OutputVisibility {
-    static toggleOutputs(data: { outputs: (Output & { id: string })[]; state: boolean; autoStartup?: boolean; autoPosition?: boolean }) {
+    static async toggleOutputs(data: { outputs: (Output & { id: string })[]; state: boolean; autoStartup?: boolean; autoPosition?: boolean }) {
         const newStates: { id: string; active: boolean | "invisible" }[] = []
 
-        data.outputs.forEach((output) => {
+        for (const output of data.outputs) {
             const autoPosition = output.boundsLocked ? false : data.autoPosition
-            const newState = OutputVisibility.toggleOutput(output, data.state, data.autoStartup, autoPosition)
+            const newState = await OutputVisibility.toggleOutput(output, data.state, data.autoStartup, autoPosition)
             newStates.push({ id: output.id, active: newState })
-        })
+        }
 
         toApp(OUTPUT, { channel: "OUTPUT_STATE", data: newStates })
     }
 
-    static toggleOutput(output: Output & { id: string }, state: boolean, autoStartup?: boolean, autoPosition?: boolean) {
+    static async toggleOutput(output: Output & { id: string }, state: boolean, autoStartup?: boolean, autoPosition?: boolean): Promise<boolean | "invisible"> {
         if (!output?.id) return false
 
         let window: BrowserWindow = OutputHelper.getOutput(output.id)?.window
 
         if (!window || window.isDestroyed()) {
-            OutputHelper.Lifecycle.createOutput(output)
+            // Creating an Electron output is asynchronous. Previously we read
+            // the window immediately and returned false, so the projection
+            // never became visible even though its entry existed in JA.
+            await OutputHelper.Lifecycle.createOutput(output)
             window = OutputHelper.getOutput(output.id)?.window
             if (!window || window.isDestroyed()) return false
         }
