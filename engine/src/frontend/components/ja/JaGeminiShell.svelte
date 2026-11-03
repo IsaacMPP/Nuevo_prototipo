@@ -130,6 +130,10 @@
     let cleanup: Array<() => void> = []
     let programSeek: HTMLInputElement | null = null
     let programVolume: HTMLInputElement | null = null
+    let programLoopButton: HTMLButtonElement | null = null
+    let loopBusy=false
+    const VIDEO_LOOP_STORAGE="ja-gemini-per-screen-video-loop-v1"
+    let videoLoopPrefs:Record<string,Record<string,boolean>>={}
     let previewMedia: HTMLMediaElement | null = null
     let jaAudioPath=""
     let jaAudioBusy=false
@@ -1556,6 +1560,90 @@
             bibleProject.textContent=chosen.length>1 ? "▶ Proyectar en "+chosen.length+" pantallas" :
                 chosen.length===1 ? "▶ Proyectar en "+(get(outputs)[chosen[0]]?.name||"pantalla elegida") :
                 "▶ Marca una pantalla para proyectar"
+        }
+    }
+    function getRememberedLoop(outputId:string,path:string):boolean {
+        return videoLoopPrefs[outputId]?.[path]===true
+    }
+    function rememberLoop(outputId:string,path:string,enabled:boolean){
+        if(!outputId || !path)return
+        videoLoopPrefs[outputId]={...(videoLoopPrefs[outputId]||{}),[path]:enabled}
+        videoLoopPrefs[outputId]=Object.fromEntries(Object.entries(videoLoopPrefs[outputId]).slice(-100))
+        try{localStorage.setItem(VIDEO_LOOP_STORAGE,JSON.stringify(videoLoopPrefs))}
+        catch(error){console.warn("[JA Video] No se pudo guardar bucle:",error)}
+    }
+    function updateProgramLoopButton(){
+        if(!programLoopButton)return
+        const bg=get(outputs)[selectedId]?.out?.background
+        const path=bg?.path||""
+        const isVideo=!!path && getMediaType(getExtension(path))==="video"
+        const session=isVideo?VideoPlayer.getPlaying(path,[selectedId]):null
+        const looping=!!session?.loop
+        programLoopButton.disabled=loopBusy || !session || get(outLocked)
+        programLoopButton.setAttribute("aria-pressed",String(looping))
+        programLoopButton.textContent=loopBusy?"↻ Preparando…":looping?"↻ Bucle ON":"↻ Bucle OFF"
+        programLoopButton.title=isVideo?
+            "Repetir solo en "+(get(outputs)[selectedId]?.name||"la salida elegida"):
+            "Selecciona una pantalla con video o himno activo"
+        for(const badge of host?.querySelectorAll<HTMLElement>(".ja-loop-badge")||[]){
+            const id=badge.dataset.loopOutput||""
+            const current=get(outputs)[id]?.out?.background?.path||""
+            const live=current&&VideoPlayer.getPlaying(current,[id])
+            badge.hidden=!live?.loop
+        }
+    }
+    async function changeLoopForSelectedOutput(){
+        if(loopBusy || get(outLocked))return
+        const id=selectedId
+        if(!id || !chooseOutput().includes(id))return notice("Selecciona una salida activa.")
+        const bg=get(outputs)[id]?.out?.background
+        const path=bg?.path||""
+        if(!path || getMediaType(getExtension(path))!=="video")
+            return notice("La pantalla seleccionada no reproduce un video o himno.")
+        const source=VideoPlayer.getPlaying(path,[id])
+        if(!source)return notice("No hay reloj de video activo para modificar.")
+        const newLoop=!source.loop
+        loopBusy=true
+        updateProgramLoopButton()
+        try{
+            if(source.linkedOutputIds.length>1){
+                const primary=localStorage.getItem("ja-main-projector")||""
+                const keepPrimary=id===primary && source.linkedOutputIds.includes(primary)
+                const detach=keepPrimary?source.linkedOutputIds.filter(other=>other!==primary):[id]
+                const currentTime=Number.isFinite(source.audio.currentTime)?Math.max(0,source.audio.currentTime):0
+                const paused=source.audio.paused
+                const oldLoop=source.loop
+                const oldMuted=source.audio.muted
+                for(const outputId of detach){
+                    if(!chooseOutput().includes(outputId))throw Error("Una pantalla ya no está conectada.")
+                    await VideoPlayer.stop(path,outputId)
+                    const started=await VideoPlayer.start(path,{
+                        startAt:currentTime,loop:outputId===id?newLoop:oldLoop,
+                        paused,muted:outputId===primary?oldMuted:true
+                    },[outputId])
+                    if(!started || !VideoPlayer.getPlaying(path,[outputId]))
+                        throw Error("No se pudo separar el reloj de "+outputId)
+                }
+            }
+            if(!VideoPlayer.setLoopForSingleOutput(path,id,newLoop))
+                throw Error("La salida sigue vinculada a otro reloj.")
+            const current=get(outputs)[id]?.out?.background
+            if(!current || current.path!==path)throw Error("Cambió el video de la pantalla.")
+            // Updating only the loop metadata never re-sends the video or seeks
+            // Program. The original output and its mounted renderer remain.
+            outputs.update(all=>({
+                ...all,[id]:{
+                    ...all[id],out:{...all[id].out,background:{...current,loop:newLoop}}
+                }
+            }))
+            rememberLoop(id,path,newLoop)
+            notice((newLoop?"Bucle activado":"Bucle desactivado")+" en "+
+                (get(outputs)[id]?.name||id)+". Las otras salidas no se reiniciaron.")
+        }catch(error){
+            notice("No se pudo modificar el bucle independiente: "+String(error))
+        }finally{
+            loopBusy=false
+            updateProgramLoopButton()
         }
     }
     function syncProgram() {
