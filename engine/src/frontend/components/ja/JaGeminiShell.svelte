@@ -792,6 +792,14 @@
                 playlistNearEnd=false
                 return
             }
+            // Native HTMLAudioElement may already be paused by its ended event
+            // when the 350ms monitor wakes up. Do not require !paused at EOF.
+            const nativeEnded="ended" in audio && audio.ended===true
+            if(nativeEnded && playlistSawProgress){
+                playlistNearEnd=true
+                advanceJAPlaylist(false)
+                return
+            }
             if(duration>0 && now>=duration-0.5 && !audio.paused)playlistNearEnd=true
             playlistLastPosition=now
             if(playlistNearEnd && duration>0 && now>=duration-0.1 && !audio.paused)
@@ -888,9 +896,9 @@
                     playlistShuffleOrder=[]
                     playlistShufflePosition=0
                 }
-                // Clear only pending EOF detection, not the current clock.
-                // The next polling tick continues observing the same track.
-                playlistNearEnd=false
+                // Preserve end-of-track evidence for this SAME media session.
+                // Resetting it here can lose EOF between 350ms monitor polls,
+                // especially when a mode is switched in the final half-second.
             }
             updateJAPlaylist(id,l=>({...l,playMode:nextMode,repeat:nextMode==="repeat-all"}))
             notice("Modo de lista: "+(

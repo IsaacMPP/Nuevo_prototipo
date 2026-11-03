@@ -813,3 +813,14 @@ test("P5: cambiar modo de playlist en vivo conserva el reloj y reordena solo lo 
  assert.ok(ui.includes('modificable durante la música'),"Los controles anuncian cambio en vivo")
  assert.ok(ui.includes('cambiar sin detener la canción actual'),"Se informa la acción al operador")
 });
+
+test("P5: cambiar modos cerca de EOF no pierde el avance natural de pistas",()=>{
+ const s=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const modes=s.split('if(event.type==="playMode"){')[1].split('if(event.type==="loopVideo"){')[0]
+ const monitor=s.split("function watchJAPlaylist(){")[1].split("async function playlistPanelAction(")[0]
+ assert.ok(!modes.includes("playlistNearEnd=false"),"Cambiar modo no borra la evidencia de fin de pista actual")
+ assert.ok(monitor.includes('const nativeEnded="ended" in audio && audio.ended===true'),"Detectar ended HTMLAudioElement incluso con paused=true")
+ assert.ok(monitor.includes("if(nativeEnded && playlistSawProgress){"),"No avanzar por una sesión que nunca arrancó")
+ assert.ok(monitor.includes("advanceJAPlaylist(false)"),"Usar el recorrido vigente al avanzar")
+ assert.ok(monitor.includes('item.loopVideo===true'),"La animación en bucle sigue sin avanzar sola")
+});
