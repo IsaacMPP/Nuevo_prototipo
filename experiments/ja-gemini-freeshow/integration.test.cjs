@@ -408,3 +408,11 @@ test("Biblia: flechas y botones Anterior/Siguiente controlan Preview y seguimien
  assert.ok(shell.includes('bibleNavigationQueue.length>=8'),"Evitar ráfagas que saturen el motor")
  assert.ok(scripture.includes('export async function refreshLiveScripture()'),"No reinventar proyección de Biblia")
 });
+
+test("Biblia: edición de destinos o referencia en vuelo no puede armar una sesión antigua",()=>{
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ assert.ok(shell.includes('if(mode==="biblia" && bibleFollowEnabled)'),"Cambiar la selección debe pausar seguimiento")
+ assert.ok(shell.includes('referenceSent===JSON.stringify(get(activeScripture).reference||null)'),"Control de referencia grupal obsoleto")
+ assert.ok(shell.includes('JSON.stringify(get(outputs)[id]?.out?.slide?.scriptureReference||null)===referenceSent'),"Grupo solo se arma si su texto enviado coincide")
+ assert.ok(shell.includes('JSON.stringify(result?.scriptureReference||null)!==referenceSent'),"Salida individual no debe armar referencia antigua")
+});
