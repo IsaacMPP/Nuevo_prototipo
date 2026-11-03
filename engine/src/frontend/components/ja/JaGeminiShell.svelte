@@ -1115,9 +1115,16 @@
                 const current = n.nodeValue || ""
                 if (/\(\s*\d+\s*\)/.test(current)) n.nodeValue = current.replace(/\(\s*\d+\s*\)/, "(" + counts[type] + ")")
             }
-            btn.setAttribute("aria-pressed", String(typeFilter === type))
-            btn.style.backgroundColor = typeFilter === type ? "#2169a5" : ""
-            btn.style.borderColor = typeFilter === type ? "#4cd1fd" : ""
+            // Gemini's original HTML gives the Videos button a permanent blue
+            // Tailwind class. Clearing an inline color with "" does NOT remove
+            // that base blue, so two tabs appear active after a filter change.
+            // Override both states explicitly, preserving the original layout.
+            const active = mode === "multimedia" && typeFilter === type
+            btn.setAttribute("aria-pressed", String(active))
+            btn.classList.toggle("ja-media-filter-active", active)
+            btn.style.backgroundColor = active ? "#2169a5" : "#101e41"
+            btn.style.borderColor = active ? "#4cd1fd" : "#30466f"
+            btn.style.boxShadow = active ? "inset 0 0 0 1px rgba(76,209,253,.18)" : "none"
         }
     }
     function renderToolbar() {

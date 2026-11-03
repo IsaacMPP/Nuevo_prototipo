@@ -599,3 +599,19 @@ test("Multimedia P3: videos, imágenes y audio se gestionan por rutas reales ais
  assert.ok(css.includes(".ja-native-audio-panel")&&css.includes(".ja-native-audio-preview"),"Estilos de audio sin cambiar tarjetas")
  assert.ok(shell.includes('item.className="ja-media-card p-2 min-w-0 rounded-lg bg-[#0a1938] border border-[#24446f] text-left hover:border-cyan-400"'),"Conservar miniaturas aprobadas")
 });
+
+test("Multimedia: solo una pestaña Videos/Imágenes/Audio queda resaltada",()=>{
+ const source=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const show=source.split("function showCounts()")[1].split("function renderToolbar()")[0]
+ const filter=source.split("function connectMediaTypeFilters()")[1].split("function installFolderPicker()")[0]
+ assert.ok(show.includes('const active = mode === "multimedia" && typeFilter === type'),"La selección debe derivar del único filtro actual")
+ assert.ok(show.includes('btn.setAttribute("aria-pressed", String(active))'),"Pestaña accesible seleccionada")
+ assert.ok(show.includes('btn.classList.toggle("ja-media-filter-active", active)'),"Mantener clase visual sincronizada")
+ assert.ok(show.includes('btn.style.backgroundColor = active ? "#2169a5" : "#101e41"'),"Desactivar explícitamente el azul de clase original")
+ assert.ok(show.includes('btn.style.borderColor = active ? "#4cd1fd" : "#30466f"'),"Desactivar borde de la pestaña anterior")
+ assert.ok(show.includes('btn.style.boxShadow = active ? "inset 0 0 0 1px rgba(76,209,253,.18)" : "none"'),"Quitar halo del filtro anterior")
+ assert.ok(!show.includes('typeFilter === type ? "#2169a5" : ""'),"No volver a dejar que Tailwind conserve azul al desmarcar")
+ assert.ok(filter.includes('const handler = () => { typeFilter = type; renderLibrary() }'),"Cada clic actualiza el estado y catálogo")
+ assert.ok(source.includes('typeFilter: GeminiMediaType | "all" = "video"'),"Conservar Videos como pestaña inicial")
+ assert.ok(source.includes('item.className="ja-media-card p-2 min-w-0 rounded-lg bg-[#0a1938] border border-[#24446f] text-left hover:border-cyan-400"'),"No rediseñar miniaturas")
+});
