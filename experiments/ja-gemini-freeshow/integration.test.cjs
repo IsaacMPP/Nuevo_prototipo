@@ -630,7 +630,7 @@ test("P3 video: añadir nuevos destinos al reloj de Primario sin reiniciarlo",()
  const s=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
  const player=read("engine/src/frontend/components/media/video/videoPlayer.ts")
  const out=read("engine/src/frontend/components/helpers/output.ts")
- const join=s.split("async function joinAlreadyPlayingPrimary(mediaPath:string,targets:string[])")[1].split("function sendToQuickTargets()")[0]
+ const join=s.split("async function joinAlreadyPlayingPrimary(mediaPath:string,targets:string[])")[1].split("function updateJAPlaylist(")[0]
  const attach=player.split("static attachOutputsToLiveSession(")[1].split("static updateProperties(")[0]
  assert.ok(join.includes('localStorage.getItem("ja-main-projector")'),"Confirmar fuente principal")
  assert.ok(join.includes("newTargets=targets.filter(id=>!source.linkedOutputIds.includes(id))"),"Solo las pantallas nuevas reciben contenido")
