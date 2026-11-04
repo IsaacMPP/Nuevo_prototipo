@@ -1109,7 +1109,6 @@
     // Never sends to Program or changes any on-air visuals.
     async function playBackgroundAudioAnywhere(path:string){
         audioProblem=""
-        const main=localStorage.getItem("ja-main-projector")||""
         if(get(outLocked))return notice("Las salidas están bloqueadas.")
         // Solo audio is an independent music bus: a different video may
         // remain visible in Programa without blocking the sound-only action.
@@ -3025,7 +3024,7 @@
         biblePreviewReady = false
         prepared = path
         refreshOnlyAudioButton()
-        const samePlayingVideo = !!(playingPath && selectedId &&
+        const samePlayingVideo = autoplay && !!(playingPath && selectedId &&
             normalizeJAContentPath(path)===normalizeJAContentPath(playingPath) &&
             !!VideoPlayer.getPlaying(playingPath,[selectedId]))
         followProgram=samePlayingVideo
