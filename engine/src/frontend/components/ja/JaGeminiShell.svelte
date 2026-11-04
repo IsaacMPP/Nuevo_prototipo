@@ -27,7 +27,8 @@
     import { send } from "../../utils/request"
     import { VideoPlayer } from "../media/video/videoPlayer"
     import { AudioPlayer } from "../../audio/audioPlayer"
-    import { playingAudio, playerVideos } from "../../stores"
+    import { setJAPrimaryAudioRouting } from "../../audio/routing/audioRoutingInit"
+    import { playingAudio, playerVideos, audioRouting } from "../../stores"
     import { jaPlaylists, jaReadPlaylists, jaWritePlaylists, jaNewPlaylist, jaLocalPlaylistEntry,
         jaYoutubePlaylistEntry, jaYoutubeId, jaMoveEntry, jaMoveEntryTo, jaShuffleOrder, jaNextIndex, jaPlaybackMode, JA_MAX_PLAYLISTS, JA_MAX_ENTRIES,
         type JAPlaylist, type JAPlaylistEntry } from "../../utils/jaGeminiPlaylists"
@@ -414,6 +415,14 @@
     function markedGroupTargets(): string[] {
         const current=chooseOutput()
         return current.filter(id=>syncedTargetIds.has(id))
+    }
+    // Route only the designated JA primary video to FreeShow's main speaker.
+    // This is separate from muting secondary media sessions: a visible video
+    // with a disconnected audio graph otherwise remains completely silent.
+    function syncJAPrimaryAudioRoute():boolean{
+        const id=localStorage.getItem("ja-main-projector")||""
+        if(!id || !chooseOutput().includes(id))return false
+        return setJAPrimaryAudioRouting(id)
     }
     function markedPlaylistTargets():string[]{
         return chooseOutput().filter(id=>playlistTargetIds.has(id))
@@ -1494,6 +1503,7 @@
         if(!habitualPrimaryId && current)habitualPrimaryId=current
         if(!habitualPrimaryId)habitualPrimaryId=id
         localStorage.setItem("ja-main-projector",id)
+        syncJAPrimaryAudioRoute()
         VideoPlayer.updateVolume()
         saveScreenMemory()
         screenNotice="Pantalla principal "+(get(outputs)[id]?.name||id)+" asignada. Puedes cambiarla en Configuración."
@@ -1628,6 +1638,7 @@
                 if(liveMain&&liveMain!==replacement&&mainWasRemoved)
                     transferProjectedContent(liveMain,replacement)
                 localStorage.setItem("ja-main-projector",replacement)
+                syncJAPrimaryAudioRoute()
                 VideoPlayer.updateVolume()
                 if(!habitualPrimaryId)habitualPrimaryId=replacement
                 saveScreenMemory()
@@ -1745,6 +1756,7 @@
         if(!to || !chooseOutput().includes(to))return
         transferProjectedContent(from,to)
         localStorage.setItem("ja-main-projector",to)
+        syncJAPrimaryAudioRoute()
         VideoPlayer.updateVolume()
         habitualPrimaryId=to
         restoreCandidateId=""
@@ -1758,6 +1770,7 @@
         const previous=localStorage.getItem("ja-main-projector")||""
         if(previous!==id)transferProjectedContent(previous,id)
         localStorage.setItem("ja-main-projector",id)
+        syncJAPrimaryAudioRoute()
         VideoPlayer.updateVolume()
         habitualPrimaryId=id
         restoreCandidateId=""
@@ -3121,6 +3134,13 @@
         }catch{}
         screenPoll=setInterval(()=>{void refreshDisplaySafety()},3000)
         playlistMonitor=setInterval(watchJAPlaylist,350)
+        // FreeShow may restore audio routing asynchronously after this shell
+        // mounts. Reconcile against the actual main input whenever it changes.
+        const stopAudioRouteReconciliation=audioRouting.subscribe(config=>{
+            if(!config || !host)return
+            syncJAPrimaryAudioRoute()
+        })
+        cleanup.push(stopAudioRouteReconciliation)
         loadJABibleAppearances()
         try{
             const parsed=JSON.parse(localStorage.getItem(VIDEO_LOOP_STORAGE)||"{}")
