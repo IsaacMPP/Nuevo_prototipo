@@ -20,6 +20,9 @@
     export let selectedTargets:string[]=[]
     let gridView=true
     let showDockYoutube=false
+    let expanded=false
+    let manageLists=false
+    let addContentOpen=false
     const dispatch=createEventDispatcher()
     let name=""
     let youtubeUrl=""
@@ -79,23 +82,37 @@
     }
 </script>
 
-<section class="ja-list-dock" class:docked role={docked?"region":"dialog"} aria-label="Centro de listas y reproducción" aria-modal={docked?undefined:"false"} style={docked?dockStyle:undefined}>
+<section class="ja-list-dock" class:docked class:expanded role={expanded?"dialog":docked?"region":"dialog"} aria-label="Centro de listas y reproducción" aria-modal={expanded?"true":docked?undefined:"false"} style={docked && !expanded?dockStyle:undefined}>
     <header class="dock-top">
         <div>
             <strong>♫ Listas de reproducción</strong>
             <small>{docked?"Arrastra desde el módulo actual o usa el botón +":"Biblioteca local, Himnario y YouTube · controles reales de FreeShow"}</small>
         </div>
-        {#if !docked}
-            <button type="button" aria-label="Cerrar centro de listas" title="Cerrar" on:click={()=>action("close")}>✕</button>
-        {/if}
+        <div class="dock-header-actions">
+            {#if docked}
+                <button type="button" class="dock-expand" aria-label={expanded?"Reducir listas al panel lateral":"Expandir listas de reproducción"}
+                    aria-expanded={expanded} title={expanded?"Volver al panel lateral":"Abrir las listas en una ventana amplia"}
+                    on:click={()=>expanded=!expanded}>{expanded?"↙ Reducir":"⛶ Expandir"}</button>
+            {:else}
+                <button type="button" aria-label="Cerrar centro de listas" title="Cerrar" on:click={()=>action("close")}>✕</button>
+            {/if}
+        </div>
     </header>
     <div class="dock-body">
         <aside class="dock-saved">
-            <strong>{docked?"Mis listas · elegir o crear":"Mis listas"}</strong>
-            <form on:submit|preventDefault={()=>{if(name.trim()){action("create",{name});name=""}}}>
+            <div class="dock-saved-heading">
+                <strong>Mis listas</strong>
+                {#if docked}
+                    <button type="button" class="dock-list-manage" aria-expanded={manageLists}
+                        on:click={()=>manageLists=!manageLists}>{manageLists?"Cerrar":"＋ Nueva lista"}</button>
+                {/if}
+            </div>
+            {#if !docked || manageLists}
+            <form on:submit|preventDefault={()=>{if(name.trim()){action("create",{name});name="";manageLists=false}}}>
                 <input aria-label="Nombre de la nueva lista" placeholder="Nueva lista…" maxlength="80" bind:value={name}/>
                 <button type="submit" disabled={!name.trim()||playlists.length>=40}>+ Crear</button>
             </form>
+            {/if}
             <div class="saved-scroll">
                 {#each playlists as list (list.id)}
                     <button type="button" class:selected={list.id===selectedId} aria-pressed={list.id===selectedId}
@@ -167,6 +184,9 @@
                         <span role="status">Sin pantalla externa · reproducción local disponible</span>
                     {/if}
                 </div>
+                <button type="button" class="dock-add-toggle" aria-expanded={addContentOpen}
+                    on:click={()=>addContentOpen=!addContentOpen}>{addContentOpen?"▾ Ocultar herramientas":"＋ Agregar contenido a esta lista"}</button>
+                {#if addContentOpen || !docked}
                 <div class="dock-quick-line">
                     <button type="button" disabled={!currentFile||playlist.entries.length>=200}
                         on:click={()=>action("addFile",{id:playlist.id})} title="Añadir a la lista el archivo seleccionado en Vista previa">+ Añadir preparado {docked?"":currentFile?"("+currentFile.path.split(/[\/\\]/).pop()+")":""}</button>
@@ -181,6 +201,7 @@
                         </form>
                     {/if}
                 </div>
+                {/if}
                 <div class="dock-options">
                     <label><input type="checkbox" checked={playlist.autoNext}
                         on:change={e=>action("autoNext",{id:playlist.id,value:e.currentTarget.checked})}/> Siguiente automático</label>
@@ -355,4 +376,57 @@
     .docked .dock-transport{padding-top:5px}
     .docked .transport-actions button{padding:4px 5px;font-size:10px}
     @media(max-width:1100px){.ja-list-dock.docked{inset:auto;min-height:0}.docked .dock-queue-list article{flex-wrap:wrap}}
+
+
+    /* Comfortable queue: compact dock shows content first; expanded mode
+       rearranges the SAME mounted component, preserving state and playback. */
+    .dock-header-actions{display:flex;align-items:center;gap:6px;margin-left:auto}
+    .dock-expand{white-space:nowrap;font-weight:650;background:#214b79;border-color:#72a1cc}
+    .dock-saved-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}
+    .dock-list-manage{padding:4px 8px;font-size:10px;white-space:nowrap}
+    .dock-add-toggle{width:100%;text-align:left;font-size:11px;background:#132d4f;border-style:dashed;border-color:#50759d}
+    .docked .dock-saved{max-height:none}
+    .docked .dock-saved .saved-scroll{max-height:38px}
+    .docked .dock-queue{gap:7px!important}
+    .docked .dock-queue-list{min-height:110px;scrollbar-width:thin}
+    .docked .dock-queue-list article{min-height:49px;flex-wrap:wrap}
+    .docked .queue-title{min-width:95px}
+    .docked .queue-actions{margin-left:auto}
+    .docked .dock-transport{flex:0 0 auto}
+    .docked .dock-transport .transport-actions{width:100%;justify-content:flex-start}
+    .ja-list-dock.docked.expanded{
+        position:fixed!important;inset:clamp(18px,5vh,55px) clamp(14px,4vw,75px)!important;
+        width:auto!important;height:auto!important;max-width:none!important;max-height:none!important;
+        z-index:120;box-shadow:0 24px 100px #000e;border:2px solid #78a9d7;
+        background:#0b1934;font-size:13px;border-radius:12px;
+    }
+    .docked.expanded .dock-top{padding:13px 18px}
+    .docked.expanded .dock-top strong{font-size:18px}
+    .docked.expanded .dock-top small{font-size:11px}
+    .docked.expanded .dock-body{display:grid;grid-template-columns:minmax(190px,235px) minmax(0,1fr)}
+    .docked.expanded .dock-saved{border-bottom:0;border-right:1px solid #31476c;padding:15px 12px;gap:14px}
+    .docked.expanded .dock-saved .saved-scroll{display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;max-height:none;flex:1;gap:7px}
+    .docked.expanded .saved-scroll button{width:100%;max-width:none;text-align:left;padding:9px 10px}
+    .docked.expanded .saved-scroll small{display:block}
+    .docked.expanded .dock-queue{padding:16px!important;gap:12px!important}
+    .docked.expanded .queue-head strong{font-size:18px}
+    .docked.expanded .queue-head small{font-size:12px}
+    .docked.expanded .dock-playlist-targets{padding:10px;gap:12px}
+    .docked.expanded .dock-playlist-targets label{font-size:12px}
+    .docked.expanded .dock-options{gap:12px}
+    .docked.expanded .play-modes button{padding:7px 10px}
+    .docked.expanded .play-modes button small{display:inline;font-size:11px}
+    .docked.expanded .dock-queue-list{min-height:180px;gap:8px}
+    .docked.expanded .dock-queue-list article{flex-wrap:nowrap;min-height:65px;padding:10px;gap:10px}
+    .docked.expanded .queue-title strong{font-size:13px}
+    .docked.expanded .queue-actions button{padding:8px 11px;font-size:13px}
+    .docked.expanded .dock-transport{padding-top:12px}
+    .docked.expanded .dock-transport button{padding:9px 12px;font-size:12px}
+    @media(max-width:700px){
+       .docked.expanded .dock-body{display:flex;flex-direction:column}
+       .docked.expanded .dock-saved{border-right:0;border-bottom:1px solid #31476c;padding:8px;gap:5px}
+       .docked.expanded .dock-saved .saved-scroll{flex-direction:row;flex:0 0 auto;max-height:45px;overflow-x:auto;overflow-y:hidden}
+       .docked.expanded .dock-queue{padding:8px!important;gap:7px!important}
+       .docked.expanded .dock-queue-list article{flex-wrap:wrap}
+    }
 </style>
