@@ -183,6 +183,7 @@
     let playlistModuleAreaPadding=""
     let playlistDockObserver:ResizeObserver|null=null
     let quickAudioOpen=false
+    let audioProblem=""
     // Select playlists independently from the Quick Play target group.
     let playlistTargetIds=new Set<string>()
     let playlistOutputChoices:Array<{id:string;name:string;primary:boolean}>=[]
@@ -534,6 +535,7 @@
     // sending any visual background. Audio routing remains the Windows default.
     // YouTube is deliberately excluded: its policies require visible playback.
     async function playJAOnlySound(path:string,targets:string[],valid:()=>boolean):Promise<boolean>{
+        audioProblem=""
         if(jaAudioBusy||get(outLocked))return false
         const available=chooseOutput()
         const primary=localStorage.getItem("ja-main-projector")||(available.length===1?available[0]:"")
@@ -562,7 +564,8 @@
             const started=await AudioPlayer.start(path,{name:fileName(path)},{playMultiple:true,startPaused:true})
             const session=AudioPlayer.getPlaying(path)
             if(!started || !session?.audio){
-                notice("No se pudo abrir la pista sonora. Verifica que el video tenga audio compatible con Windows.")
+                audioProblem="No se pudo abrir el audio de este archivo. Comprueba que el MP4 tenga una pista compatible con Windows."
+                notice(audioProblem)
                 return false
             }
             if(!valid()||get(outLocked)||targets.some(id=>!chooseOutput().includes(id))){
@@ -570,13 +573,26 @@
                 return false
             }
             if(previous && previous!==path && AudioPlayer.audioExists(previous))AudioPlayer.stop(previous)
+            // AudioPlayer.play() doesn't await the native play promise:
+            // the UI could say playing while HTMLMediaElement was still paused.
+            session.audio.muted=false
+            if(session.audio.volume<=0){
+                audioProblem="Volumen del archivo en 0. Revisa el mezclador JA y el dispositivo de sonido de Windows."
+                notice(audioProblem)
+            }
+            const context=AudioAnalyser.getAudioContext()
+            if(context.state==="suspended")await context.resume()
+            AudioPlayer.play(path)
+            await session.audio.play()
+            if(session.audio.paused)throw Error("Windows no confirmó la reproducción del archivo.")
             jaAudioPath=path
             showJAOwnedAudio(path)
-            if(AudioPlayer.isPaused(path))AudioPlayer.play(path)
-            notice("Solo audio: "+fileName(path)+". Los versículos, fondos e imágenes de Programa permanecen intactos.")
+            notice("Solo audio: "+fileName(path)+". La imagen proyectada permanece intacta.")
             return true
         }catch(error){
-            notice("No se pudo reproducir el audio del archivo: "+String(error))
+            if(AudioPlayer.audioExists(path))AudioPlayer.stop(path)
+            audioProblem="No se pudo reproducir el audio de "+fileName(path)+": "+String(error)
+            notice(audioProblem)
             return false
         }finally{jaAudioBusy=false}
     }
@@ -589,7 +605,7 @@
     }
     function refreshOnlyAudioButton(){
         if(!jaAudioOnlyButton)return
-        jaAudioOnlyButton.hidden=mode==="biblia"
+        jaAudioOnlyButton.hidden=false
         jaAudioOnlyButton.setAttribute("aria-pressed",String(audioOnlyLocal))
         jaAudioOnlyButton.classList.toggle("ja-checked",audioOnlyLocal)
         jaAudioOnlyButton.textContent=audioOnlyLocal?"♫ Solo audio ✓":"♫ Solo audio"
@@ -1066,11 +1082,14 @@
     // A real, independent music channel accessible even while showing Bible.
     // Never sends to Program or changes any on-air visuals.
     async function playBackgroundAudioAnywhere(path:string){
+        audioProblem=""
         const main=localStorage.getItem("ja-main-projector")||""
         if(get(outLocked))return notice("Las salidas están bloqueadas.")
         if(get(playingVideos).some(s=>s.linkedOutputIds.includes(main) && !s.audio.muted && !s.audio.paused) ||
-            (previewMedia && !previewMedia.paused && !previewMedia.muted))
-            return notice("Ya hay un video con sonido; siléncialo antes de activar Solo audio.")
+            (previewMedia && !previewMedia.paused && !previewMedia.muted)){
+            audioProblem="Ya hay un video con sonido. Siléncialo o páusalo antes de activar otra pista Solo audio."
+            return notice(audioProblem)
+        }
         if(!playlistLibraryFiles.some(f=>f.path===path&&(f.kind==="audio"||f.kind==="video")))
             return notice("La pista no está disponible en las carpetas reales vinculadas.")
         if(playlistRunning)stopJAPlaylist()
@@ -1079,6 +1098,7 @@
     }
     function stopBackgroundAudioAnywhere(){
         ++quickAudioToken
+        audioProblem=""
         if(jaAudioPath && AudioPlayer.audioExists(jaAudioPath))AudioPlayer.stop(jaAudioPath)
         jaAudioPath=""
         jaAudioControls?.$destroy()
@@ -1976,8 +1996,15 @@
             onlyAudio.className="ja-target ja-only-audio-toggle rounded-lg border px-2 py-1 text-xs"
             onlyAudio.textContent="♫ Solo audio"
             onlyAudio.title="Escuchar videos y canciones sin cambiar la imagen proyectada"
-            onlyAudio.onclick=()=>{quickAudioOpen=!quickAudioOpen}
+            onlyAudio.onclick=()=>{
+                audioOnlyLocal=!audioOnlyLocal
+                refreshOnlyAudioButton()
+                notice(audioOnlyLocal?"Solo audio activado. Elige un video o himno desde su miniatura.":
+                    "Solo audio desactivado. Las miniaturas prepararán contenido para proyección.")
+            }
             targets.append(onlyAudio)
+            jaAudioOnlyButton=onlyAudio
+            refreshOnlyAudioButton()
         }
         updatePlaylistTargets()
         refreshGroupChoices()
@@ -2363,7 +2390,11 @@
             label.className="text-xs text-slate-200 truncate mt-2"
             label.textContent=file.name
             item.append(visual,label)
-            item.onclick=()=>prepare(file.path)
+            item.onclick=()=>{
+                if(audioOnlyLocal&&(file.kind==="video"||file.kind==="audio"))
+                    void playBackgroundAudioAnywhere(file.path)
+                else prepare(file.path)
+            }
             if(file.kind==="video"||file.kind==="audio"){
                 item.draggable=true
                 item.ondragstart=e=>{
@@ -2387,6 +2418,20 @@
                     if(e.key==="Enter"||e.key===" ")action(e)
                 }
                 item.append(plus)
+                const sound=document.createElement("span")
+                sound.className="ja-card-solo-audio"
+                sound.setAttribute("role","button")
+                sound.tabIndex=0
+                sound.setAttribute("aria-label","Escuchar solo audio de "+file.name)
+                sound.title="Solo audio sin modificar las pantallas"
+                sound.textContent="♫"
+                const playOnly=(e:Event)=>{
+                    e.preventDefault();e.stopPropagation()
+                    void playBackgroundAudioAnywhere(file.path)
+                }
+                sound.onclick=playOnly
+                sound.onkeydown=(e:KeyboardEvent)=>{if(e.key==="Enter"||e.key===" ")playOnly(e)}
+                item.append(sound)
             }
             area.append(item)
             showNativeThumbnail(visual,file)
@@ -3324,6 +3369,12 @@
             {/if}
         </div>
     {/if}
+    {#if audioProblem}
+        <div class="ja-audio-visible-error" role="alert">
+            <strong>♫ Solo audio</strong> {audioProblem}
+            <button type="button" on:click={()=>audioProblem=""} aria-label="Cerrar advertencia de audio">✕</button>
+        </div>
+    {/if}
     {#if quickAudioOpen}
         <JaGeminiQuickAudioPanel files={playlistLibraryFiles} currentPath={jaAudioPath}
             busy={jaAudioBusy} preparedVideo={prepared && getMediaType(getExtension(prepared))==="video" ? fileName(prepared) : ""}
@@ -3412,4 +3463,9 @@
 .ja-screen-alert{top:70px}.ja-screen-live-notice{bottom:12px;right:12px;max-width:340px}
 .ja-screen-alert strong,.ja-screen-live-notice strong{color:#ffe39b}
 .ja-screen-alert button{padding:5px 8px;background:#205785;border:1px solid #8ab6de;border-radius:5px;color:white;cursor:pointer}
+
+.ja-audio-visible-error{position:absolute;bottom:12px;left:14px;z-index:90;width:min(525px,65vw);background:#5b2728;color:#fff4e8;border:2px solid #ffa778;border-radius:8px;padding:9px 12px;display:flex;gap:10px;align-items:center;font-size:12px;box-shadow:0 7px 24px #000a}
+.ja-audio-visible-error button{margin-left:auto;background:#863b3e;color:white;border:1px solid #eab4ac;border-radius:5px;padding:2px 7px;cursor:pointer}
+:global(.ja-media-card) .ja-card-solo-audio{display:block;position:absolute;bottom:35px;right:8px;background:#173c65;color:#fff;border:1px solid #6ebce4;border-radius:6px;padding:2px 9px;font-size:17px;cursor:pointer;z-index:3}
+:global(.ja-media-card) .ja-card-solo-audio:hover{background:#276d9b}
 </style>

@@ -169,3 +169,11 @@ Continuar JA Proyecciones con diseño Gemini y FreeShow 1.6.7 en `IsaacMPP/Nuevo
 - Playlist visible al cambiar de Multimedia a Himnario o Biblia, una sola lista activa, control + y arrastrar archivos desde tarjetas reales a la cola.
 - Se mantienen modos normal/aleatorio/repetir, Solo audio por elemento, bucles, pantallas seleccionadas y botones de transporte de FreeShow. «Listas» en el menú enfoca el panel integrado.
 - Pruebas por realizar: 1920×1080, cambios de módulo, scroll independiente, agregar/soltar, persistencia, audio; revisar CSS calculado en Windows.
+
+
+## P12 — Solo audio directo y detección visible de fallos (4 noviembre 2026)
+- El botón único «Solo audio» superior cambia a modo activo/inactivo sin abrir un menú; desde Himnario/Multimedia una miniatura comienza solo el audio del MP4.
+- Acción ♫ adicional por tarjeta para escuchar sin cambiar de modo; + continúa añadiendo contenido a la playlist lateral.
+- La sesión conserva el motor AudioPlayer de FreeShow y ahora espera realmente HTMLMediaElement.play(); si está en pausa o el navegador rechaza la reproducción, se muestra una advertencia persistente en la consola. Si el volumen es cero, se advierte explícitamente.
+- No se alteran las salidas visuales; se bloquea de forma segura mezclar con un video audible, hasta que el operador lo silencie.
+- Verificar físicamente con MP3 y MP4 AAC, volumen/routing de Windows, consola sin proyector y con HDMI. Play resuelto no demuestra salida física audible.

@@ -747,7 +747,7 @@ test("P5: Biblioteca integrada real y agregado rápido sin modificar reproducci�
  const panel=read("engine/src/frontend/components/ja/JaGeminiPlaylistPanel.svelte")
  const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
  const model=read("engine/src/frontend/utils/jaGeminiPlaylists.ts")
- assert.ok(panel.includes('role="dialog"')&&panel.includes('aria-modal="false"'),"Panel integrado no modal de pantalla completa")
+ assert.ok(panel.includes('role={docked?"region":"dialog"}')&&panel.includes('aria-modal={docked?undefined:"false"}'),"Dock permanente no modal y modal anterior compatible")
  assert.ok(panel.includes('class="dock-library"')&&panel.includes('class="dock-queue"'),"Biblioteca y cola simultáneas")
  assert.ok(panel.includes('matches.slice(0,shown)'),"No cargar 613 canciones en el DOM")
  assert.ok(panel.includes('on:input={()=>shown=60}'),"Búsqueda en toda la biblioteca")
@@ -959,4 +959,16 @@ test("P11: playlist fija ocupa columna derecha y conserva biblioteca real a la i
  assert.ok(p.includes('on:drop={dropAtEnd}'),"Aceptar pistas soltadas en la cola")
  assert.ok(p.includes('{#if !docked}'),"No duplicar biblioteca dentro del dock")
  assert.ok(p.includes(".ja-list-dock.docked"),"Diseño compacto, no ventana modal")
+});
+
+test("P12: audio directo desde tarjetas y promesa de reproducción nativa comprobada",()=>{
+ const s=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const media=s.split("function appendLibraryCards()")[1].split("function renderLibrary(")[0]
+ const audio=s.split("async function playJAOnlySound(")[1].split("function jaOnlyAudioSend(")[0]
+ assert.ok(s.includes("audioOnlyLocal=!audioOnlyLocal"),"Interruptor superior en lugar de menú")
+ assert.ok(media.includes("ja-card-solo-audio"),"Acceso por miniatura sin perder el título")
+ assert.ok(media.includes("void playBackgroundAudioAnywhere(file.path)"),"Reproduce desde tarjeta")
+ assert.ok(audio.includes("await session.audio.play()"),"Confirmar promesa nativa")
+ assert.ok(audio.includes("if(session.audio.paused)throw Error"),"Evitar falsa reproducción")
+ assert.ok(s.includes('class="ja-audio-visible-error" role="alert"'),"Errores de audio visibles")
 });
