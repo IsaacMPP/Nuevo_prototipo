@@ -26,7 +26,6 @@
     import { OUTPUT } from "../../../types/Channels"
     import { send } from "../../utils/request"
     import { VideoPlayer } from "../media/video/videoPlayer"
-    import { AudioPlayer } from "../../audio/audioPlayer"
     import { setJAPrimaryAudioRouting } from "../../audio/routing/audioRoutingInit"
     import { playingAudio, playerVideos, audioRouting } from "../../stores"
     import { jaPlaylists, jaReadPlaylists, jaWritePlaylists, jaNewPlaylist, jaLocalPlaylistEntry,
@@ -516,7 +515,13 @@
             jaAudioControls=null
             if(jaAudioContainer)jaAudioContainer.hidden=true
         }
-        jaAudioControls.$on("ended",close)
+        jaAudioControls.$on("ended",()=>{
+            const active=get(jaPlaylists).find(p=>p.id===playlistCurrentId)?.entries[playlistIndex]
+            const advance=playlistRunning && !playlistPaused && !!active &&
+                (active.kind==="audio"||active.audioOnly) && active.path===path
+            close()
+            if(advance)advanceJAPlaylist(false)
+        })
         jaAudioControls.$on("stopped",close)
     }
     async function publishPreparedAudio(path:string,_targets:string[]){
