@@ -934,3 +934,16 @@ test("P9: Solo audio se crea una sola vez aunque rebuildOutputs se invoque conti
  assert.ok(rebuild.includes("targets?.replaceChildren()"),
      "Cambiar la estructura de pantallas debe limpiar el botón viejo y recrearlo una vez")
 });
+
+test("P10: Spacedesk/iPad actualiza geometría y preserva proporción de imagen y video",()=>{
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const video=read("engine/src/frontend/components/media/Video.svelte")
+ const image=read("engine/src/frontend/components/media/Image.svelte")
+ const native=read("engine/src/electron/output/helpers/OutputVisibility.ts")
+ assert.ok(shell.includes('const fingerprint=(d:JAExternalDisplay)'),"Reconexión identifica la pantalla estable")
+ assert.ok(shell.includes('fingerprint(d)+"@"+displayGeometry(d)'),"No ignorar resolución y posición cambiantes")
+ assert.ok(shell.includes("!sameDisplayBounds(output.bounds,display.bounds)"),"Actualizar ventana ya conectada tras rotación o resolución")
+ assert.ok(video.includes('mediaStyle.fit === "blur" || mediaStyle.fit === "fill" ? "contain"'),"No estirar videos")
+ assert.ok(image.includes('mediaStyle.fit === "blur" || mediaStyle.fit === "fill" ? "contain"'),"No deformar imágenes")
+ assert.ok(native.includes('if (output.boundsLocked) return outputBounds'),"No mover ventanas bloqueadas fuera del monitor elegido")
+});

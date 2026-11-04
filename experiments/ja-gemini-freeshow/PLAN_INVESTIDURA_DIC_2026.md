@@ -152,3 +152,12 @@ Continuar JA Proyecciones con diseño Gemini y FreeShow 1.6.7 en `IsaacMPP/Nuevo
 - Solución mínima: consultar `.ja-only-audio-toggle` antes de crear el botón. Con monitores, sin monitores, con cambios de pantallas y con sucesivos ticks de FreeShow debe permanecer solo uno.
 - No alterar los controles Mostrar/Ocultar, destino de salida, reproducción, playlists ni el panel de Solo audio.
 - Pruebas por realizar en Windows: abrir la consola y cambiar de Biblioteca/Biblia/Himnario, iniciar y detener pistas, conectar/desconectar monitores, comprobar que se conserva un solo botón.
+
+
+## P10 — Adaptación proporcional a Spacedesk/iPad y cambios de resolución (4 noviembre 2026)
+- Confirmación del operador: conservar la proporción original de videos e imágenes, sin deformación; aceptar franjas cuando el aspecto del monitor sea distinto al del contenido.
+- Windows y JA muestran 2160×1620 (4:3) para el iPad virtual; el problema de la franja azul/negra no se puede atribuir únicamente a un error de lectura de resolución.
+- Al comparar pantallas conectadas se conserva una identidad por ID/etiqueta, pero se añade la geometría x/y/ancho/alto al detector de cambios. Cuando Spacedesk cambia la resolución u orientación con el mismo ID, JA actualiza los bounds de la ventana activa sin borrar el contenido ni reiniciar el reloj.
+- La visualización principal de imágenes y videos no utilizará object-fit:fill aunque una preferencia antigua lo solicite; se normaliza a contain. Se respeta el modo cover únicamente cuando se eligió explícitamente, y la capa decorativa desenfocada puede cubrir el fondo sin deformar el elemento principal.
+- Verificación pendiente en Windows/iPad: comprobar ventana exactamente en el área útil del monitor, pantalla completa y proporción correcta en 2160×1620, tras giro, reconexión y cambio de escala. Si persistiera la franja, investigar DOM/compositor de la ventana de salida sin asumir diagnóstico.
+- No se toca main, JA_Proyecciones2, PR ni los controles de listas.

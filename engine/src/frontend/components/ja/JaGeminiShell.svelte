@@ -95,6 +95,12 @@
     let previousExternalSignature=""
     type JAExternalDisplay={id:number;label?:string;bounds:{x:number;y:number;width:number;height:number}}
     const fingerprint=(d:JAExternalDisplay)=>String(d.id)+"|"+(d.label||"").trim().toLowerCase()
+    // A monitor's identity survives a Windows resolution/orientation change,
+    // but the geometry must trigger a fresh placement of its output window.
+    const displayGeometry=(d:JAExternalDisplay)=>[d.bounds.x,d.bounds.y,d.bounds.width,d.bounds.height].join(",")
+    const sameDisplayBounds=(a:{x:number;y:number;width:number;height:number}|undefined,
+        b:{x:number;y:number;width:number;height:number})=>!!a &&
+        a.x===b.x && a.y===b.y && a.width===b.width && a.height===b.height
     function saveScreenMemory(){
         try{
             localStorage.setItem(JA_SCREEN_PROFILES,JSON.stringify(screenProfiles))
@@ -115,7 +121,7 @@
             const previouslyConnected=new Set(knownExternalDisplayIds)
             knownExternalDisplayIds=new Set(external.map(d=>String(d.id)))
             displaysChecked=true
-            const signature=external.map(d=>fingerprint(d)).sort().join(";")
+            const signature=external.map(d=>fingerprint(d)+"@"+displayGeometry(d)).sort().join(";")
             if(signature!==previousExternalSignature){
                 previousExternalSignature=signature
                 screenStructure=""
@@ -1517,7 +1523,10 @@
             screenProfiles[key]=outputId
             const output=get(outputs)[outputId]
             if(!output)continue
-            if(String(output.screen)!==id || !output.enabled || !output.active){
+            if(String(output.screen)!==id || !output.enabled || !output.active ||
+                !sameDisplayBounds(output.bounds,display.bounds)){
+                // Keep the live output and its audio; only refresh the window
+                // rectangle on the physical monitor reported by Electron.
                 outputs.update(a=>({...a,[outputId]:{...a[outputId],enabled:true,active:true,
                     screen:id,bounds:{...display.bounds},boundsLocked:true,alwaysOnTop:true}}))
             }
