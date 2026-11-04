@@ -1922,8 +1922,11 @@
                 targets.append(showAll,hideAll)
             }
         }
-        // Exactly one Solo audio control, including when no projector exists.
-        if(targets){
+        // Rebuilds happen after each output/video state update. The strip is
+        // only cleared when its screen structure changes, so reusing the
+        // existing button prevents unbounded Solo audio duplicates.
+        // This must also work with zero external monitors.
+        if(targets && !targets.querySelector(".ja-only-audio-toggle")){
             const onlyAudio=document.createElement("button")
             onlyAudio.type="button"
             onlyAudio.className="ja-target ja-only-audio-toggle rounded-lg border px-2 py-1 text-xs"

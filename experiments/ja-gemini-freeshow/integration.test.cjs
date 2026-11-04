@@ -921,3 +921,16 @@ test("P8e: asignación manual no deja la principal vacía ni la salida inactiva"
  assert.ok(activate.includes("ensurePrimaryAfterManualScreenActivation(outputId)"),"Primario al activar salida")
  assert.ok(s.includes('if(current && chooseOutput().includes(current))return'),"La primaria activa no se reemplaza al conectar secundarias")
 });
+
+test("P9: Solo audio se crea una sola vez aunque rebuildOutputs se invoque continuamente",()=>{
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const rebuild=shell.split("function rebuildOutputs() {")[1].split("function getRememberedLoop(")[0]
+ assert.ok(rebuild.includes('if(targets && !targets.querySelector(".ja-only-audio-toggle"))'),
+     "rebuildOutputs debe reutilizar el botón ya existente, incluso sin monitores")
+ assert.equal((rebuild.match(/targets\.append\(onlyAudio\)/g)||[]).length,1,
+     "Solo audio se debe insertar desde un único punto")
+ assert.equal((rebuild.match(/onlyAudio\.onclick=/g)||[]).length,1,
+     "Debe conservar un solo controlador de clic")
+ assert.ok(rebuild.includes("targets?.replaceChildren()"),
+     "Cambiar la estructura de pantallas debe limpiar el botón viejo y recrearlo una vez")
+});

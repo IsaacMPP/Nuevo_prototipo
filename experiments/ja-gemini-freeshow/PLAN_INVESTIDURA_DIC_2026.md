@@ -144,3 +144,11 @@ Continuar JA Proyecciones con diseño Gemini y FreeShow 1.6.7 en `IsaacMPP/Nuevo
 
 ## P8e — Activación manual y primario provisional
 - «Activar pantalla» y «Crear salida» asignan primario solo si el actual no está físicamente disponible, sin borrar la identidad de la principal habitual; la salida se habilita y marca activa.
+
+
+## P9 — Corrección de duplicación de «Solo audio» (4 noviembre 2026)
+- Fallo reportado en Windows: la barra Envío rápido generaba repetidamente botones «Solo audio» cada vez que se actualizaban las salidas.
+- Causa: `rebuildOutputs()` inserta el botón fuera de la reconstrucción condicional de destinos; al actualizar reproducción, la barra no se vacía, pero se agregaba otro botón.
+- Solución mínima: consultar `.ja-only-audio-toggle` antes de crear el botón. Con monitores, sin monitores, con cambios de pantallas y con sucesivos ticks de FreeShow debe permanecer solo uno.
+- No alterar los controles Mostrar/Ocultar, destino de salida, reproducción, playlists ni el panel de Solo audio.
+- Pruebas por realizar en Windows: abrir la consola y cambiar de Biblioteca/Biblia/Himnario, iniciar y detener pistas, conectar/desconectar monitores, comprobar que se conserva un solo botón.
