@@ -248,7 +248,7 @@ test("Logo propio: selector nativo de imagen, efecto enlazado y configuración p
 });
 test("Regresar al mismo vídeo puede revincular Vista previa sin reiniciar Programa",()=>{
  const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
- const body=shell.split("function prepare(path: string)")[1].split("function project()")[0]
+ const body=shell.split("function prepare(path: string, autoplay=previewAutoplay)")[1].split("function project()")[0]
  assert.ok(body.includes('VideoPlayer.getPlaying(playingPath,[selectedId])'),"La revinculación requiere sesión pública real")
  assert.ok(body.includes("followProgram=samePlayingVideo"),"Falta recuperar el vínculo del mismo medio")
  assert.ok(body.includes('if (samePlayingVideo && type==="video")'),"No reiniciar desde cero si el vídeo ya está en Programa")
@@ -705,7 +705,7 @@ test("P5: avanzar mixto usa el motor existente y YouTube visible",()=>{
  assert.ok(run.includes('playerVideos.update(data=>({...data,[youtubeId]'),"Registro nativo YouTube")
  assert.ok(run.includes('id:youtubeId,type:"player",loop:false'),"No reproducción oculta en YouTube")
  assert.ok(native.includes('<Player {outputId} {id} on:loaded />'),"YouTube usa el iframe de FreeShow")
- assert.ok(run.includes("prepare(item.path,false)")&&run.includes("local.loop=item.loopVideo===true"),"Vídeo de lista comienza en Vista previa con bucle individual")
+ assert.ok(run.includes("prepare(item.path,false)")&&run.includes("local.loop=item.loopVideo===true"),"Vídeo de lista queda preparado en Vista previa con bucle individual")
  assert.ok(!run.includes('sendToJAOutputs("background",{\n                    path:item.path,type:"video"'),"El video local no se envía automáticamente")
  assert.ok(s.includes('if(event.type==="send"){')&&s.includes("const destinations=markedPlaylistTargets()"),"La playlist exige envío explícito a los destinos marcados")
  assert.ok(s.includes("muted:!targets.includes(mainId),startAt:kind==="),"Envío agrupado conserva el audio principal y el reloj preparado")
@@ -719,7 +719,7 @@ test("P5: Play nuevo inicia en cero sin perjudicar recuperación de reloj ni ata
  const s=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
  const runner=s.split("async function playJAPlaylistIndex(id:string,index:number,fromQueue=false)")[1].split("function advanceJAPlaylist(")[0]
  const recovery=s.split("async function joinAlreadyPlayingPrimary(mediaPath:string,targets:string[])")[1].split("function updateJAPlaylist(")[0]
- assert.ok(runner.includes("try{local.currentTime=0}catch{}"),"Play explícito inicia el video preparado desde cero")
+ assert.ok(runner.includes("prepare(item.path,false)")&&runner.includes("local.pause()"),"Play explícito prepara Vista previa desde su inicio sin reproducción")
  assert.ok(runner.includes("playlistLocalVideoPath=item.path"),"No reiniciar la pantalla al preparar una canción")
  assert.ok(s.includes("Math.max(0,Number(previewMedia.currentTime)||0):0"),"Envío manual parte del reloj de Vista previa")
  assert.ok(!runner.includes("await joinAlreadyPlayingPrimary("),"Recuperar pantalla y reproducir nueva lista son acciones distintas")
