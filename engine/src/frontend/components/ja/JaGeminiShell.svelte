@@ -813,36 +813,25 @@
             }else{
                 if(getMediaType(getExtension(item.path))!=="video")throw Error("El archivo ya no es un video válido.")
                 prepare(item.path)
-                // Explicit Play of a playlist entry always begins that song
-                // at 0:00, even if its file was already on air. The separate
-                // Quick Send flow still reuses live clocks for recovery.
-                const current=get(playingVideos).filter(session=>
-                    normalizeJAContentPath(session.path)===normalizeJAContentPath(item.path) &&
-                    session.linkedOutputIds.some(target=>targets.includes(target)))
-                for(const session of current){
-                    for(const outputId of [...session.linkedOutputIds].filter(t=>targets.includes(t)))
-                        await VideoPlayer.stop(session.path,outputId)
-                }
-                if(token!==playlistToken)return
-                if(!targets.length){
-                    // Local playback is the native media element in the operator Preview.
-                    playlistLocalVideoPath=item.path
-                    const local=previewMedia
-                    if(!local)throw Error("No existe un reproductor local para este video.")
-                    local.muted=false
-                    local.loop=item.loopVideo===true
+                // Playlists use the SAME operator path as Multimedia:
+                // first prepare and play locally in Vista previa. Only the
+                // explicit "Enviar a pantallas" action can alter Programa.
+                playlistLocalVideoPath=item.path
+                const local=previewMedia
+                if(!local)throw Error("No existe Vista previa para este video.")
+                local.muted=false
+                local.loop=item.loopVideo===true
+                const begin=()=>{
+                    if(token!==playlistToken || previewMedia!==local)return
                     try{local.currentTime=0}catch{}
-                    await local.play()
-                    if(token!==playlistToken){local.pause();local.muted=true;return}
-                    notice("Reproducción local activa, sin pantalla externa.")
-                }else{
-                    const received=sendToJAOutputs("background",{
-                        path:item.path,type:"video",loop:item.loopVideo===true,muted:!targets.includes(primary),startAt:0
-                    },targets,{replaceScripture:true,requireAll:true})
-                    if(received.length!==targets.length)throw Error("FreeShow no confirmó las salidas del video.")
-                    clearBlackBeforePublishing(targets)
-                    rebuildOutputs()
+                    void local.play().catch(error=>{
+                        playlistNotice="Vista previa no pudo reproducir el vídeo: "+String(error)
+                        notice(playlistNotice)
+                    })
                 }
+                if(local.readyState>=1)begin()
+                else local.addEventListener("loadedmetadata",begin,{once:true})
+                notice("Playlist preparada en Vista previa: "+item.title+". Usa Enviar a pantallas para proyectarla.")
             }
             if(token!==playlistToken)return
             playlistWaiting=false
@@ -937,6 +926,24 @@
             if(event.value)playlistTargetIds.add(event.id)
             else playlistTargetIds.delete(event.id)
             updatePlaylistTargets()
+            return
+        }
+        if(event.type==="send"){
+            const entry=get(jaPlaylists).find(p=>p.id===playlistCurrentId)?.entries[playlistIndex]
+            if(!entry || !playlistRunning)return notice("Primero prepara una pista de la lista.")
+            if(entry.kind!=="video" || entry.audioOnly)return notice("Solo los vídeos visibles se envían desde Vista previa; Solo audio se escucha localmente.")
+            if(prepared!==entry.path)return notice("La Vista previa cambió; prepara nuevamente la pista.")
+            const destinations=markedPlaylistTargets()
+            if(!destinations.length)return notice("Selecciona al menos una pantalla de la lista.")
+            syncedTargetIds=new Set(destinations)
+            refreshGroupChoices()
+            if(destinations.length>1)await sendPreparedToGroup()
+            else publishPreparedMedia()
+            if(destinations.every(id=>normalizeJAContentPath(get(outputs)[id]?.out?.background?.path||"")===normalizeJAContentPath(entry.path))){
+                playlistLocalVideoPath=""
+                if(previewMedia){previewMedia.muted=true;followProgram=true;syncLinkedPreview()}
+                notice("Playlist enviada desde Vista previa a "+destinations.length+" pantalla(s).")
+            }
             return
         }
         if(event.type==="stop"){stopJAPlaylist();return}
@@ -1230,9 +1237,9 @@
                 localStorage.getItem("ja-main-projector")!==mainId)
                 return notice("Cambió la configuración mientras se preparaba el envío; no se ha publicado el grupo.")
             const sent=sendToJAOutputs("background",{
-                path:mediaPath,type:kind,loop:kind==="video"?getRememberedLoop(mainId,mediaPath):false,
+                path:mediaPath,type:kind,loop:kind==="video"?(playlistRunning && playlistCurrentId && playlistLocalVideoPath===mediaPath ? !!get(jaPlaylists).find(l=>l.id===playlistCurrentId)?.entries[playlistIndex]?.loopVideo : getRememberedLoop(mainId,mediaPath)):false,
                 // Audio de una única sesión: solo la salida principal es audible.
-                muted:!targets.includes(mainId),startAt:0
+                muted:!targets.includes(mainId),startAt:kind==="video" && playlistLocalVideoPath===mediaPath && previewMedia ? Math.max(0,Number(previewMedia.currentTime)||0):0
             },targets,{replaceScripture:true,requireAll:true})
             if(sent.length!==targets.length)
                 return notice("No se pudo enviar a todos los destinos. Revisa las salidas antes de repetir.")
@@ -1241,7 +1248,7 @@
             if(!targets.includes(selectedId))selectedId=targets.includes(mainId)?mainId:targets[0]
             if(previewMedia && kind==="video" && targets.includes(selectedId)){
                 previewMedia.pause()
-                try{previewMedia.currentTime=0}catch{}
+                if(playlistLocalVideoPath!==mediaPath)try{previewMedia.currentTime=0}catch{}
                 previewMedia.muted=true
                 followProgram=true
             }else followProgram=false
@@ -1306,7 +1313,7 @@
                 return notice("Selecciona la salida principal en Configuración JA antes de emitir con varios monitores.")
             // Secondary screens cannot emit duplicated audio by default.
             setOutput("background",{
-                path:mediaPath,type:kind,loop:kind==="video"?getRememberedLoop(destinationId,mediaPath):false,muted:available.length>1 && destinationId!==mainId,startAt:0
+                path:mediaPath,type:kind,loop:kind==="video" && playlistLocalVideoPath===mediaPath ? !!get(jaPlaylists).find(l=>l.id===playlistCurrentId)?.entries[playlistIndex]?.loopVideo : kind==="video" && getRememberedLoop(destinationId,mediaPath),muted:available.length>1 && destinationId!==mainId,startAt:kind==="video" && playlistLocalVideoPath===mediaPath && previewMedia ? Math.max(0,Number(previewMedia.currentTime)||0):0
             },false,destinationId)
             const actual=get(outputs)[destinationId]?.out?.background
             // La actualización del store indica recepción interna, NO que
@@ -1317,7 +1324,7 @@
             }
             if(previewMedia && kind==="video" && selectedId===destinationId){
                 previewMedia.pause()
-                try{previewMedia.currentTime=0}catch{}
+                if(playlistLocalVideoPath!==mediaPath)try{previewMedia.currentTime=0}catch{}
                 previewMedia.muted=true
                 followProgram=true
             }else followProgram=false
