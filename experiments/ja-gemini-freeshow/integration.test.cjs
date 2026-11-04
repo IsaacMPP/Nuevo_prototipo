@@ -1004,3 +1004,15 @@ test("P14: despertar audio en gesto de usuario y localizar sesión resuelta",()=
  assert.ok(c.includes("JaSoloAudioPlayer.audio"),"Controles usan la sesión independiente")
  assert.ok(!c.includes("get(playingAudio)[path]"),"No depender de sesiones FreeShow por clave antigua")
 });
+
+test("P15: playlist fija admite ventana expandida sin duplicar reproductor",()=>{
+ const panel=read("engine/src/frontend/components/ja/JaGeminiPlaylistPanel.svelte")
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ assert.ok(panel.includes("let expanded=false")&&panel.includes("class:expanded"),"Estado de expansión en el mismo componente")
+ assert.ok(panel.includes("docked && !expanded?dockStyle:undefined"),"El modo expandido no conserva medidas estrechas del dock")
+ assert.ok(panel.includes('aria-label={expanded?"Reducir listas al panel lateral":"Expandir listas de reproducción"}'),"Botón accesible para alternar")
+ assert.ok(panel.includes(".ja-list-dock.docked.expanded")&&panel.includes("grid-template-columns:minmax(190px,235px)"),"Vista amplia con dos columnas")
+ assert.ok(panel.includes("let addContentOpen=false")&&panel.includes("let manageLists=false"),"Herramientas secundarias se pueden plegar")
+ assert.ok(shell.includes("<JaGeminiPlaylistPanel docked={true}"),"Se mantiene un panel fijo")
+ assert.ok(!panel.includes("JaSoloAudioPlayer.start("),"Cambiar tamaño no reinicia la pista")
+});
