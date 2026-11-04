@@ -134,3 +134,7 @@ Continuar JA Proyecciones con diseño Gemini y FreeShow 1.6.7 en `IsaacMPP/Nuevo
 
 ## P8b — Audio local sin duplicación (4 noviembre 2026)
 - Al pasar de un vídeo local de la playlist a un MP3 o al Solo audio de otro MP4, el reproductor Preview anterior se pausa y silencia antes de iniciar la pista nueva. Bucle de vídeo también funciona en modo laptop.
+
+## P8c — Errores visibles y video reintegrado al proyector
+- El centro de listas muestra una advertencia persistente con role=alert si falla un archivo, no depende del toast de 4.5 segundos.
+- Cuando una lista pasa de la Vista previa local al monitor principal recién conectado, el observador de la lista cambia al destino real para no perder el siguiente automático.

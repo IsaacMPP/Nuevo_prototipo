@@ -178,6 +178,7 @@
     let playlistSelectedTargets:string[]=[]
     let playlistTargetsChosenByOperator=false
     let playlistLocalVideoPath=""
+    let playlistNotice=""
     let quickAudioToken=0
     let selectedPlaylistId=""
     let playlistCurrentId=""
@@ -693,6 +694,7 @@
             previewMedia.muted=true
         }
         playlistLocalVideoPath=""
+        playlistNotice=""
         if(stopSound && jaAudioPath && AudioPlayer.audioExists(jaAudioPath)){
             AudioPlayer.stop(jaAudioPath)
             jaAudioPath=""
@@ -707,11 +709,13 @@
         const list=get(jaPlaylists).find(p=>p.id===id)
         const item=list?.entries[index]
         if(!item || playlistBusy)return
+        playlistNotice=""
         const targets=markedPlaylistTargets()
         const available=chooseOutput()
         const primary=localStorage.getItem("ja-main-projector")||(available.length===1?available[0]:"")
         if(get(outLocked)||targets.some(t=>!available.includes(t))){
-            notice("Las salidas seleccionadas están bloqueadas o ya no están disponibles.")
+            playlistNotice="Las salidas seleccionadas están bloqueadas o ya no están disponibles."
+            notice(playlistNotice)
             return
         }
         if(!fromQueue || playlistCurrentId!==id){
@@ -814,7 +818,8 @@
         }catch(error){
             if(token===playlistToken){
                 playlistRunning=false
-                notice("Lista detenida: "+String(error))
+                playlistNotice="Lista detenida: "+String(error)
+                notice(playlistNotice)
             }
         }finally{
             if(token===playlistToken)playlistBusy=false
@@ -1618,6 +1623,10 @@
             return
         }
         previewMedia.muted=true
+        if(playlistRunning && playlistLocalVideoPath===path){
+            playlistTargetIds.add(outputId)
+            updatePlaylistTargets()
+        }
         playlistLocalVideoPath=""
         playlistSawProgress=false
         followProgram=true
@@ -3270,6 +3279,7 @@
             currentFile={playlistCurrentFile}
             libraryFiles={playlistLibraryFiles}
             paused={playlistPaused}
+            playbackNotice={playlistNotice}
             primaryLabel={get(outputs)[localStorage.getItem("ja-main-projector")||""]?.name||"Audio del equipo"}
             outputChoices={playlistOutputChoices} selectedTargets={playlistSelectedTargets}
             on:action={event=>{void playlistPanelAction(event.detail)}}/>

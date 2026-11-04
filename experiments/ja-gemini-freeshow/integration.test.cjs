@@ -885,3 +885,12 @@ test("P8b: cambiar de video local a pista de audio no duplica sonido",()=>{
  assert.ok(run.includes("previewMedia.muted=true"),"Desactivar sonido de video al reproducir siguiente pista")
  assert.ok(run.includes("local.loop=item.loopVideo===true"),"Loop de videos también funciona en consola sin monitor")
 });
+
+test("P8c: errores de playlists visibles permanentemente dentro del reproductor",()=>{
+ const s=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const p=read("engine/src/frontend/components/ja/JaGeminiPlaylistPanel.svelte")
+ assert.ok(s.includes('playlistNotice="Lista detenida: "+String(error)'),"El motivo del fallo se conserva visible")
+ assert.ok(s.includes("playbackNotice={playlistNotice}"),"Reproductor recibe errores propios")
+ assert.ok(p.includes('class="dock-error" role="alert"'),"Advertencia legible dentro de la lista")
+ assert.ok(s.includes("playlistTargetIds.add(outputId)"),"Al reconectar, la playlist puede observar el video transferido a la principal")
+});
