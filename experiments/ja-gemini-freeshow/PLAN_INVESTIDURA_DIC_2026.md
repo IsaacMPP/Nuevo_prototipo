@@ -138,3 +138,6 @@ Continuar JA Proyecciones con diseño Gemini y FreeShow 1.6.7 en `IsaacMPP/Nuevo
 ## P8c — Errores visibles y video reintegrado al proyector
 - El centro de listas muestra una advertencia persistente con role=alert si falla un archivo, no depende del toast de 4.5 segundos.
 - Cuando una lista pasa de la Vista previa local al monitor principal recién conectado, el observador de la lista cambia al destino real para no perder el siguiente automático.
+
+## P8d — Conexión real de Configuración
+- Las acciones de Hacer principal, Mostrar/Ocultar y Olvidar configuración están vinculadas explícitamente al controlador JA Gemini; no son botones demostrativos.

@@ -3292,6 +3292,8 @@
     {#if settingsOpen}
         <JaGeminiSettings
             selectedOutputId={selectedId}
+            mainOutputId={localStorage.getItem("ja-main-projector")||""}
+            hiddenOutputIds={[...manuallyHiddenOutputs]}
             logoName={customLogoPath?fileName(customLogoPath):"Logo predeterminado JA"}
             {logoScale}
             {logoPosition}
@@ -3324,6 +3326,9 @@
             on:assignDisplay={(event) => { void assignMonitorToOutput(event.detail.displayId,event.detail.bounds,event.detail.outputId) }}
             on:createDisplayOutput={(event) => { void createPhysicalOutput(event.detail.displayId,event.detail.bounds,event.detail.name) }}
             on:activateDisplay={(event) => { void activateConfiguredOutput(event.detail.outputId,event.detail.displayId) }}
+            on:makePrimary={(event) => { makeOutputPrimary(event.detail.id) }}
+            on:toggleProjection={(event) => { setProjectionVisible(event.detail.id,event.detail.visible) }}
+            on:forgetOutput={(event) => { forgetDisconnectedOutput(event.detail.id) }}
             on:linkMedia={() => sendMain(Main.OPEN_FOLDER, {channel:"JA_GEMINI_MEDIA_FOLDER",title:"Vincular carpeta Multimedia"})}
             on:linkHymn={(event) => {
                 collection = event.detail.collection

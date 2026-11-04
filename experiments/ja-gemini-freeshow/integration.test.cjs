@@ -894,3 +894,18 @@ test("P8c: errores de playlists visibles permanentemente dentro del reproductor"
  assert.ok(p.includes('class="dock-error" role="alert"'),"Advertencia legible dentro de la lista")
  assert.ok(s.includes("playlistTargetIds.add(outputId)"),"Al reconectar, la playlist puede observar el video transferido a la principal")
 });
+
+test("P8d: Configuración de pantallas está conectada al controlador real",()=>{
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const settings=read("engine/src/frontend/components/ja/JaGeminiSettings.svelte")
+ assert.ok(shell.includes('mainOutputId={localStorage.getItem("ja-main-projector")||""}'),"Config recibe principal real")
+ assert.ok(shell.includes('hiddenOutputIds={[...manuallyHiddenOutputs]}'),"Config recibe ventanas ocultas")
+ for(const [event,method] of [
+    ["makePrimary","makeOutputPrimary(event.detail.id)"],
+    ["toggleProjection","setProjectionVisible(event.detail.id,event.detail.visible)"],
+    ["forgetOutput","forgetDisconnectedOutput(event.detail.id)"]
+ ]){
+    assert.ok(shell.includes('on:'+event+'={(event) => { '+method+' }}'),"Acción de Config ausente: "+event)
+    assert.ok(settings.includes('dispatch("'+event+'"'),"Botón sin evento: "+event)
+ }
+});
