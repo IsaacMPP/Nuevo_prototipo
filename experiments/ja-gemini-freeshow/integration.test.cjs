@@ -989,3 +989,12 @@ test("P13b: la acción Solo audio dibujada por DOM manual tiene CSS global",()=>
  assert.ok(css.includes(".ja-gemini-host .ja-card-solo-audio{"),"Necesita CSS global, no solo Svelte scoped")
  assert.ok(css.includes("bottom:35px"),"No tapar el botón + ni la miniatura")
 });
+
+test("P14: despertar audio en gesto de usuario y localizar sesión resuelta",()=>{
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const c=read("engine/src/frontend/components/ja/JaGeminiAudioControls.svelte")
+ const audio=shell.split("async function playJAOnlySound(")[1].split("function jaOnlyAudioSend(")[0]
+ assert.ok(audio.includes("initialAudioContext.resume()"),"Intentar reactivar AudioContext desde la interacción")
+ assert.ok(c.includes("AudioPlayer.getPlaying(path)"),"Controles siguen la sesión aunque el archivo cambie de ruta")
+ assert.ok(!c.includes("get(playingAudio)[path]"),"No destruir controles por buscar una clave de ruta antigua")
+});

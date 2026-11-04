@@ -21,7 +21,9 @@
     let seeking=false
     let ended=false
     function refresh(){
-        const session=path?get(playingAudio)[path]:null
+        // File-location recovery may store a resolved path as the player key.
+        // Use the same lookup as the native engine, not raw store indexing.
+        const session=path?AudioPlayer.getPlaying(path):null
         if(!session?.audio){
             if(!ended){
                 ended=true

@@ -559,6 +559,11 @@
         }
         const previous=jaAudioPath
         jaAudioBusy=true
+        // Request the default audio context's resume synchronously from the
+        // user's click; async file resolution can otherwise lose activation.
+        const initialAudioContext=AudioAnalyser.getAudioContext()
+        if(initialAudioContext.state==="suspended")
+            void initialAudioContext.resume().catch(error=>console.warn("[JA Solo audio] AudioContext:",error))
         try{
             if(jaAudioPath===path && AudioPlayer.audioExists(path))AudioPlayer.stop(path)
             const started=await AudioPlayer.start(path,{name:fileName(path)},{playMultiple:true,startPaused:true})

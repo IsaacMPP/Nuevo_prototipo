@@ -185,3 +185,7 @@ Continuar JA Proyecciones con diseño Gemini y FreeShow 1.6.7 en `IsaacMPP/Nuevo
 
 ## P13b — Visibilidad real del acceso Solo audio
 - La acción ♫ se agrega a tarjetas de Gemini con `document.createElement`. Para que sea visible, su estilo se aplica mediante la hoja global `ja-gemini-layout.css`, no únicamente el CSS scoped de Svelte.
+
+## P14 — Resiliencia de audio con rutas resueltas
+- Se solicita reactivar el AudioContext en el contexto del gesto del usuario, antes de cargar el archivo asíncronamente.
+- Los controles nativos ya no dependen de una coincidencia exacta con el índice de `playingAudio`; consultan `AudioPlayer.getPlaying(path)`, que también resuelve claves alternativas. Sin modificar las conexiones de mezclador personalizadas.
