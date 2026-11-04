@@ -752,7 +752,7 @@ test("P5: Biblioteca integrada real y agregado rápido sin modificar reproducci�
  const panel=read("engine/src/frontend/components/ja/JaGeminiPlaylistPanel.svelte")
  const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
  const model=read("engine/src/frontend/utils/jaGeminiPlaylists.ts")
- assert.ok(panel.includes('role={docked?"region":"dialog"}')&&panel.includes('aria-modal={docked?undefined:"false"}'),"Dock permanente no modal y modal anterior compatible")
+ assert.ok(panel.includes('role={expanded?"dialog":docked?"region":"dialog"}')&&panel.includes('aria-modal={expanded?"true":docked?undefined:"false"}'),"Dock normal no modal y vista expandida accesible como diálogo")
  assert.ok(panel.includes('class="dock-library"')&&panel.includes('class="dock-queue"'),"Biblioteca y cola simultáneas")
  assert.ok(panel.includes('matches.slice(0,shown)'),"No cargar 613 canciones en el DOM")
  assert.ok(panel.includes('on:input={()=>shown=60}'),"Búsqueda en toda la biblioteca")
