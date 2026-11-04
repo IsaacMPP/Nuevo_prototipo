@@ -926,6 +926,7 @@
     async function playlistPanelAction(event:{type:string;id?:string;name?:string;url?:string;
         entryId?:string;index?:number;offset?:number;value?:boolean;playMode?:string;
         files?:Array<{path:string;source:"multimedia"|"himnario"}>;from?:number;to?:number}){
+        if(event.type==="dismissNotice"){playlistNotice="";return}
         if(event.type==="close"){playlistOpen=false;return}
         if(event.type==="targets" && event.id){
             playlistTargetsChosenByOperator=true
