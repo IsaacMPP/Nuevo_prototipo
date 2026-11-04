@@ -1016,3 +1016,13 @@ test("P15: playlist fija admite ventana expandida sin duplicar reproductor",()=>
  assert.ok(shell.includes("<JaGeminiPlaylistPanel docked={true}"),"Se mantiene un panel fijo")
  assert.ok(!panel.includes("JaSoloAudioPlayer.start("),"Cambiar tamaño no reinicia la pista")
 });
+
+test("P16: avisos transitorios se cierran y no bloquean la consola",()=>{
+ const s=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const p=read("engine/src/frontend/components/ja/JaGeminiPlaylistPanel.svelte")
+ assert.ok(s.includes("screenNoticeTimer=setTimeout")&&s.includes("audioProblemTimer=setTimeout")&&s.includes("playlistNoticeTimer=setTimeout"),"Las notificaciones transitorias vencen")
+ assert.ok(s.includes("!restoreCandidateId"),"No esconder una decisión pendiente sobre principal")
+ assert.ok(s.includes("clearTimeout(screenNoticeTimer)")&&s.includes("clearTimeout(audioProblemTimer)")&&s.includes("clearTimeout(playlistNoticeTimer)"),"No dejar temporizadores huérfanos")
+ assert.ok(s.includes("hideNoScreenNotice=true"),"Aviso sin monitor se puede cerrar")
+ assert.ok(p.includes('action("dismissNotice")')&&s.includes('if(event.type==="dismissNotice")'),"Alerta de playlist tiene cierre funcional")
+});
