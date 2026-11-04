@@ -187,7 +187,7 @@
     let audioProblem=""
     // When requesting only sound from a video already on air, hand its audio
     // to the independent JA sound bus without changing the projected image.
-    let soloMutedProgram:{path:string;outputId:string;audio:ReturnType<typeof VideoPlayer.getPlaying>["audio"]}|null=null
+    let soloMutedProgram:{path:string;outputId:string;audio:NonNullable<ReturnType<typeof VideoPlayer.getPlaying>>["audio"]}|null=null
     function restoreSoloProgramSound(){
         const previous=soloMutedProgram
         soloMutedProgram=null
@@ -821,6 +821,7 @@
         // Every new entry owns only the audio started by this JA playlist.
         if(jaAudioPath && jaAudioPath!==item.path && AudioPlayer.audioExists(jaAudioPath)){
             AudioPlayer.stop(jaAudioPath)
+            restoreSoloProgramSound()
             jaAudioPath=""
             jaAudioControls?.$destroy()
             jaAudioControls=null
@@ -1143,6 +1144,7 @@
         ++quickAudioToken
         audioProblem=""
         if(jaAudioPath && AudioPlayer.audioExists(jaAudioPath))AudioPlayer.stop(jaAudioPath)
+        restoreSoloProgramSound()
         jaAudioPath=""
         jaAudioControls?.$destroy()
         jaAudioControls=null
