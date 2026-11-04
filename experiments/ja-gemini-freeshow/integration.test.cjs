@@ -676,7 +676,7 @@ test("P5: playlists tipadas para audio, video, himnos y YouTube con persistencia
  assert.ok(m.includes('e.kind==="youtube"')&&m.includes('!e.audioOnly'),"No separar audio de YouTube")
  assert.ok(m.includes('localStorage.setItem(JA_PLAYLISTS_KEY'),"Guardar listas sin modificar archivos")
  assert.ok(m.includes('JA_MAX_ENTRIES = 200'),"Límite de seguridad")
- assert.ok(p.includes("Añadir archivo preparado")&&p.includes("Pegar URL de YouTube"),"Mezcla de archivos locales y YouTube")
+ assert.ok(p.includes("Añadir preparado")&&p.includes("Pegar URL de YouTube"),"Preparado y YouTube accesibles también en el dock compacto")
  assert.ok(p.includes('action("move"')&&p.includes('action("autoNext"')&&p.includes('action("playMode"'),"Orden, avance automático y modos")
  assert.ok(s.includes("jaPlaylists.set(jaReadPlaylists())"),"Restaurar al arrancar")
  assert.ok(s.includes('else if(id==="listas")'),"Acceso a listas desde la navegación")
