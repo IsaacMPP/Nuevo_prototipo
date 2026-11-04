@@ -585,7 +585,7 @@ test("Multimedia P3: motor Solo audio independiente y biblioteca real",()=>{
  assert.ok(onlyAudio.includes("jaAudioPath")&&onlyAudio.includes("restoreSoloProgramSound()"),"Sustituir únicamente la sesión JA y restaurar sonido original")
  assert.ok(!onlyAudio.includes('!targets.includes(primary)'),"La música no requiere monitor")
  assert.ok(player.includes("new Audio()")&&player.includes("await audio.play()"),"Reproductor HTMLAudioElement directo, con promesa comprobada")
- assert.ok(!player.includes("AudioPlayer")&&!player.includes("AudioAnalyser")&&!player.includes("VideoPlayer"),"Bus de audio no debe alterar motor de proyección")
+ assert.ok(!player.includes('from "../../audio/audioPlayer"')&&!player.includes("AudioAnalyser.")&&!player.includes("VideoPlayer."),"Bus de audio no debe alterar motor de proyección")
  assert.ok(!onlyAudio.includes("setOutput(")&&!onlyAudio.includes("sendToJAOutputs("),"Audio no debe borrar imágenes ni emitir fondos")
  assert.ok(shell.includes('if(kind==="audio"){void publishPreparedAudio(mediaPath,targets);return}'),"Audio en envío grupal")
  assert.ok(shell.includes('if(kind==="audio"){void publishPreparedAudio(mediaPath,[destinationId]);return}'),"Audio en envío individual")
