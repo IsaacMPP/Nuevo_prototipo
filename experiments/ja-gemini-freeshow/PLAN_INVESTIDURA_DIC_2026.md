@@ -161,3 +161,11 @@ Continuar JA Proyecciones con diseño Gemini y FreeShow 1.6.7 en `IsaacMPP/Nuevo
 - La visualización principal de imágenes y videos no utilizará object-fit:fill aunque una preferencia antigua lo solicite; se normaliza a contain. Se respeta el modo cover únicamente cuando se eligió explícitamente, y la capa decorativa desenfocada puede cubrir el fondo sin deformar el elemento principal.
 - Verificación pendiente en Windows/iPad: comprobar ventana exactamente en el área útil del monitor, pantalla completa y proporción correcta en 2160×1620, tras giro, reconexión y cambio de escala. Si persistiera la franja, investigar DOM/compositor de la ventana de salida sin asumir diagnóstico.
 - No se toca main, JA_Proyecciones2, PR ni los controles de listas.
+
+
+## P11 — Playlist lateral fija, sin ventana flotante (4 noviembre 2026)
+- Aprobado: vistas previa/Programa/multipantalla arriba sin cambios; debajo, menú a la izquierda, módulo actual al centro y playlist fija a la derecha con la misma altura.
+- Se reserva espacio a la derecha dentro del contenedor inferior real mediante padding; la biblioteca mantiene sus tarjetas y scroll, sin segunda biblioteca de 625 elementos dentro del dock.
+- Playlist visible al cambiar de Multimedia a Himnario o Biblia, una sola lista activa, control + y arrastrar archivos desde tarjetas reales a la cola.
+- Se mantienen modos normal/aleatorio/repetir, Solo audio por elemento, bucles, pantallas seleccionadas y botones de transporte de FreeShow. «Listas» en el menú enfoca el panel integrado.
+- Pruebas por realizar: 1920×1080, cambios de módulo, scroll independiente, agregar/soltar, persistencia, audio; revisar CSS calculado en Windows.

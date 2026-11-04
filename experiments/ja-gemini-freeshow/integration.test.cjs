@@ -947,3 +947,16 @@ test("P10: Spacedesk/iPad actualiza geometría y preserva proporción de imagen 
  assert.ok(image.includes('mediaStyle.fit === "blur" || mediaStyle.fit === "fill" ? "contain"'),"No deformar imágenes")
  assert.ok(native.includes('if (output.boundsLocked) return outputBounds'),"No mover ventanas bloqueadas fuera del monitor elegido")
 });
+
+test("P11: playlist fija ocupa columna derecha y conserva biblioteca real a la izquierda",()=>{
+ const s=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const p=read("engine/src/frontend/components/ja/JaGeminiPlaylistPanel.svelte")
+ assert.ok(s.includes("function layoutPersistentPlaylist()"))
+ assert.ok(s.includes('region.style.paddingRight=padding+"px"'),"Reservar espacio sin tapar multimedia")
+ assert.ok(s.includes("<JaGeminiPlaylistPanel docked={true}"),"Un solo panel permanente en los módulos")
+ assert.ok(s.includes("playlistDockObserver.observe(region)"),"Respetar la altura del área inferior")
+ assert.ok(s.includes('e.dataTransfer?.setData("text/plain"'),"Arrastrar tarjetas desde biblioteca real")
+ assert.ok(p.includes('on:drop={dropAtEnd}'),"Aceptar pistas soltadas en la cola")
+ assert.ok(p.includes('{#if !docked}'),"No duplicar biblioteca dentro del dock")
+ assert.ok(p.includes(".ja-list-dock.docked"),"Diseño compacto, no ventana modal")
+});

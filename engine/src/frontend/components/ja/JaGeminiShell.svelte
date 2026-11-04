@@ -177,6 +177,11 @@
     let jaAudioContainer: HTMLDivElement | null = null
     let jaAudioControls: JaGeminiAudioControls | null = null
     let playlistOpen=false
+    let playlistDockReady=false
+    let playlistDockStyle=""
+    let playlistModuleArea:HTMLElement|null=null
+    let playlistModuleAreaPadding=""
+    let playlistDockObserver:ResizeObserver|null=null
     let quickAudioOpen=false
     // Select playlists independently from the Quick Play target group.
     let playlistTargetIds=new Set<string>()
@@ -1080,9 +1085,39 @@
         jaAudioControls=null
         if(jaAudioContainer)jaAudioContainer.hidden=true
     }
+    // The Gemini module content reserves a live right-hand column for the
+    // playlist. Do not create a second multimedia library or overlay the preview.
+    function layoutPersistentPlaylist(){
+        if(!host)return
+        const region=el("moduleView_multimedia")?.parentElement as HTMLElement|null
+        if(!region)return
+        if(playlistModuleArea!==region){
+            if(playlistModuleArea)playlistModuleArea.style.paddingRight=playlistModuleAreaPadding
+            playlistDockObserver?.disconnect()
+            playlistModuleArea=region
+            playlistModuleAreaPadding=region.style.paddingRight
+            playlistDockObserver=new ResizeObserver(()=>layoutPersistentPlaylist())
+            playlistDockObserver.observe(region)
+            playlistDockObserver.observe(host)
+        }
+        const h=host.getBoundingClientRect(),r=region.getBoundingClientRect()
+        if(r.width<350 || r.height<120)return
+        const width=Math.min(500,Math.max(285,Math.round(r.width*0.36)))
+        const padding=width+9
+        if(region.style.paddingRight!==padding+"px")region.style.paddingRight=padding+"px"
+        const pos="position:absolute;left:"+Math.round(r.right-h.left-width)+"px;top:"+
+            Math.round(r.top-h.top)+"px;width:"+width+"px;height:"+Math.round(r.height)+"px;"
+        if(playlistDockStyle!==pos)playlistDockStyle=pos
+        playlistDockReady=true
+    }
+    function focusPersistentPlaylist(){
+        playlistOpen=false
+        const panel=host?.querySelector<HTMLElement>(".ja-list-dock.docked")
+        panel?.querySelector<HTMLElement>(".dock-saved input")?.focus()
+    }
     function addFileDirectToPlaylist(path:string,source:"multimedia"|"himnario"){
         const list=get(jaPlaylists).find(x=>x.id===selectedPlaylistId)
-        if(!list){playlistOpen=true;return notice("Crea o elige una lista antes de añadir una canción.")}
+        if(!list){focusPersistentPlaylist();return notice("Crea una lista en el panel fijo de la derecha antes de añadir contenido.")}
         if(playlistRunning&&playlistCurrentId===list.id)return notice("Detén la lista para editarla.")
         const entry=jaLocalPlaylistEntry(path,source)
         if(!entry)return notice("Selecciona un video, audio o himno real.")
@@ -2234,7 +2269,7 @@
         playlistBtn.type="button"
         playlistBtn.textContent="☰ Listas"
         playlistBtn.title="Crear playlists mixtas, añadir el archivo preparado y elegir Solo audio"
-        playlistBtn.onclick=()=>{playlistOpen=true}
+        playlistBtn.onclick=focusPersistentPlaylist
         libraryToolbar.append(playlistBtn)
         const extras = mode === "multimedia"
             ? Object.entries(get(mediaFolders)).filter(([key,f])=>key.startsWith("ja_gemini_") && !!f?.path).map(([key,f])=>({label:f.name || f.path || key,path:f.path || "",key}))
@@ -2330,6 +2365,11 @@
             item.append(visual,label)
             item.onclick=()=>prepare(file.path)
             if(file.kind==="video"||file.kind==="audio"){
+                item.draggable=true
+                item.ondragstart=e=>{
+                    e.dataTransfer?.setData("text/plain",(mode==="himnario"?"himnario":"multimedia")+"|"+file.path)
+                    if(e.dataTransfer)e.dataTransfer.effectAllowed="copy"
+                }
                 item.style.position="relative"
                 const plus=document.createElement("span")
                 plus.className="ja-card-quick-add"
@@ -2417,6 +2457,7 @@
         refreshOnlyAudioButton()
         if(next==="biblia") {void registerJARV1909().then(()=>{updateBibleUI();if(get(outputs)[selectedId]?.out?.slide?.id==="temp")void restoreBibleControlForOutput(selectedId);else scheduleBiblePreview()});updateBibleUI();scheduleBiblePreview()}
         else {renderLibrary();if(next==="himnario")void refreshJAHymnLibrary()}
+        requestAnimationFrame(layoutPersistentPlaylist)
     }
     // Render the private next Scripture with FreeShow's actual slide compositor.
     // No calls to setOutput, VideoPlayer or remote output windows occur here.
@@ -2867,7 +2908,7 @@
             if(id==="biblia"||id==="multimedia"||id==="himnario")
                 button.onclick=()=>showModule(id)
             else if(id==="listas")
-                button.onclick=()=>{playlistOpen=true}
+                button.onclick=focusPersistentPlaylist
             else {button.disabled=true;button.title="Módulo pendiente de integración en JA Gemini"}
             menu.append(button)
         }
@@ -3050,6 +3091,9 @@
             selectedMediaPaths = Array.isArray(storedFiles) ? storedFiles.filter((p):p is string => typeof p==="string" && !!geminiFileType(p)).slice(0,5000) : []
         } catch {}
         setupNavigation()
+        requestAnimationFrame(layoutPersistentPlaylist)
+        window.addEventListener("resize",layoutPersistentPlaylist)
+        cleanup.push(()=>window.removeEventListener("resize",layoutPersistentPlaylist))
         void refreshDisplaySafety()
         collectMockText()
         removeInertGeminiControls()
@@ -3223,6 +3267,8 @@
         rebuildOutputs()
         return () => {
             if (timer) clearTimeout(timer)
+            playlistDockObserver?.disconnect()
+            if(playlistModuleArea)playlistModuleArea.style.paddingRight=playlistModuleAreaPadding
             if(playlistMonitor)clearInterval(playlistMonitor)
             if(screenPoll)clearInterval(screenPoll)
             stopJAPlaylist()
@@ -3287,8 +3333,8 @@
             on:play={event=>{void playBackgroundAudioAnywhere(event.detail.path)}}
             on:stop={stopBackgroundAudioAnywhere}/>
     {/if}
-    {#if playlistOpen}
-        <JaGeminiPlaylistPanel
+    {#if playlistDockReady}
+        <JaGeminiPlaylistPanel docked={true} dockStyle={playlistDockStyle}
             playlists={$jaPlaylists}
             selectedId={selectedPlaylistId}
             runningPlaylistId={playlistCurrentId}

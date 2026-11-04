@@ -4,6 +4,8 @@
     import JaGeminiPlaylistThumbnail from "./JaGeminiPlaylistThumbnail.svelte"
     export type LibraryItem = {path:string;name:string;source:"multimedia"|"himnario";kind:"video"|"audio"}
     export let playlists:JAPlaylist[]=[]
+    export let docked=false
+    export let dockStyle=""
     export let libraryFiles:LibraryItem[]=[]
     export let selectedId=""
     export let runningPlaylistId=""
@@ -65,6 +67,7 @@
     }
     function onQueueDrop(event:DragEvent,to:number){
         event.preventDefault()
+        event.stopPropagation()
         if(!playlist)return
         const code=event.dataTransfer?.getData("text/plain")||""
         const file=libraryFiles.find(f=>fileKey(f)===code)
@@ -75,17 +78,19 @@
     }
 </script>
 
-<section class="ja-list-dock" role="dialog" aria-label="Centro de listas y reproducción" aria-modal="false">
+<section class="ja-list-dock" class:docked role={docked?"region":"dialog"} aria-label="Centro de listas y reproducción" aria-modal={docked?undefined:"false"} style={docked?dockStyle:undefined}>
     <header class="dock-top">
         <div>
             <strong>♫ Listas de reproducción</strong>
-            <small>Biblioteca local, Himnario y YouTube · controles reales de FreeShow</small>
+            <small>{docked?"Arrastra desde el módulo actual o usa el botón +":"Biblioteca local, Himnario y YouTube · controles reales de FreeShow"}</small>
         </div>
-        <button type="button" aria-label="Cerrar centro de listas" title="Cerrar" on:click={()=>action("close")}>✕</button>
+        {#if !docked}
+            <button type="button" aria-label="Cerrar centro de listas" title="Cerrar" on:click={()=>action("close")}>✕</button>
+        {/if}
     </header>
     <div class="dock-body">
         <aside class="dock-saved">
-            <strong>Mis listas</strong>
+            <strong>{docked?"Mis listas · elegir o crear":"Mis listas"}</strong>
             <form on:submit|preventDefault={()=>{if(name.trim()){action("create",{name});name=""}}}>
                 <input aria-label="Nombre de la nueva lista" placeholder="Nueva lista…" maxlength="80" bind:value={name}/>
                 <button type="submit" disabled={!name.trim()||playlists.length>=40}>+ Crear</button>
@@ -101,6 +106,7 @@
             </div>
             <small>Guardadas localmente. Tus archivos originales no se modifican.</small>
         </aside>
+        {#if !docked}
         <section class="dock-library" aria-label="Biblioteca para agregar contenido">
             <div class="dock-section-head"><strong>Biblioteca</strong><small>{matches.length} resultados</small></div>
             <div class="dock-view-choice" role="group" aria-label="Vista de la biblioteca">
@@ -136,6 +142,7 @@
                 <button type="button" disabled={!playlist||chosen.size===0} on:click={addChecked}>+ Añadir seleccionados</button>
             </footer>
         </section>
+        {/if}
         <main class="dock-queue">
             {#if playlist}
                 <div class="dock-section-head queue-head">
@@ -181,7 +188,7 @@
                         {/each}
                     </div>
                 </div>
-                <div class="dock-queue-list" role="list" on:dragover|preventDefault>
+                <div class="dock-queue-list" role="list" on:dragover|preventDefault on:drop={dropAtEnd}>
                     {#each playlist.entries as entry,index (entry.id)}
                         <article role="listitem" class:playing={running&&runningPlaylistId===playlist.id&&runningIndex===index}
                             draggable={!running} on:dragstart={()=>draggedIndex=index}
@@ -306,4 +313,34 @@
       .dock-quick-line{grid-template-columns:1fr}
       .dock-queue-list article{flex-wrap:wrap}
     }
+
+    .ja-list-dock.docked{inset:auto;z-index:35;max-height:none;min-height:0;box-shadow:none;border-radius:9px;font-size:11px}
+    .docked .dock-top{padding:7px 9px;gap:5px}
+    .docked .dock-top strong{font-size:12px}
+    .docked .dock-top small{font-size:9px}
+    .docked .dock-body{display:flex;flex-direction:column;min-height:0}
+    .docked .dock-saved{flex:0 0 auto;min-height:0;max-height:118px;padding:6px 8px;gap:3px;border-right:0;border-bottom:1px solid #31476c}
+    .docked .dock-saved form{display:flex;flex-direction:row;gap:5px}
+    .docked .dock-saved form input{flex:1;min-width:0;padding:5px}
+    .docked .dock-saved form button{flex:0 0 auto;padding:4px 6px}
+    .docked .dock-saved .saved-scroll{display:flex;flex-direction:row;overflow-x:auto;overflow-y:hidden;flex:0 0 auto;max-height:35px;min-height:26px}
+    .docked .saved-scroll button{flex:0 0 auto;max-width:170px;min-width:100px;padding:3px 6px}
+    .docked .saved-scroll small{display:none}
+    .docked .dock-saved>small{display:none}
+    .docked .dock-queue{flex:1;overflow:hidden;padding:7px 8px!important;gap:5px!important}
+    .docked .dock-section-head strong{font-size:12px}
+    .docked .dock-quick-line{grid-template-columns:1fr;gap:4px}
+    .docked .dock-playlist-targets{gap:4px;padding:5px}
+    .docked .dock-playlist-targets label{font-size:9px}
+    .docked .dock-options{gap:4px}
+    .docked .play-modes{gap:3px}
+    .docked .play-modes button{padding:3px 4px}
+    .docked .play-modes button small{font-size:9px}
+    .docked .dock-queue-list{overflow:auto;min-height:50px;flex:1}
+    .docked .dock-queue-list article{padding:5px;gap:4px}
+    .docked .queue-title strong{font-size:10px}
+    .docked .queue-actions button{padding:3px 4px}
+    .docked .dock-transport{padding-top:5px}
+    .docked .transport-actions button{padding:4px 5px;font-size:10px}
+    @media(max-width:1100px){.ja-list-dock.docked{inset:auto;min-height:0}.docked .dock-queue-list article{flex-wrap:wrap}}
 </style>
