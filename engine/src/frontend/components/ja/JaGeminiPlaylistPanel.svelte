@@ -19,6 +19,7 @@
     export let outputChoices:Array<{id:string;name:string;primary:boolean}>=[]
     export let selectedTargets:string[]=[]
     let gridView=true
+    let showDockYoutube=false
     const dispatch=createEventDispatcher()
     let name=""
     let youtubeUrl=""
@@ -168,11 +169,17 @@
                 </div>
                 <div class="dock-quick-line">
                     <button type="button" disabled={!currentFile||playlist.entries.length>=200}
-                        on:click={()=>action("addFile",{id:playlist.id})}>+ Añadir archivo preparado {currentFile?"("+currentFile.path.split(/[\/\\]/).pop()+")":""}</button>
-                    <form on:submit|preventDefault={addYoutube}>
-                        <input aria-label="Pegar URL de YouTube" placeholder="Pegar URL de YouTube" bind:value={youtubeUrl}/>
-                        <button type="submit" disabled={!youtubeUrl.trim()||playlist.entries.length>=200}>+ YouTube</button>
-                    </form>
+                        on:click={()=>action("addFile",{id:playlist.id})} title="Añadir a la lista el archivo seleccionado en Vista previa">+ Añadir preparado {docked?"":currentFile?"("+currentFile.path.split(/[\/\\]/).pop()+")":""}</button>
+                    {#if docked}
+                        <button type="button" class="dock-youtube-toggle" aria-expanded={showDockYoutube}
+                            on:click={()=>showDockYoutube=!showDockYoutube}>+ Enlace YouTube</button>
+                    {/if}
+                    {#if !docked || showDockYoutube}
+                        <form on:submit|preventDefault={()=>{addYoutube();if(docked)showDockYoutube=false}}>
+                            <input aria-label="Pegar URL de YouTube" placeholder="Pegar URL de YouTube" bind:value={youtubeUrl}/>
+                            <button type="submit" disabled={!youtubeUrl.trim()||playlist.entries.length>=200}>+ YouTube</button>
+                        </form>
+                    {/if}
                 </div>
                 <div class="dock-options">
                     <label><input type="checkbox" checked={playlist.autoNext}
@@ -319,7 +326,7 @@
     .docked .dock-top strong{font-size:12px}
     .docked .dock-top small{font-size:9px}
     .docked .dock-body{display:flex;flex-direction:column;min-height:0}
-    .docked .dock-saved{flex:0 0 auto;min-height:0;max-height:118px;padding:6px 8px;gap:3px;border-right:0;border-bottom:1px solid #31476c}
+    .docked .dock-saved{flex:0 0 auto;min-height:0;max-height:92px;padding:5px 8px;gap:3px;border-right:0;border-bottom:1px solid #31476c}
     .docked .dock-saved form{display:flex;flex-direction:row;gap:5px}
     .docked .dock-saved form input{flex:1;min-width:0;padding:5px}
     .docked .dock-saved form button{flex:0 0 auto;padding:4px 6px}
@@ -329,13 +336,15 @@
     .docked .dock-saved>small{display:none}
     .docked .dock-queue{flex:1;overflow:hidden;padding:7px 8px!important;gap:5px!important}
     .docked .dock-section-head strong{font-size:12px}
-    .docked .dock-quick-line{grid-template-columns:1fr;gap:4px}
+    .docked .dock-quick-line{display:flex;flex-wrap:wrap;grid-template-columns:none;gap:4px}
+    .docked .dock-quick-line>button{flex:1;min-width:120px}
+    .docked .dock-quick-line form{flex:1 0 100%}
     .docked .dock-playlist-targets{gap:4px;padding:5px}
     .docked .dock-playlist-targets label{font-size:9px}
     .docked .dock-options{gap:4px}
     .docked .play-modes{gap:3px}
     .docked .play-modes button{padding:3px 4px}
-    .docked .play-modes button small{font-size:9px}
+    .docked .play-modes button small{font-size:9px;display:none}
     .docked .dock-queue-list{overflow:auto;min-height:50px;flex:1}
     .docked .dock-queue-list article{padding:5px;gap:4px}
     .docked .queue-title strong{font-size:10px}

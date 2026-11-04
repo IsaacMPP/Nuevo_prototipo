@@ -297,3 +297,9 @@ html, body, #app { height: 100%; min-height: 0; overflow: hidden; }
 .ja-gemini-host .ja-video-loop-button[aria-pressed="true"]{background:#236b95;color:#fff;border-color:#4cd1fd}
 .ja-gemini-host .ja-video-loop-button:disabled{opacity:.4;cursor:not-allowed}
 .ja-gemini-host .ja-loop-badge[hidden]{display:none}
+
+/* The permanent playlist reserves part of the existing lower module pane.
+   The upper Preview / Program screens are NOT modified. */
+.ja-gemini-host #multimediaCardsGrid,.ja-gemini-host #hymnModuleGrid{
+    grid-template-columns:repeat(auto-fill,minmax(155px,1fr))!important;
+}

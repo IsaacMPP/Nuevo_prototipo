@@ -972,3 +972,12 @@ test("P12: audio directo desde tarjetas y promesa de reproducción nativa compro
  assert.ok(audio.includes("if(session.audio.paused)throw Error"),"Evitar falsa reproducción")
  assert.ok(s.includes('class="ja-audio-visible-error" role="alert"'),"Errores de audio visibles")
 });
+
+test("P13: playlist fija tiene controles compactos y miniaturas en columnas adaptables",()=>{
+ const panel=read("engine/src/frontend/components/ja/JaGeminiPlaylistPanel.svelte")
+ const css=read("engine/public/ja-gemini-layout.css")
+ assert.ok(panel.includes("let showDockYoutube=false"),"YouTube accesible sin ocupar espacio permanente")
+ assert.ok(panel.includes("class=\"dock-youtube-toggle\""),"Botón desplegable YouTube en el dock")
+ assert.ok(panel.includes("max-height:92px"),"Mis listas compactas, cola siempre visible")
+ assert.ok(css.includes("repeat(auto-fill,minmax(155px,1fr))"),"Reajustar cuadrícula al estrechar biblioteca")
+});
