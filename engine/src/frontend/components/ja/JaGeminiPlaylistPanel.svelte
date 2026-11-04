@@ -238,6 +238,9 @@
                     <div class="transport-actions">
                         <button type="button" disabled={!playlist.entries.length||busy} class="primary"
                             on:click={()=>action("play",{id:playlist.id,index:0})}>▶ Reproducir</button>
+                        <button type="button" disabled={!running||busy || !selectedTargets.length} class="primary"
+                            title="Publicar el video preparado en Vista previa únicamente en las pantallas seleccionadas"
+                            on:click={()=>action("send")}>▶ Enviar a pantallas</button>
                         <button type="button" disabled={!running||busy} title="Anterior" on:click={()=>action("previous")}>⏮</button>
                         <button type="button" disabled={!running||busy} title="Pausar o continuar" on:click={()=>action("togglePause")}>
                             {paused?"▶ Continuar":"Ⅱ Pausar"}
@@ -246,7 +249,7 @@
                         <button type="button" disabled={!running} on:click={()=>action("stop")}>■ Detener</button>
                     </div>
                     <small>{running&&runningPlaylistId===playlist.id
-                        ? "En reproducción: "+(playlist.entries[runningIndex]?.title||"") : "Lista preparada"}</small>
+                        ? "Vista previa / reproducción: "+(playlist.entries[runningIndex]?.title||"") : "Lista preparada"}</small>
                 </footer>
             {:else}
                 <div class="empty">Selecciona o crea una lista para añadir tus cantos.</div>
