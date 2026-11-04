@@ -571,32 +571,32 @@ test("Himnario: coincidencias parciales por número y palabras sin alterar tarje
  assert.ok(!fn.includes("setOutput(") && !fn.includes("sendToJAOutputs("),"Buscar no puede proyectar")
 });
 
-test("Multimedia P3: videos, imágenes y audio se gestionan por rutas reales aisladas",()=>{
+test("Multimedia P3: motor Solo audio independiente y biblioteca real",()=>{
  const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const player=read("engine/src/frontend/components/ja/JaSoloAudioPlayer.ts")
+ const controls=read("engine/src/frontend/components/ja/JaGeminiAudioControls.svelte")
  const renderer=read("engine/src/frontend/components/output/layers/Media.svelte")
  const background=read("engine/src/frontend/components/output/layers/BackgroundMedia.svelte")
- const audio=read("engine/src/frontend/components/ja/JaGeminiAudioControls.svelte")
  const css=read("engine/public/ja-gemini-layout.css")
  const extensions=read("engine/src/frontend/values/extensions.ts")
- const onlyAudio=shell.split("async function publishPreparedAudio(path:string,targets:string[])")[1].split("async function joinAlreadyPlayingPrimary(")[0]
- assert.ok(shell.includes('import { AudioPlayer } from "../../audio/audioPlayer"'),"Debe usar motor de audio FreeShow")
- assert.ok(onlyAudio.includes("AudioPlayer.start(path,{name:fileName(path)},{playMultiple:true,startPaused:true})"),"No borrar sesiones ajenas al iniciar audio")
- assert.ok(onlyAudio.includes("jaAudioPath")&&onlyAudio.includes("AudioPlayer.stop(previous)"),"Solo reemplazar pista de JA")
- assert.ok(!onlyAudio.includes('!targets.includes(primary)'),"Audio local no debe bloquearse por falta de monitor; la ruta de Windows es única")
- assert.ok(onlyAudio.includes('targetSnapshot!==markedGroupTargets().join("|")'),"Prevenir reproducción tras cambios de destinos")
- assert.ok(onlyAudio.includes("AudioPlayer.getPlaying(path)"),"Confirmar sesión nativa antes de indicar éxito")
- assert.ok(!onlyAudio.includes("setOutput(")&&!onlyAudio.includes("sendToJAOutputs("),"Audio no debe borrar imágenes ni enviar un fondo no soportado")
- assert.ok(shell.includes('if(kind==="audio"){void publishPreparedAudio(mediaPath,targets);return}'),"Envío grupal de audio separado del video")
- assert.ok(shell.includes('if(kind==="audio"){void publishPreparedAudio(mediaPath,[destinationId]);return}'),"Envío individual de audio separado del video")
- assert.ok(background.includes('if (type === "video" || type === "image") type = "media"'),"Motor solo muestra imágenes y videos")
+ const onlyAudio=shell.split("async function publishPreparedAudio(path:string,_targets:string[])")[1].split("function jaOnlyAudioSend(")[0]
+ assert.ok(shell.includes('import { JaSoloAudioPlayer } from "./JaSoloAudioPlayer"'),"Debe usar el motor Solo audio independiente")
+ assert.ok(onlyAudio.includes("JaSoloAudioPlayer.start(path)"),"Los MP4/MP3 locales no pasan por FreeShow AudioPlayer")
+ assert.ok(onlyAudio.includes("jaAudioPath")&&onlyAudio.includes("restoreSoloProgramSound()"),"Sustituir únicamente la sesión JA y restaurar sonido original")
+ assert.ok(!onlyAudio.includes('!targets.includes(primary)'),"La música no requiere monitor")
+ assert.ok(player.includes("new Audio()")&&player.includes("await audio.play()"),"Reproductor HTMLAudioElement directo, con promesa comprobada")
+ assert.ok(!player.includes("AudioPlayer")&&!player.includes("AudioAnalyser")&&!player.includes("VideoPlayer"),"Bus de audio no debe alterar motor de proyección")
+ assert.ok(!onlyAudio.includes("setOutput(")&&!onlyAudio.includes("sendToJAOutputs("),"Audio no debe borrar imágenes ni emitir fondos")
+ assert.ok(shell.includes('if(kind==="audio"){void publishPreparedAudio(mediaPath,targets);return}'),"Audio en envío grupal")
+ assert.ok(shell.includes('if(kind==="audio"){void publishPreparedAudio(mediaPath,[destinationId]);return}'),"Audio en envío individual")
+ assert.ok(background.includes('if (type === "video" || type === "image") type = "media"'),"Motor visual intacto")
  assert.ok(renderer.includes('{#if type === "video"}')&&renderer.includes('{:else if type === "image"}'),"Conservar renderizador nativo")
  for(const ext of ["mp4","webm","jpg","png","mp3","wav","ogg","flac","m4a"])assert.ok(extensions.includes('"'+ext+'"'),"Extensión no indexada: "+ext)
- assert.ok(shell.includes('poster.className="ja-native-audio-preview"'),"Vista previa debe mostrar audio de forma comprensible")
- assert.ok(shell.includes('img.onerror=()=>{if(img.isConnected)'),"Imagen inválida no se debe reportar como éxito")
- assert.ok(audio.includes("AudioPlayer.pause(path)")&&audio.includes("AudioPlayer.play(path)")&&audio.includes("AudioPlayer.stop(path)"),"Controles de audio reales")
- assert.ok(audio.includes("AudioPlayer.setTime(path"),"Seek de audio real")
- assert.ok(audio.includes("AudioAnalyser.setSourceVolume(path"),"Control de ganancia del audio nativo")
- assert.ok(css.includes(".ja-native-audio-panel")&&css.includes(".ja-native-audio-preview"),"Estilos de audio sin cambiar tarjetas")
+ assert.ok(shell.includes('poster.className="ja-native-audio-preview"'),"Vista previa describe el audio")
+ assert.ok(shell.includes('img.onerror=()=>{if(img.isConnected)'),"Imagen inválida se reporta")
+ assert.ok(controls.includes("JaSoloAudioPlayer.toggle()")&&controls.includes("JaSoloAudioPlayer.stop()"),"Controles de sesión propia")
+ assert.ok(controls.includes("JaSoloAudioPlayer.seek(")&&controls.includes("JaSoloAudioPlayer.setVolume("),"Seek y volumen directos")
+ assert.ok(css.includes(".ja-native-audio-panel")&&css.includes(".ja-native-audio-preview"),"Estilos de audio intactos")
  assert.ok(shell.includes('item.className="ja-media-card p-2 min-w-0 rounded-lg bg-[#0a1938] border border-[#24446f] text-left hover:border-cyan-400"'),"Conservar miniaturas aprobadas")
 });
 
@@ -683,19 +683,21 @@ test("P5: playlists tipadas para audio, video, himnos y YouTube con persistencia
  assert.ok(s.includes('playlistBtn.textContent="☰ Listas"'),"Acceso sin alterar tarjetas")
  assert.ok(s.includes("<JaGeminiPlaylistPanel"),"Panel montado en Gemini")
 });
-test("P5: Solo audio de MP4 e himnos nunca borra fondo o Biblia",()=>{
+test("P5: Solo audio acepta videos e himnos sin modificar Programa",()=>{
  const s=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
  const audio=s.split("async function playJAOnlySound(path:string,targets:string[],valid:()=>boolean)")[1].split("function jaOnlyAudioSend(")[0]
- assert.ok(audio.includes('kind!=="audio" && kind!=="video"'),"Aceptar pista de vídeo local")
- assert.ok(audio.includes('AudioPlayer.start(path,{name:fileName(path)},{playMultiple:true,startPaused:true})'),"Motor nativo de sonido")
- assert.ok(audio.includes('targets.some(id=>!available.includes(id))'),"Validar destinos sin impedir reproducir Solo audio localmente")
- assert.ok(audio.includes("liveVideo"),"Prevenir duplicar sonido de un video activo")
- assert.ok(audio.includes("jaAudioPath!==path"),"No interrumpir otro reproductor")
- assert.ok(audio.includes("showJAOwnedAudio(path)"),"Controles de audio reales")
- assert.ok(!audio.includes("setOutput(")&&!audio.includes("sendToJAOutputs(")&&!audio.includes("clearSlide(")&&!audio.includes("clearBackground("),"Solo audio no altera imagen o texto")
- assert.ok(s.includes('onlyAudio.className="ja-target ja-only-audio-toggle'),"Botón único Solo audio disponible incluso sin pantallas")
+ const player=read("engine/src/frontend/components/ja/JaSoloAudioPlayer.ts")
+ assert.ok(audio.includes('type!=="audio"&&type!=="video"'),"Aceptar MP4 y archivos musicales")
+ assert.ok(audio.includes("JaSoloAudioPlayer.start(path)"),"Solo audio usa su motor independiente")
+ assert.ok(audio.includes('targets.some(id=>!chooseOutput().includes(id))'),"Validar solo destinos seleccionados")
+ assert.ok(audio.includes("liveVideo")&&audio.includes("restoreSoloProgramSound()"),"Evitar audio duplicado al reproducir el mismo video")
+ assert.ok(audio.includes("showJAOwnedAudio(path)"),"Controles reales visibles")
+ assert.ok(!audio.includes("setOutput(")&&!audio.includes("sendToJAOutputs(")&&!audio.includes("clearSlide(")&&!audio.includes("clearBackground("),"No cambiar Biblia, fondos ni pantallas")
+ assert.ok(player.includes("this.stop()")&&player.includes("this.generation"),"Nueva pista sustituye anterior sin bloqueo busy")
+ assert.ok(s.includes('onlyAudio.className="ja-target ja-only-audio-toggle'),"Botón Solo audio en módulos")
  assert.ok(s.includes("if(jaOnlyAudioSend(selected))return"),"Envío rápido respeta el modo")
 });
+
 test("P5: avanzar mixto usa el motor existente y YouTube visible",()=>{
  const s=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
  const native=read("engine/src/frontend/components/output/layers/BackgroundMedia.svelte")
@@ -712,7 +714,7 @@ test("P5: avanzar mixto usa el motor existente y YouTube visible",()=>{
  assert.ok(!run.includes('type:"youtube-audio"'),"No separar audio de YouTube")
  assert.ok(s.includes('playlistMonitor=setInterval(watchJAPlaylist,350)'),"Vigilar fin de sesión")
  assert.ok(s.includes('if(!manual && !list.autoNext)')&&s.includes('jaNextIndex(jaPlaybackMode(list.playMode,list.repeat)'),"Manual y modos repetición")
- assert.ok(s.includes('AudioPlayer.getPlaying(item.path)')&&s.includes('VideoPlayer.getPlaying(key,[target])')&&s.includes('playlistLocalVideoPath===item.path'),"Observar audio, video remoto y reproducción local")
+ assert.ok(s.includes('JaSoloAudioPlayer.path===item.path')&&s.includes('VideoPlayer.getPlaying(key,[target])')&&s.includes('playlistLocalVideoPath===item.path'),"Observar audio, video remoto y reproducción local")
 });
 
 test("P5: Play nuevo inicia en cero sin perjudicar recuperación de reloj ni atajos bíblicos",()=>{
@@ -972,8 +974,8 @@ test("P12: audio directo desde tarjetas y promesa de reproducción nativa compro
  assert.ok(s.includes("audioOnlyLocal=!audioOnlyLocal"),"Interruptor superior en lugar de menú")
  assert.ok(media.includes("ja-card-solo-audio"),"Acceso por miniatura sin perder el título")
  assert.ok(media.includes("void playBackgroundAudioAnywhere(file.path)"),"Reproduce desde tarjeta")
- assert.ok(audio.includes("await session.audio.play()"),"Confirmar promesa nativa")
- assert.ok(audio.includes("if(session.audio.paused)throw Error"),"Evitar falsa reproducción")
+ assert.ok(audio.includes("await JaSoloAudioPlayer.start(path)"),"Confirmar sesión del reproductor independiente")
+ assert.ok(read("engine/src/frontend/components/ja/JaSoloAudioPlayer.ts").includes("await audio.play()"),"Comprobar promesa nativa antes del éxito")
  assert.ok(s.includes('class="ja-audio-visible-error" role="alert"'),"Errores de audio visibles")
 });
 
@@ -998,7 +1000,7 @@ test("P14: despertar audio en gesto de usuario y localizar sesión resuelta",()=
  const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
  const c=read("engine/src/frontend/components/ja/JaGeminiAudioControls.svelte")
  const audio=shell.split("async function playJAOnlySound(")[1].split("function jaOnlyAudioSend(")[0]
- assert.ok(audio.includes("initialAudioContext.resume()"),"Intentar reactivar AudioContext desde la interacción")
- assert.ok(c.includes("AudioPlayer.getPlaying(path)"),"Controles siguen la sesión aunque el archivo cambie de ruta")
- assert.ok(!c.includes("get(playingAudio)[path]"),"No destruir controles por buscar una clave de ruta antigua")
+ assert.ok(audio.includes("JaSoloAudioPlayer.start(path)"),"El nuevo player no necesita despertar AudioContext global")
+ assert.ok(c.includes("JaSoloAudioPlayer.audio"),"Controles usan la sesión independiente")
+ assert.ok(!c.includes("get(playingAudio)[path]"),"No depender de sesiones FreeShow por clave antigua")
 });
