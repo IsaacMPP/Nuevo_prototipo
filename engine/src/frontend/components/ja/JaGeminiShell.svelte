@@ -142,6 +142,12 @@
     let jaAudioControls: JaGeminiAudioControls | null = null
     let playlistOpen=false
     let quickAudioOpen=false
+    // Select playlists independently from the Quick Play target group.
+    let playlistTargetIds=new Set<string>()
+    let playlistOutputChoices:Array<{id:string;name:string;primary:boolean}>=[]
+    let playlistSelectedTargets:string[]=[]
+    let playlistTargetsChosenByOperator=false
+    let playlistLocalVideoPath=""
     let quickAudioToken=0
     let selectedPlaylistId=""
     let playlistCurrentId=""
@@ -366,6 +372,18 @@
         const current=chooseOutput()
         return current.filter(id=>syncedTargetIds.has(id))
     }
+    function markedPlaylistTargets():string[]{
+        return chooseOutput().filter(id=>playlistTargetIds.has(id))
+    }
+    function updatePlaylistTargets(){
+        const available=chooseOutput()
+        for(const id of [...playlistTargetIds])if(!available.includes(id))playlistTargetIds.delete(id)
+        const primary=localStorage.getItem("ja-main-projector")||""
+        if(available.length&&!playlistTargetIds.size&&!playlistTargetsChosenByOperator)
+            playlistTargetIds.add(available.includes(primary)?primary:available[0])
+        playlistOutputChoices=available.map(id=>({id,name:get(outputs)[id]?.name||"Salida "+id,primary:id===primary}))
+        playlistSelectedTargets=[...playlistTargetIds]
+    }
     function refreshGroupChoices() {
         if(!host)return
         const destinations=markedGroupTargets()
@@ -436,11 +454,7 @@
     async function publishPreparedAudio(path:string,targets:string[]){
         if(jaAudioBusy)return notice("El audio anterior todavía está preparándose.")
         if(get(outLocked))return notice("Las salidas están bloqueadas.")
-        const available=chooseOutput()
-        const primary=localStorage.getItem("ja-main-projector")||(available.length===1?available[0]:"")
-        if(!primary || !available.includes(primary) || !targets.includes(primary) ||
-            !targets.every(id=>available.includes(id)))
-            return notice("Para reproducir audio, incluye Primario entre las pantallas marcadas y verifica que esté activo.")
+        // A native audio session does not require an external monitor.
         if(getMediaType(getExtension(path))!=="audio")
             return notice("Selecciona un archivo de audio válido.")
         if(get(playingAudio)[path] && jaAudioPath!==path)
@@ -458,8 +472,7 @@
                 return
             }
             if(token!==jaAudioGeneration || prepared!==path || get(outLocked) ||
-                targetSnapshot!==markedGroupTargets().join("|") ||
-                !chooseOutput().includes(primary)){
+                targetSnapshot!==markedGroupTargets().join("|")){
                 if(!active)AudioPlayer.stop(path)
                 notice("Cambió la preparación durante la carga del audio; no se inició.")
                 return
@@ -482,9 +495,8 @@
         const available=chooseOutput()
         const primary=localStorage.getItem("ja-main-projector")||(available.length===1?available[0]:"")
         const kind=getMediaType(getExtension(path))
-        if((kind!=="audio" && kind!=="video") || !primary ||
-            !targets.includes(primary) || targets.some(id=>!available.includes(id))){
-            notice("Solo audio requiere un archivo local y Primario entre las salidas marcadas.")
+        if((kind!=="audio" && kind!=="video") || targets.some(id=>!available.includes(id))){
+            notice("Solo audio requiere un archivo válido y salidas activas si se seleccionaron.")
             return false
         }
         if(get(playingAudio)[path] && jaAudioPath!==path){
@@ -645,6 +657,11 @@
         playlistShuffleOrder=[]
         playlistShufflePosition=0
         playlistPaused=false
+        if(playlistLocalVideoPath && previewMedia && prepared===playlistLocalVideoPath){
+            previewMedia.pause()
+            previewMedia.muted=true
+        }
+        playlistLocalVideoPath=""
         if(stopSound && jaAudioPath && AudioPlayer.audioExists(jaAudioPath)){
             AudioPlayer.stop(jaAudioPath)
             jaAudioPath=""
@@ -659,11 +676,11 @@
         const list=get(jaPlaylists).find(p=>p.id===id)
         const item=list?.entries[index]
         if(!item || playlistBusy)return
-        const targets=markedGroupTargets()
+        const targets=markedPlaylistTargets()
         const available=chooseOutput()
         const primary=localStorage.getItem("ja-main-projector")||(available.length===1?available[0]:"")
-        if(get(outLocked)||!primary||!targets.includes(primary)||targets.some(t=>!available.includes(t))){
-            notice("Marca Primario y las salidas activas donde quieras reproducir la lista.")
+        if(get(outLocked)||targets.some(t=>!available.includes(t))){
+            notice("Las salidas seleccionadas están bloqueadas o ya no están disponibles.")
             return
         }
         if(!fromQueue || playlistCurrentId!==id){
@@ -682,6 +699,7 @@
         playlistNearEnd=false
         playlistLastPosition=0
         playlistPaused=false
+        playlistLocalVideoPath=""
         selectedPlaylistId=id
         // Every new entry owns only the audio started by this JA playlist.
         if(jaAudioPath && jaAudioPath!==item.path && AudioPlayer.audioExists(jaAudioPath)){
@@ -709,8 +727,9 @@
                 // Native FreeShow Player.svelte -> YouTube.svelte; keep iframe
                 // visible, never extract or hide YouTube audio.
                 playerVideos.update(data=>({...data,[youtubeId]:{id:youtubeId,type:"youtube",name:item.title}}))
+                if(!targets.length)throw Error("YouTube requiere reproducción visible en una salida externa.")
                 const received=sendToJAOutputs("background",{
-                    id:youtubeId,type:"player",loop:false,muted:false,startAt:0
+                    id:youtubeId,type:"player",loop:false,muted:!targets.includes(primary),startAt:0
                 },targets,{replaceScripture:true,requireAll:true})
                 if(received.length!==targets.length)throw Error("No se pudo asignar YouTube a todas las pantallas.")
                 clearBlackBeforePublishing(targets)
@@ -730,12 +749,24 @@
                         await VideoPlayer.stop(session.path,outputId)
                 }
                 if(token!==playlistToken)return
-                const received=sendToJAOutputs("background",{
-                    path:item.path,type:"video",loop:item.loopVideo===true,muted:false,startAt:0
-                },targets,{replaceScripture:true,requireAll:true})
-                if(received.length!==targets.length)throw Error("FreeShow no confirmó las salidas del video.")
-                clearBlackBeforePublishing(targets)
-                rebuildOutputs()
+                if(!targets.length){
+                    // Local playback is the native media element in the operator Preview.
+                    playlistLocalVideoPath=item.path
+                    const local=previewMedia
+                    if(!local)throw Error("No existe un reproductor local para este video.")
+                    local.muted=false
+                    try{local.currentTime=0}catch{}
+                    await local.play()
+                    if(token!==playlistToken){local.pause();local.muted=true;return}
+                    notice("Reproducción local activa, sin pantalla externa.")
+                }else{
+                    const received=sendToJAOutputs("background",{
+                        path:item.path,type:"video",loop:item.loopVideo===true,muted:!targets.includes(primary),startAt:0
+                    },targets,{replaceScripture:true,requireAll:true})
+                    if(received.length!==targets.length)throw Error("FreeShow no confirmó las salidas del video.")
+                    clearBlackBeforePublishing(targets)
+                    rebuildOutputs()
+                }
             }
             if(token!==playlistToken)return
             playlistWaiting=false
@@ -772,11 +803,14 @@
         if(item.kind==="audio"||item.audioOnly){
             const session=AudioPlayer.getPlaying(item.path)
             if(session?.audio){audio=session.audio;found=true}
+        }else if(playlistLocalVideoPath===item.path && previewMedia){
+            audio=previewMedia;found=true
         }else{
             const primary=localStorage.getItem("ja-main-projector")||""
+            const target=markedPlaylistTargets().includes(primary)?primary:markedPlaylistTargets()[0]||""
             const key=item.kind==="youtube"?jaYoutubeId(item.path):item.path
-            const session=VideoPlayer.getPlaying(key,[primary])
-            const onAir=get(outputs)[primary]?.out?.background
+            const session=VideoPlayer.getPlaying(key,[target])
+            const onAir=get(outputs)[target]?.out?.background
             if(session && (onAir?.path===key || onAir?.id===key)){
                 audio=session.audio;found=true
             }
@@ -821,6 +855,13 @@
         entryId?:string;index?:number;offset?:number;value?:boolean;playMode?:string;
         files?:Array<{path:string;source:"multimedia"|"himnario"}>;from?:number;to?:number}){
         if(event.type==="close"){playlistOpen=false;return}
+        if(event.type==="targets" && event.id){
+            playlistTargetsChosenByOperator=true
+            if(event.value)playlistTargetIds.add(event.id)
+            else playlistTargetIds.delete(event.id)
+            updatePlaylistTargets()
+            return
+        }
         if(event.type==="stop"){stopJAPlaylist();return}
         if(event.type==="next"){advanceJAPlaylist(true);return}
         if(event.type==="previous"){
@@ -844,11 +885,17 @@
                 if(AudioPlayer.isPaused(entry.path)){AudioPlayer.play(entry.path);playlistPaused=false}
                 else {AudioPlayer.pause(entry.path);playlistPaused=true}
             }else{
+                if(playlistLocalVideoPath===entry.path && previewMedia){
+                    if(previewMedia.paused){void previewMedia.play().catch(()=>notice("No se pudo continuar el video local."));playlistPaused=false}
+                    else {previewMedia.pause();playlistPaused=true}
+                    return
+                }
                 const path=entry.kind==="youtube"?jaYoutubeId(entry.path):entry.path
-                const video=VideoPlayer.getPlaying(path,[main])
+                const target=markedPlaylistTargets().includes(main)?main:markedPlaylistTargets()[0]||""
+                const video=VideoPlayer.getPlaying(path,[target])
                 if(!video)return notice("Este reproductor no ofrece pausa remota. Usa sus controles visibles.")
-                if(video.audio.paused){VideoPlayer.play(path,main);playlistPaused=false}
-                else {VideoPlayer.pause(path,main);playlistPaused=true}
+                if(video.audio.paused){VideoPlayer.play(path,target);playlistPaused=false}
+                else {VideoPlayer.pause(path,target);playlistPaused=true}
             }
             return
         }
@@ -965,16 +1012,14 @@
     async function playBackgroundAudioAnywhere(path:string){
         const main=localStorage.getItem("ja-main-projector")||""
         if(get(outLocked))return notice("Las salidas están bloqueadas.")
-        if(!main || !chooseOutput().includes(main))
-            return notice("Configura Primario antes de reproducir música de fondo.")
-        if(get(playingVideos).some(s=>s.linkedOutputIds.includes(main) && !s.audio.muted && !s.audio.paused))
-            return notice("Existe un video con sonido en Primario; siléncialo antes de agregar música de fondo.")
+        if(get(playingVideos).some(s=>s.linkedOutputIds.includes(main) && !s.audio.muted && !s.audio.paused) ||
+            (previewMedia && !previewMedia.paused && !previewMedia.muted))
+            return notice("Ya hay un video con sonido; siléncialo antes de activar Solo audio.")
         if(!playlistLibraryFiles.some(f=>f.path===path&&(f.kind==="audio"||f.kind==="video")))
             return notice("La pista no está disponible en las carpetas reales vinculadas.")
         if(playlistRunning)stopJAPlaylist()
         const generation=++quickAudioToken
-        await playJAOnlySound(path,[main],()=>generation===quickAudioToken &&
-            !get(outLocked) && chooseOutput().includes(main))
+        await playJAOnlySound(path,[],()=>generation===quickAudioToken && !get(outLocked))
     }
     function stopBackgroundAudioAnywhere(){
         ++quickAudioToken
@@ -997,7 +1042,18 @@
     function sendToQuickTargets() {
         if(publishingGroup)return notice("Ya se está preparando un envío sincronizado.")
         const selected=markedGroupTargets()
-        if(!selected.length)return notice("Marca al menos una pantalla en Envío rápido.")
+        if(!selected.length){
+            if(mode==="biblia")return notice("No hay pantalla externa; el versículo sigue en Vista previa.")
+            if(!prepared)return notice("Prepara primero un archivo real.")
+            const kind=getMediaType(getExtension(prepared))
+            if(audioOnlyLocal || kind==="audio"){void playJAOnlySound(prepared,[],()=>!!prepared);return}
+            if(kind==="video" && previewMedia){
+                previewMedia.muted=false
+                void previewMedia.play().catch(()=>notice("No se pudo abrir el video local. Revisa su códec."))
+                return notice("Video local en Vista previa con audio; no hay pantalla externa.")
+            }
+            return notice("Archivo visible en Vista previa, sin pantalla externa.")
+        }
         if(jaOnlyAudioSend(selected))return
         if(selected.length>1){void sendPreparedToGroup();return}
         publishPreparedMedia()
@@ -1094,7 +1150,7 @@
     function publishPreparedMedia() {
         if(publishingGroup)return notice("Ya se está preparando un envío sincronizado.")
         const targets=markedGroupTargets()
-        if(!targets.length)return notice("Marca al menos una pantalla en Envío rápido.")
+        if(!targets.length)return sendToQuickTargets()
         if(targets.length>1){void sendPreparedToGroup();return}
         const destinationId=targets[0]
         if(mode==="biblia") {
@@ -1561,27 +1617,24 @@
                 send.className="ja-sync-send ja-target rounded-lg border px-2 py-1 text-xs"
                 send.onclick=sendToQuickTargets
                 targets.append(send)
-                const audioToggle=document.createElement("button")
-                audioToggle.type="button"
-                audioToggle.className="ja-target ja-only-audio-toggle rounded-lg border px-2 py-1 text-xs"
-                audioToggle.onclick=()=>{audioOnlyLocal=!audioOnlyLocal;refreshOnlyAudioButton()}
-                targets.append(audioToggle)
-                jaAudioOnlyButton=audioToggle
-                refreshOnlyAudioButton()
                 const state=document.createElement("span")
                 state.className="ja-sync-state"
                 state.setAttribute("role","status")
                 state.setAttribute("aria-live","polite")
                 targets.append(state)
-                const music=document.createElement("button")
-                music.type="button"
-                music.className="ja-target ja-global-music rounded-lg border px-2 py-1 text-xs"
-                music.textContent="♫ Música de fondo"
-                music.title="Buscar Solo audio desde Biblia, Himnario o Multimedia"
-                music.onclick=()=>{quickAudioOpen=!quickAudioOpen}
-                targets.append(music)
             }
         }
+        // Exactly one Solo audio control, including when no projector exists.
+        if(targets){
+            const onlyAudio=document.createElement("button")
+            onlyAudio.type="button"
+            onlyAudio.className="ja-target ja-only-audio-toggle rounded-lg border px-2 py-1 text-xs"
+            onlyAudio.textContent="♫ Solo audio"
+            onlyAudio.title="Escuchar videos y canciones sin cambiar la imagen proyectada"
+            onlyAudio.onclick=()=>{quickAudioOpen=!quickAudioOpen}
+            targets.append(onlyAudio)
+        }
+        updatePlaylistTargets()
         refreshGroupChoices()
         for (const id of available) {
             const output = outputMap[id]
@@ -2886,7 +2939,10 @@
     {@html geminiHtml}
     {#if quickAudioOpen}
         <JaGeminiQuickAudioPanel files={playlistLibraryFiles} currentPath={jaAudioPath}
-            busy={jaAudioBusy} on:close={()=>quickAudioOpen=false}
+            busy={jaAudioBusy} preparedVideo={prepared && getMediaType(getExtension(prepared))==="video" ? fileName(prepared) : ""}
+            preparedAudioOnly={audioOnlyLocal}
+            on:togglePrepared={event=>{audioOnlyLocal=event.detail.enabled;refreshOnlyAudioButton()}}
+            on:close={()=>quickAudioOpen=false}
             on:play={event=>{void playBackgroundAudioAnywhere(event.detail.path)}}
             on:stop={stopBackgroundAudioAnywhere}/>
     {/if}
@@ -2901,7 +2957,8 @@
             currentFile={playlistCurrentFile}
             libraryFiles={playlistLibraryFiles}
             paused={playlistPaused}
-            primaryLabel={get(outputs)[localStorage.getItem("ja-main-projector")||""]?.name||"Primario"}
+            primaryLabel={get(outputs)[localStorage.getItem("ja-main-projector")||""]?.name||"Audio del equipo"}
+            outputChoices={playlistOutputChoices} selectedTargets={playlistSelectedTargets}
             on:action={event=>{void playlistPanelAction(event.detail)}}/>
     {/if}
     {#if bibleEditorOpen && mode==="biblia"}

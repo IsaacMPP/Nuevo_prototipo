@@ -357,7 +357,7 @@ test("Envío rápido multiselección reemplaza el panel grande sin ocultar tarje
 test("Quick Play y Cortar envían al destino marcado; al marcar varias usan un reloj",()=>{
  const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
  const p=shell.split("function publishPreparedMedia()")[1].split("function toggleFollowProgram()")[0]
- assert.ok(p.includes("const targets=markedGroupTargets()"),"No usar el destino marcado")
+ assert.ok(p.includes("const targets=markedPlaylistTargets()"),"El destino de la playlist es independiente del Envío rápido")
  assert.ok(p.includes("if(!targets.length)"),"No emitir sin destinos")
  assert.ok(p.includes("if(targets.length>1){void sendPreparedToGroup();return}"),"Enviar grupo no está conectado a Quick Play")
  assert.ok(p.includes("const destinationId=targets[0]"),"Envío individual debe seguir funcionando")
@@ -770,9 +770,9 @@ test("P5: Solo audio global y controles de bucle por salida aislados",()=>{
  const css=read("engine/public/ja-gemini-layout.css")
  const audio=shell.split("async function playBackgroundAudioAnywhere(path:string)")[1].split("function stopBackgroundAudioAnywhere()")[0]
  const loop=shell.split("async function changeLoopForSelectedOutput()")[1].split("function syncProgram()")[0]
- assert.ok(shell.includes('music.textContent="♫ Música de fondo"'),"Acceso desde cualquier módulo")
+ assert.ok(shell.includes('onlyAudio.textContent="♫ Solo audio"'),"Una sola entrada de audio desde cualquier módulo")
  assert.ok(shell.includes("<JaGeminiQuickAudioPanel files={playlistLibraryFiles}"),"Buscar sin cambiar de módulo")
- assert.ok(audio.includes("playJAOnlySound(path,[main]"),"Reproductor nativo solo audio")
+ assert.ok(audio.includes("playJAOnlySound(path,[]"),"Solo audio desde la consola sin depender de pantallas")
  assert.ok(!audio.includes("setOutput(")&&!audio.includes("prepare("),"Biblia y Programa no cambian con música")
  assert.ok(quick.includes('on:click={()=>dispatch("play",{path:file.path})}'),"Añadir música directamente")
  assert.ok(shell.includes('addFileDirectToPlaylist(file.path,mode==="himnario"?"himnario":"multimedia")'),"Botón de agregar a lista")
@@ -823,4 +823,17 @@ test("P5: cambiar modos cerca de EOF no pierde el avance natural de pistas",()=>
  assert.ok(monitor.includes("if(nativeEnded && playlistSawProgress){"),"No avanzar por una sesión que nunca arrancó")
  assert.ok(monitor.includes("advanceJAPlaylist(false)"),"Usar el recorrido vigente al avanzar")
  assert.ok(monitor.includes('item.loopVideo===true'),"La animación en bucle sigue sin avanzar sola")
+});
+
+test("P6: audio y videos locales no requieren monitor externo; biblioteca con miniaturas",()=>{
+ const s=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const p=read("engine/src/frontend/components/ja/JaGeminiPlaylistPanel.svelte")
+ const thumb=read("engine/src/frontend/components/ja/JaGeminiPlaylistThumbnail.svelte")
+ assert.ok(s.includes("playlistLocalVideoPath=item.path"),"Debe haber ruta de reproducción local")
+ assert.ok(s.includes("await local.play()"),"El video empieza en Vista previa cuando no hay salida")
+ assert.ok(s.includes("const targets=markedPlaylistTargets()"),"Destinos propios de playlist")
+ assert.ok(s.includes("playJAOnlySound(path,[],()=>generation===quickAudioToken"),"Solo audio sin monitor")
+ assert.ok(p.includes('class:dock-grid={gridView}')&&p.includes('aria-label="Elegir pantallas de la lista"'),"Cuadrícula y destinos")
+ assert.ok(thumb.includes("queuedHymnThumbnail(path)"),"Miniaturas reales progresivas")
+ assert.ok(!s.includes('music.textContent="♫ Música de fondo"'),"No existe el botón duplicado")
 });

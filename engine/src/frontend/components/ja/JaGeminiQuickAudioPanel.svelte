@@ -3,19 +3,26 @@
  export let files:Array<{path:string;name:string;source:"multimedia"|"himnario";kind:"video"|"audio"}>=[]
  export let currentPath=""
  export let busy=false
+ export let preparedVideo=""
+ export let preparedAudioOnly=false
  const dispatch=createEventDispatcher()
  let search=""
  let shown=40
  const norm=(s:string)=>s.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase()
  $: results=files.filter(f=>norm(f.name).includes(norm(search.trim())))
 </script>
-<section class="ja-global-music-panel" role="dialog" aria-label="Reproductor de música de fondo">
+<section class="ja-global-music-panel" role="dialog" aria-label="Solo audio de JA">
  <header>
-  <div><strong>♫ Música de fondo</strong><small>Solo audio sin cambiar Biblia, imágenes o videos en Programa</small></div>
-  <button type="button" aria-label="Cerrar música" on:click={()=>dispatch("close")}>✕</button>
+  <div><strong>♫ Solo audio</strong><small>Escucha canciones y audio de videos sin cambiar lo que se proyecta</small></div>
+  <button type="button" aria-label="Cerrar Solo audio" on:click={()=>dispatch("close")}>✕</button>
  </header>
  <input aria-label="Buscar pistas para solo audio" placeholder="Buscar cantos, videos o MP3…" bind:value={search}
     on:input={()=>shown=40}/>
+ {#if preparedVideo}
+   <label class="prepared-only"><input type="checkbox" checked={preparedAudioOnly}
+     on:change={e=>dispatch("togglePrepared",{enabled:e.currentTarget.checked})}/>
+     Solo audio para «{preparedVideo}» al enviarlo</label>
+ {/if}
  <div class="music-results">
   {#each results.slice(0,shown) as file (file.source+"|"+file.path)}
    <div class="music-row">
@@ -31,7 +38,7 @@
  <footer><span title={currentPath}>{currentPath?"♫ "+currentPath.split(/[\/\\]/).pop():"Sin música activa"}</span>
   <button type="button" disabled={!currentPath} on:click={()=>dispatch("stop")}>■ Detener</button>
  </footer>
- <small>El sonido sale por el dispositivo configurado en Windows. No cambia las pantallas.</small>
+ <small>El sonido sale por el dispositivo de Windows y no requiere pantalla externa.</small>
 </section>
 <style>
  .ja-global-music-panel{position:absolute;bottom:48px;right:14px;z-index:62;width:min(410px,94%);height:min(470px,72vh);
@@ -50,4 +57,6 @@
  footer{display:flex;gap:7px;justify-content:space-between;align-items:center;border-top:1px solid #38587a;padding-top:8px}
  footer span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
  section>small{font-size:10px;color:#b4c9e6}
+ .prepared-only{display:flex;gap:6px;align-items:center;color:#d9ebff;font-size:11px}
+ .prepared-only input{width:auto;min-width:0;padding:0}
 </style>

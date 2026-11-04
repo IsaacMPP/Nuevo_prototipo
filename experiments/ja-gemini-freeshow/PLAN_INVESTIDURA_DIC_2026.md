@@ -104,3 +104,12 @@ Continuar JA Proyecciones con diseño Gemini y FreeShow 1.6.7 en `IsaacMPP/Nuevo
 **Validación física pendiente (S1 si falla):** playlist de MP3 y video local en Normal, cambiar a Repetir canción / Repetir lista / Aleatorio en los últimos 0.5 s, comprobar continuidad de sonido, avance al EOF y ausencia de salto doble. Probar pausa manual cerca del final para confirmar que no adelanta estando en pausa; repetir con video de logo en Bucle ON y pulsar Siguiente manual. Después comprobar Solo audio desde Biblia, mezcla YouTube, grupo sincronizado con HDMI/Spacedesk y separación de relojes por pantalla. No cerrar P5 hasta resultados Windows.
 
 **Prompt autocontenido para siguiente cambio:** Continuar JA Proyecciones; repo `IsaacMPP/Nuevo_prototipo`, rama `experiment/gemini-freeshow`, diseño Gemini y motor FreeShow 1.6.7. Base CI #41735876977 SUCCESS, commit da6b368, instalador Windows publicado. En incremento posterior se corrigió preventivamente el final de pista durante cambio de modo: conservar `playlistNearEnd` al cambiar Normal/Aleatorio/Repetir lista/Repetir canción y reconocer `HTMLAudioElement.ended` aun con `paused=true` si hubo progreso. Verificar nuevo Actions y artefacto antes de usarlo. Ensayar playlist mixta, modos en vivo cerca de EOF, pausa, Solo audio durante Biblia, bucle individual de Primario/HDMI/Spacedesk y reloj independiente tras separar pantallas; registrar y corregir S0/S1 antes de aprobar. No tocar `main`, `feature/motor-propio-v1`, PR #2 ni `JA_Proyecciones2`, no fusionar. Documentar y generar prompt después de cada modificación. Objetivo 5 diciembre 2026.
+
+
+## P6 — Reproducción local y una única entrada «Solo audio» (4 noviembre 2026)
+- Las listas usan destinos propios, sin depender de la tira Envío rápido.
+- Con cero pantallas, los MP4 locales pueden reproducirse con imagen y sonido en Vista previa; MP3 y el audio de MP4 usan AudioPlayer.
+- Se conserva la búsqueda global pero renombrada a «Solo audio», sin un segundo botón «Música de fondo».
+- La biblioteca de listas incorpora cuadrícula/lista y miniaturas locales progresivas; audio conserva carátula neutra.
+- Modos normal, aleatorio, repetir canción/lista y bucles por pantalla permanecen.
+- Requiere pruebas físicas de Windows para garantizar códecs, audio y transferencia sin cortes.

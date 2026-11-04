@@ -1,6 +1,7 @@
 <script lang="ts">
     import { createEventDispatcher } from "svelte"
     import type { JAPlaylist, JAPlaylistEntry } from "../../utils/jaGeminiPlaylists"
+    import JaGeminiPlaylistThumbnail from "./JaGeminiPlaylistThumbnail.svelte"
     export type LibraryItem = {path:string;name:string;source:"multimedia"|"himnario";kind:"video"|"audio"}
     export let playlists:JAPlaylist[]=[]
     export let libraryFiles:LibraryItem[]=[]
@@ -12,6 +13,9 @@
     export let busy=false
     export let currentFile:{path:string;source:"multimedia"|"himnario";kind:"audio"|"video"}|null=null
     export let primaryLabel="Primario"
+    export let outputChoices:Array<{id:string;name:string;primary:boolean}>=[]
+    export let selectedTargets:string[]=[]
+    let gridView=true
     const dispatch=createEventDispatcher()
     let name=""
     let youtubeUrl=""
@@ -98,6 +102,10 @@
         </aside>
         <section class="dock-library" aria-label="Biblioteca para agregar contenido">
             <div class="dock-section-head"><strong>Biblioteca</strong><small>{matches.length} resultados</small></div>
+            <div class="dock-view-choice" role="group" aria-label="Vista de la biblioteca">
+                <button type="button" aria-pressed={gridView} class:active={gridView} on:click={()=>gridView=true}>▦ Cuadrícula</button>
+                <button type="button" aria-pressed={!gridView} class:active={!gridView} on:click={()=>gridView=false}>☷ Lista</button>
+            </div>
             <input aria-label="Buscar cantos, videos o música" placeholder="⌕ Buscar archivos reales…" bind:value={search}
                 on:input={()=>shown=60}/>
             <div class="dock-filter" role="group" aria-label="Filtrar biblioteca">
@@ -106,12 +114,12 @@
                         on:click={()=>chooseCategory(item.v)}>{item.n}</button>
                 {/each}
             </div>
-            <div class="dock-library-rows">
+            <div class:dock-grid={gridView} class="dock-library-rows">
                 {#each matches.slice(0,shown) as file (fileKey(file))}
                     <div class="dock-file" draggable="true" on:dragstart={e=>onLibraryDrag(e,file)}>
                         <input type="checkbox" aria-label={"Seleccionar "+file.name} checked={chosen.has(fileKey(file))}
                             on:change={()=>toggleFile(file)}/>
-                        <span class="file-icon" aria-hidden="true">{file.source==="himnario"?"♫":file.kind==="audio"?"♪":"▶"}</span>
+                        <JaGeminiPlaylistThumbnail path={file.path} kind={file.kind}/>
                         <div class="file-name" title={file.path}><strong>{file.name}</strong><small>{file.source==="himnario"?"Himnario":file.kind==="audio"?"Audio local":"Video local"}</small></div>
                         <button type="button" class="quick-add" title="Añadir a la lista" aria-label={"Añadir "+file.name}
                             disabled={!playlist||playlist.entries.length>=200} on:click={()=>addOne(file)}>+</button>
@@ -130,8 +138,22 @@
         <main class="dock-queue">
             {#if playlist}
                 <div class="dock-section-head queue-head">
-                    <div><strong>{playlist.name}</strong><small>{playlist.entries.length} pistas · Salida de audio: {primaryLabel}</small></div>
+                    <div><strong>{playlist.name}</strong><small>{playlist.entries.length} pistas · Audio: {primaryLabel}</small></div>
                     <button type="button" class="delete" title="Eliminar lista" on:click={()=>{if(confirm("¿Eliminar esta lista?"))action("delete",{id:playlist.id})}}>Eliminar</button>
+                </div>
+                <div class="dock-playlist-targets" role="group" aria-label="Elegir pantallas de la lista">
+                    <strong>Proyectar en</strong>
+                    {#if outputChoices.length}
+                        {#each outputChoices as target (target.id)}
+                            <label title={target.primary?"Pantalla principal con audio":"Pantalla secundaria"}>
+                                <input type="checkbox" checked={selectedTargets.includes(target.id)}
+                                    on:change={e=>action("targets",{id:target.id,value:e.currentTarget.checked})}/>
+                                {target.name}{target.primary?" · Principal":""}
+                            </label>
+                        {/each}
+                    {:else}
+                        <span role="status">Sin pantalla externa · reproducción local disponible</span>
+                    {/if}
                 </div>
                 <div class="dock-quick-line">
                     <button type="button" disabled={!currentFile||playlist.entries.length>=200}
@@ -162,6 +184,9 @@
                             on:drop={e=>onQueueDrop(e,index)}>
                             <span class="queue-grip" aria-hidden="true">⠿</span>
                             <span class="queue-number">{index+1}</span>
+                            {#if entry.kind==="video" || entry.kind==="audio"}
+                                <JaGeminiPlaylistThumbnail path={entry.path} kind={entry.kind}/>
+                            {/if}
                             <div class="queue-title" title={entry.path}><strong>{entry.title}</strong><small>{kindName(entry)}</small></div>
                             {#if entry.kind==="video"}
                                 <label class="option-check" title="Solo audio: conserva Biblia, imágenes y videos en Programa">
@@ -235,8 +260,18 @@
     .dock-filter{display:flex;gap:4px;flex-wrap:wrap}.dock-filter button{padding:5px 7px;font-size:10px}
     .dock-filter button.active,.play-modes button.active{background:#2169a5;border-color:#4cd1fd}
     .dock-library-rows{flex:1;overflow:auto;min-height:0;display:flex;flex-direction:column;gap:4px}
+    .dock-library-rows.dock-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(116px,1fr));align-content:start;gap:8px}
+    .dock-library-rows.dock-grid .dock-file{flex-direction:column;align-items:stretch;position:relative;min-height:142px}
+    .dock-library-rows.dock-grid .dock-file input[type="checkbox"]{position:absolute;left:9px;top:9px;z-index:2}
+    .dock-library-rows.dock-grid .dock-file .file-name{width:100%}
+    .dock-library-rows.dock-grid .dock-file .quick-add{position:absolute;right:8px;top:76px;background:#17446f}
+    .dock-view-choice{display:flex;gap:5px}.dock-view-choice button{font-size:10px}
+    .dock-view-choice button.active{border-color:#4cd1fd;background:#225687}
+    .dock-playlist-targets{display:flex;gap:8px;align-items:center;flex-wrap:wrap;border:1px solid #345579;background:#0d2344;padding:7px;border-radius:7px}
+    .dock-playlist-targets strong{font-size:11px;color:#cfeaff}.dock-playlist-targets label{display:flex;gap:4px;align-items:center;font-size:10px}
+    .dock-playlist-targets span{color:#ffdf9b;font-size:11px}
     .dock-file{display:flex;align-items:center;gap:7px;border:1px solid #2c456b;background:#101f40;border-radius:6px;padding:6px;min-width:0}
-    .dock-file .file-icon{color:#f1cc6b;font-size:16px}.file-name{flex:1;min-width:0}
+    .file-name{flex:1;min-width:0}
     .file-name strong{display:block;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;font-size:11px}
     .file-name small{color:#a4bbda;font-size:10px}.dock-file button.quick-add{padding:2px 8px;font-weight:700;font-size:15px}
     .dock-library-footer{border-top:1px solid #324b70;padding-top:8px;display:flex;justify-content:space-between;gap:5px;align-items:center}
