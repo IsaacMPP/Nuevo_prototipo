@@ -1415,6 +1415,16 @@
         settingsStartSection = "general"
         settingsOpen = !settingsOpen
     }
+    function ensurePrimaryAfterManualScreenActivation(id:string){
+        const current=localStorage.getItem("ja-main-projector")||""
+        if(current && chooseOutput().includes(current))return
+        if(!habitualPrimaryId && current)habitualPrimaryId=current
+        if(!habitualPrimaryId)habitualPrimaryId=id
+        localStorage.setItem("ja-main-projector",id)
+        VideoPlayer.updateVolume()
+        saveScreenMemory()
+        screenNotice="Pantalla principal "+(get(outputs)[id]?.name||id)+" asignada. Puedes cambiarla en Configuración."
+    }
     async function assignMonitorToOutput(displayId:number, _bounds:{x:number;y:number;width:number;height:number}, outputId:string){
         const targetDisplay=await validateExternalDisplay(displayId)
         if(!targetDisplay)return notice("La laptop está reservada como consola. Selecciona una pantalla externa válida.")
@@ -1426,9 +1436,8 @@
         screenProfiles[fingerprint(targetDisplay)]=outputId
         saveScreenMemory()
         outputs.update(a=>({...a,[outputId]:{...a[outputId],screen:String(displayId),
-            bounds:{...bounds},boundsLocked:true,enabled:true}}))
-        if(!localStorage.getItem("ja-main-projector") || !get(outputs)[localStorage.getItem("ja-main-projector")||""]?.screen)
-            localStorage.setItem("ja-main-projector",outputId)
+            bounds:{...bounds},boundsLocked:true,enabled:true,active:true}}))
+        ensurePrimaryAfterManualScreenActivation(outputId)
         // CREATE alone leaves the window hidden. Toggle is a separate, required
         // operation and the native backend now waits for window creation.
         toggleOutputs([outputId],{state:true})
@@ -1441,10 +1450,6 @@
         if(!targetDisplay || get(outLocked))return notice("No se puede crear una salida en la laptop ni estando bloqueada")
         if(Object.values(get(outputs)).some(o=>o.enabled && o.screen===String(displayId)))
             return notice("El monitor ya tiene una salida asignada")
-        const existingPrimary=chooseOutput()[0] ||
-            Object.entries(get(outputs)).find(([,out])=>out.enabled && !!out.screen && out.screen!==operatorDisplayId)?.[0] || ""
-        if(existingPrimary && !localStorage.getItem("ja-main-projector"))
-            localStorage.setItem("ja-main-projector",existingPrimary)
         const id=addOutput(false,"",false,name)
         if(!id)return notice("FreeShow no pudo registrar la salida")
         const bounds=targetDisplay.bounds
@@ -1454,6 +1459,7 @@
             ...a,[id]:{...a[id],enabled:true,active:true,
                 screen:String(displayId),bounds:{...bounds},boundsLocked:true,alwaysOnTop:true}
         }))
+        ensurePrimaryAfterManualScreenActivation(id)
         toggleOutputs([id],{state:true})
         selectedId=id
         void refreshDisplaySafety()
@@ -1466,6 +1472,7 @@
             return notice("La asignación ha cambiado. Actualiza la detección y vuelve a intentarlo.")
         screenProfiles[fingerprint(d)]=outputId
         saveScreenMemory()
+        ensurePrimaryAfterManualScreenActivation(outputId)
         toggleOutputs([outputId],{state:true})
         selectedId=outputId
         void refreshDisplaySafety()

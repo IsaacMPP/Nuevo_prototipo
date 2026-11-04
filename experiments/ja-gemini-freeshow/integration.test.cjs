@@ -909,3 +909,15 @@ test("P8d: Configuración de pantallas está conectada al controlador real",()=>
     assert.ok(settings.includes('dispatch("'+event+'"'),"Botón sin evento: "+event)
  }
 });
+
+test("P8e: asignación manual no deja la principal vacía ni la salida inactiva",()=>{
+ const s=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const assign=s.split("async function assignMonitorToOutput(")[1].split("async function createPhysicalOutput(")[0]
+ const create=s.split("async function createPhysicalOutput(")[1].split("async function activateConfiguredOutput(")[0]
+ const activate=s.split("async function activateConfiguredOutput(")[1].split("async function reconcileWindowsDisplays(")[0]
+ assert.ok(assign.includes("enabled:true,active:true"),"Asignar monitor reactiva salida")
+ assert.ok(assign.includes("ensurePrimaryAfterManualScreenActivation(outputId)"),"Primario al reasignar monitor")
+ assert.ok(create.includes("ensurePrimaryAfterManualScreenActivation(id)"),"Primario al crear salida")
+ assert.ok(activate.includes("ensurePrimaryAfterManualScreenActivation(outputId)"),"Primario al activar salida")
+ assert.ok(s.includes('if(current && chooseOutput().includes(current))return'),"La primaria activa no se reemplaza al conectar secundarias")
+});

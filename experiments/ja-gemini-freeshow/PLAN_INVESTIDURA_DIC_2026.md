@@ -141,3 +141,6 @@ Continuar JA Proyecciones con diseño Gemini y FreeShow 1.6.7 en `IsaacMPP/Nuevo
 
 ## P8d — Conexión real de Configuración
 - Las acciones de Hacer principal, Mostrar/Ocultar y Olvidar configuración están vinculadas explícitamente al controlador JA Gemini; no son botones demostrativos.
+
+## P8e — Activación manual y primario provisional
+- «Activar pantalla» y «Crear salida» asignan primario solo si el actual no está físicamente disponible, sin borrar la identidad de la principal habitual; la salida se habilita y marca activa.
