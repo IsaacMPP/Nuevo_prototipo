@@ -545,16 +545,22 @@
     // YouTube is deliberately excluded: its policies require visible playback.
     async function playJAOnlySound(path:string,targets:string[],valid:()=>boolean):Promise<boolean>{
         audioProblem=""
-        if(jaAudioBusy||get(outLocked))return false
+        if(jaAudioBusy||get(outLocked)){
+            audioProblem=jaAudioBusy?"Hay otra pista de audio iniciándose.":"Las salidas están bloqueadas."
+            notice(audioProblem)
+            return false
+        }
         const available=chooseOutput()
         const primary=localStorage.getItem("ja-main-projector")||(available.length===1?available[0]:"")
         const kind=getMediaType(getExtension(path))
         if((kind!=="audio" && kind!=="video") || targets.some(id=>!available.includes(id))){
-            notice("Solo audio requiere un archivo válido y salidas activas si se seleccionaron.")
+            audioProblem="Solo audio requiere un archivo local compatible y pantallas disponibles si se seleccionaron."
+            notice(audioProblem)
             return false
         }
         if(get(playingAudio)[path] && jaAudioPath!==path){
-            notice("Esta pista ya está siendo utilizada por otro reproductor. No se interrumpió.")
+            audioProblem="Esta pista ya está siendo utilizada por otro reproductor de FreeShow."
+            notice(audioProblem)
             return false
         }
         // The same source could already be on-screen; otherwise we risk two
@@ -563,7 +569,8 @@
             normalizeJAContentPath(session.path)===normalizeJAContentPath(path) &&
             session.linkedOutputIds.includes(primary) && !session.audio.muted)
         if(liveVideo){
-            notice("Ese vídeo ya tiene audio en Programa. Siléncialo antes de iniciar otra copia en Solo audio.")
+            audioProblem="Este mismo video ya está sonando en Programa. Silencia su audio antes de iniciar una segunda copia."
+            notice(audioProblem)
             return false
         }
         const previous=jaAudioPath
@@ -578,12 +585,14 @@
             const started=await AudioPlayer.start(path,{name:fileName(path)},{playMultiple:true,startPaused:true})
             const session=AudioPlayer.getPlaying(path)
             if(!started || !session?.audio){
-                audioProblem="No se pudo abrir el audio de este archivo. Comprueba que el MP4 tenga una pista compatible con Windows."
+                audioProblem="El motor de audio no pudo abrir "+fileName(path)+". Verifica que el MP4 contenga una pista de audio compatible."
                 notice(audioProblem)
                 return false
             }
             if(!valid()||get(outLocked)||targets.some(id=>!chooseOutput().includes(id))){
                 AudioPlayer.stop(path)
+                audioProblem="Se canceló Solo audio: cambió la pista o la selección durante la carga."
+                notice(audioProblem)
                 return false
             }
             if(previous && previous!==path && AudioPlayer.audioExists(previous))AudioPlayer.stop(previous)
@@ -598,7 +607,11 @@
             if(context.state==="suspended")await context.resume()
             AudioPlayer.play(path)
             await session.audio.play()
-            if(session.audio.paused)throw Error("Windows no confirmó la reproducción del archivo.")
+            if(session.audio.paused)throw Error("El reproductor no confirmó Play. Estado multimedia: "+String(session.audio.error?.code||"sin código"))
+            if(context.state!=="running"){
+                audioProblem="La pista avanza, pero el motor Web Audio está "+context.state+". Revisa la salida en Configuración de audio."
+                notice(audioProblem)
+            }
             jaAudioPath=path
             showJAOwnedAudio(path)
             notice("Solo audio: "+fileName(path)+". La imagen proyectada permanece intacta.")
@@ -797,7 +810,7 @@
             if(item.kind==="audio"||item.audioOnly){
                 if(item.kind==="youtube")throw Error("YouTube no admite Solo audio.")
                 const ok=await playJAOnlySound(item.path,targets,()=>token===playlistToken && playlistRunning)
-                if(!ok)throw Error("No se pudo iniciar la pista sonora.")
+                if(!ok)throw Error(audioProblem||"No se pudo iniciar la pista sonora. Revisa el formato y enrutamiento de audio.")
                 // If manual Next changes a playing local/YouTube video to a
                 // sound-only entry, freeze its last visible frame rather than
                 // allowing two different soundtracks to overlap.
@@ -821,29 +834,21 @@
                 notice("YouTube enviado con video visible. Si el reproductor bloquea autoplay, pulsa Play en la pantalla.")
             }else{
                 if(getMediaType(getExtension(item.path))!=="video")throw Error("El archivo ya no es un video válido.")
-                prepare(item.path)
-                // Playlists use the SAME operator path as Multimedia:
-                // first prepare and play locally in Vista previa. Only the
-                // explicit "Enviar a pantallas" action can alter Programa.
+                prepare(item.path,false)
+                // Preview is a silent, paused STAGING area, not a player.
+                // Program does not change until the operator explicitly sends.
                 playlistLocalVideoPath=item.path
                 const local=previewMedia
                 if(!local)throw Error("No existe Vista previa para este video.")
-                local.muted=false
+                local.pause()
+                local.muted=true
                 local.loop=item.loopVideo===true
-                const begin=()=>{
-                    if(token!==playlistToken || previewMedia!==local)return
-                    try{local.currentTime=0}catch{}
-                    void local.play().catch(error=>{
-                        playlistNotice="Vista previa no pudo reproducir el vídeo: "+String(error)
-                        notice(playlistNotice)
-                    })
-                }
-                if(local.readyState>=1)begin()
-                else local.addEventListener("loadedmetadata",begin,{once:true})
-                notice("Playlist preparada en Vista previa: "+item.title+". Usa Enviar a pantallas para proyectarla.")
+                playlistWaiting=true
+                playlistPaused=true
+                notice("Pista preparada y detenida en Vista previa: "+item.title+". Pulsa Enviar a pantallas para reproducir.")
             }
             if(token!==playlistToken)return
-            playlistWaiting=false
+            if(item.kind==="audio"||item.audioOnly||item.kind==="youtube")playlistWaiting=false
             notice("Playlist: "+(index+1)+"/"+list!.entries.length+" · "+item.title)
         }catch(error){
             if(token===playlistToken){
@@ -950,6 +955,8 @@
             else publishPreparedMedia()
             if(destinations.every(id=>normalizeJAContentPath(get(outputs)[id]?.out?.background?.path||"")===normalizeJAContentPath(entry.path))){
                 playlistLocalVideoPath=""
+                playlistWaiting=false
+                playlistPaused=false
                 if(previewMedia){previewMedia.muted=true;followProgram=true;syncLinkedPreview()}
                 notice("Playlist enviada desde Vista previa a "+destinations.length+" pantalla(s).")
             }
@@ -979,9 +986,7 @@
                 else {AudioPlayer.pause(entry.path);playlistPaused=true}
             }else{
                 if(playlistLocalVideoPath===entry.path && previewMedia){
-                    if(previewMedia.paused){void previewMedia.play().catch(()=>notice("No se pudo continuar el video local."));playlistPaused=false}
-                    else {previewMedia.pause();playlistPaused=true}
-                    return
+                    return notice("La pista está preparada en Vista previa. Pulsa Enviar a pantallas para iniciar la reproducción.")
                 }
                 const path=entry.kind==="youtube"?jaYoutubeId(entry.path):entry.path
                 const target=markedPlaylistTargets().includes(main)?main:markedPlaylistTargets()[0]||""
@@ -1106,11 +1111,9 @@
         audioProblem=""
         const main=localStorage.getItem("ja-main-projector")||""
         if(get(outLocked))return notice("Las salidas están bloqueadas.")
-        if(get(playingVideos).some(s=>s.linkedOutputIds.includes(main) && !s.audio.muted && !s.audio.paused) ||
-            (previewMedia && !previewMedia.paused && !previewMedia.muted)){
-            audioProblem="Ya hay un video con sonido. Siléncialo o páusalo antes de activar otra pista Solo audio."
-            return notice(audioProblem)
-        }
+        // Solo audio is an independent music bus: a different video may
+        // remain visible in Programa without blocking the sound-only action.
+        // The exact same video is guarded inside playJAOnlySound against duplicates.
         if(!playlistLibraryFiles.some(f=>f.path===path&&(f.kind==="audio"||f.kind==="video")))
             return notice("La pista no está disponible en las carpetas reales vinculadas.")
         if(playlistRunning)stopJAPlaylist()
@@ -3014,7 +3017,7 @@
             mute.title = previewMedia?.muted ? "Activar escucha local de Vista previa" : "Silenciar Vista previa"
         }
     }
-    function prepare(path: string) {
+    function prepare(path: string, autoplay=previewAutoplay) {
         biblePreviewGeneration++
         if (biblePreviewTimer) clearTimeout(biblePreviewTimer)
         biblePreviewRenderer?.$destroy()
@@ -3062,7 +3065,7 @@
                 if (previewMedia !== m || !m.isConnected) return
                 if (samePlayingVideo && type==="video") {
                     syncLinkedPreview()
-                } else if (previewAutoplay) {
+                } else if (autoplay) {
                     void m.play().catch(() => notice("Vista previa no pudo iniciar. Comprueba formato/códec y pulsa Play."))
                 }
             }, {once:true})
