@@ -3,7 +3,7 @@
     import { get } from "svelte/store"
     import { AudioPlayer } from "../../audio/audioPlayer"
     import { AudioAnalyser } from "../../audio/audioAnalyser"
-    import { outLocked, playingAudio } from "../../stores"
+    import { outLocked } from "../../stores"
 
     // Exact JA-owned session, not the currently focused global FreeShow music.
     export let path: string
