@@ -182,3 +182,6 @@ Continuar JA Proyecciones con diseño Gemini y FreeShow 1.6.7 en `IsaacMPP/Nuevo
 ## P13 — Controles compactos para 1920×1080
 - En playlist fija, «Mis listas» ocupa un máximo de 92 px; los modos de reproducción utilizan iconos con títulos accesibles. YouTube se introduce desde una opción expandible para preservar la cola visible.
 - Las cuadrículas originales de Multimedia e Himnario usan columnas automáticas de al menos 155 px en vez de forzar cinco miniaturas estrechas; la imagen conserva su proporción.
+
+## P13b — Visibilidad real del acceso Solo audio
+- La acción ♫ se agrega a tarjetas de Gemini con `document.createElement`. Para que sea visible, su estilo se aplica mediante la hoja global `ja-gemini-layout.css`, no únicamente el CSS scoped de Svelte.

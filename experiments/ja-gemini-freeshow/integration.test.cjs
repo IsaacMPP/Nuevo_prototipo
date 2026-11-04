@@ -981,3 +981,11 @@ test("P13: playlist fija tiene controles compactos y miniaturas en columnas adap
  assert.ok(panel.includes("max-height:92px"),"Mis listas compactas, cola siempre visible")
  assert.ok(css.includes("repeat(auto-fill,minmax(155px,1fr))"),"Reajustar cuadrícula al estrechar biblioteca")
 });
+
+test("P13b: la acción Solo audio dibujada por DOM manual tiene CSS global",()=>{
+ const css=read("engine/public/ja-gemini-layout.css")
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ assert.ok(shell.includes('sound.className="ja-card-solo-audio"'),"Acción creada en tarjeta real")
+ assert.ok(css.includes(".ja-gemini-host .ja-card-solo-audio{"),"Necesita CSS global, no solo Svelte scoped")
+ assert.ok(css.includes("bottom:35px"),"No tapar el botón + ni la miniatura")
+});

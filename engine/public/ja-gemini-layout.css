@@ -303,3 +303,15 @@ html, body, #app { height: 100%; min-height: 0; overflow: hidden; }
 .ja-gemini-host #multimediaCardsGrid,.ja-gemini-host #hymnModuleGrid{
     grid-template-columns:repeat(auto-fill,minmax(155px,1fr))!important;
 }
+
+/* Native Gemini library tiles are created with document.createElement, so
+   Svelte-scoped selectors cannot style this in-card Solo audio action. */
+.ja-gemini-host .ja-media-card{position:relative}
+.ja-gemini-host .ja-card-solo-audio{
+  display:flex;position:absolute;right:8px;bottom:35px;align-items:center;justify-content:center;
+  min-width:29px;min-height:29px;padding:2px 7px;border-radius:6px;z-index:3;
+  background:#173c65;color:#fff;border:1px solid #6ebce4;font-size:18px;cursor:pointer;
+}
+.ja-gemini-host .ja-card-solo-audio:hover,.ja-gemini-host .ja-card-solo-audio:focus-visible{
+  background:#276d9b;outline:2px solid #4cd1fd;
+}
