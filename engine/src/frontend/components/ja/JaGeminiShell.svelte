@@ -1409,6 +1409,8 @@
         if(Object.entries(current).some(([id,o])=>id!==outputId && o.enabled && o.screen===String(displayId)))
             return notice("Esta pantalla ya pertenece a otra salida")
         const bounds=targetDisplay.bounds
+        screenProfiles[fingerprint(targetDisplay)]=outputId
+        saveScreenMemory()
         outputs.update(a=>({...a,[outputId]:{...a[outputId],screen:String(displayId),
             bounds:{...bounds},boundsLocked:true,enabled:true}}))
         if(!localStorage.getItem("ja-main-projector") || !get(outputs)[localStorage.getItem("ja-main-projector")||""]?.screen)
@@ -1432,6 +1434,8 @@
         const id=addOutput(false,"",false,name)
         if(!id)return notice("FreeShow no pudo registrar la salida")
         const bounds=targetDisplay.bounds
+        screenProfiles[fingerprint(targetDisplay)]=id
+        saveScreenMemory()
         outputs.update(a=>({
             ...a,[id]:{...a[id],enabled:true,active:true,
                 screen:String(displayId),bounds:{...bounds},boundsLocked:true,alwaysOnTop:true}
@@ -1446,6 +1450,8 @@
         const output=get(outputs)[outputId]
         if(!d || !output || !output.enabled || output.screen!==String(displayId))
             return notice("La asignación ha cambiado. Actualiza la detección y vuelve a intentarlo.")
+        screenProfiles[fingerprint(d)]=outputId
+        saveScreenMemory()
         toggleOutputs([outputId],{state:true})
         selectedId=outputId
         void refreshDisplaySafety()
@@ -1469,10 +1475,14 @@
             const id=String(display.id),key=fingerprint(display)
             let outputId=screenProfiles[key]||""
             const outs=get(outputs)
+            // A saved ID must never steal an output already assigned to some
+            // other *connected* physical monitor.
+            if(outputId && outs[outputId]?.screen &&
+                String(outs[outputId].screen)!==id &&
+                knownExternalDisplayIds.has(String(outs[outputId].screen)))outputId=""
             if(!outputId||!outs[outputId]){
-                outputId=Object.entries(outs).find(([candidate,output])=>output?.enabled &&
-                    !output?.stageOutput && String(output.screen)===id &&
-                    (!Object.entries(screenProfiles).some(([oldKey,owned])=>owned===candidate&&oldKey!==key)))?.[0]||""
+                outputId=Object.entries(outs).find(([,output])=>output?.enabled &&
+                    !output?.stageOutput && String(output.screen)===id)?.[0]||""
             }
             const newlyConnected=!previous.has(id)
             if(!outputId){
@@ -1481,6 +1491,8 @@
                 if(!outputId)continue
                 newDisplays++
             }
+            for(const [oldKey,owner] of Object.entries(screenProfiles))
+                if(owner===outputId&&oldKey!==key)delete screenProfiles[oldKey]
             screenProfiles[key]=outputId
             const output=get(outputs)[outputId]
             if(!output)continue
@@ -1497,6 +1509,8 @@
                     (localVideo && outputId===currentMain)){
                     clearBackground(outputId)
                     clearSlide(true,outputId)
+                    setOutput("effects",[],false,outputId)
+                    setOutput("overlays",[],false,outputId)
                 }
                 const wasExplicitlyHidden=manuallyHiddenOutputs.has(outputId)
                 toggleOutputs([outputId],{state:!wasExplicitlyHidden})
@@ -1517,6 +1531,7 @@
                 if(liveMain&&liveMain!==replacement&&mainWasRemoved)
                     transferProjectedContent(liveMain,replacement)
                 localStorage.setItem("ja-main-projector",replacement)
+                VideoPlayer.updateVolume()
                 if(!habitualPrimaryId)habitualPrimaryId=replacement
                 saveScreenMemory()
                 screenNotice=(newDisplays?"Nueva pantalla detectada. ":"")+
@@ -1567,8 +1582,11 @@
         if(background){
             const path=background.path||""
             const current=path?VideoPlayer.getPlaying(path,[from])?.audio.currentTime:undefined
-            setOutput("background",{...background,muted:false,
-                startAt:Number.isFinite(current)?current:background.startAt||0},false,to)
+            const previewClock=path && normalizeJAContentPath(playingPath)===normalizeJAContentPath(path)
+                ?videoState.currentTime:undefined
+            const playhead=Number.isFinite(current)?current:
+                Number.isFinite(previewClock)?previewClock:background.startAt||0
+            setOutput("background",{...background,muted:false,startAt:playhead},false,to)
         }
         if(source.slide)setOutput("slide",source.slide,false,to)
         if(source.overlays?.length)setOutput("overlays",[...source.overlays],false,to)
@@ -1626,6 +1644,7 @@
         if(!to || !chooseOutput().includes(to))return
         transferProjectedContent(from,to)
         localStorage.setItem("ja-main-projector",to)
+        VideoPlayer.updateVolume()
         habitualPrimaryId=to
         restoreCandidateId=""
         screenStructure=""
@@ -1638,6 +1657,7 @@
         const previous=localStorage.getItem("ja-main-projector")||""
         if(previous!==id)transferProjectedContent(previous,id)
         localStorage.setItem("ja-main-projector",id)
+        VideoPlayer.updateVolume()
         habitualPrimaryId=id
         restoreCandidateId=""
         screenStructure=""

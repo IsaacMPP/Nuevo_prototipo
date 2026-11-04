@@ -125,3 +125,9 @@ Continuar JA Proyecciones con diseño Gemini y FreeShow 1.6.7 en `IsaacMPP/Nuevo
 - Cuando queda sin pantalla externa, un MP4 local puede continuar en la Vista previa de la laptop y al reconectar se envía con startAt tomado del reloj actual.
 - Riesgos que requieren prueba en Windows real: estabilidad de los IDs de Electron, reconexión de HDMI y spacedesk, compatibilidad de códecs, reproducción y audio sin saltos, posición inicial de cada ventana, transferencia de escenas superpuestas y presentaciones externas.
 - Nunca fusionar la rama experimental hasta completar esas pruebas y corregir los errores que aparezcan.
+
+
+## P7b — Endurecimiento de la reasignación
+- Se conserva una única asignación por pantalla física, aun cuando Windows cambie su etiqueta.
+- Las asignaciones manuales también se recuerdan y el audio nativo recalcula la salida autorizada tras intercambiar la principal.
+- No se transfiere una composición antigua si la desconexión no se observó durante esta sesión; se evita mostrar contenido obsoleto en la pantalla reconectada.

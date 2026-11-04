@@ -855,3 +855,15 @@ test("P7: ventanas de proyección son independientes del reloj y tienen reconexi
  assert.ok(settings.includes('Ocultar proyección'),"Cerrar ventana para mostrar escritorio externo")
  assert.ok(native.includes("window.hide()"),"No se reemplaza imagen por negro")
 });
+
+test("P7b: principal intercambiable sin duplicar sonido ni emitir contenido antiguo",()=>{
+ const s=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const transfers=s.split("function transferProjectedContent(")[1].split("function bridgeLocalVideoToOutput(")[0]
+ assert.ok(s.includes("VideoPlayer.updateVolume()"),"Mover el audio al nuevo principal")
+ assert.ok(s.includes("screenProfiles[fingerprint(targetDisplay)]=outputId"),"Recordar asignaciones manuales")
+ assert.ok(s.includes("screenProfiles[fingerprint(targetDisplay)]=id"),"Recordar nuevos proyectores")
+ assert.ok(s.includes("mainWasRemoved"),"No resucitar contenido guardado de sesiones pasadas")
+ assert.ok(s.includes("localVideo && outputId===currentMain"),"Evitar mostrar cuadros viejos al reconectar")
+ assert.ok(transfers.includes("clearBackground(from)"),"Vaciar anterior principal tras transferencia")
+ assert.ok(transfers.includes('setOutput("effects",[],false,from)'),"No reactivar logos anteriores")
+});
