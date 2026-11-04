@@ -35,6 +35,7 @@
     import JaGeminiPlaylistPanel from "./JaGeminiPlaylistPanel.svelte"
     import JaGeminiQuickAudioPanel from "./JaGeminiQuickAudioPanel.svelte"
     import JaGeminiAudioControls from "./JaGeminiAudioControls.svelte"
+    import { JaSoloAudioPlayer } from "./JaSoloAudioPlayer"
     import { videoSync } from "../media/video/videoSync"
     import PreviewOutput from "../output/preview/PreviewOutput.svelte"
     import JaGeminiBiblePreview from "./JaGeminiBiblePreview.svelte"
@@ -509,6 +510,7 @@
         const close=()=>{
             if(jaAudioPath!==path)return
             restoreSoloProgramSound()
+            JaSoloAudioPlayer.stop()
             jaAudioPath=""
             jaAudioControls?.$destroy()
             jaAudioControls=null
@@ -517,130 +519,71 @@
         jaAudioControls.$on("ended",close)
         jaAudioControls.$on("stopped",close)
     }
-    async function publishPreparedAudio(path:string,targets:string[]){
-        if(jaAudioBusy)return notice("El audio anterior todavía está preparándose.")
-        if(get(outLocked))return notice("Las salidas están bloqueadas.")
-        // A native audio session does not require an external monitor.
-        if(getMediaType(getExtension(path))!=="audio")
-            return notice("Selecciona un archivo de audio válido.")
-        if(get(playingAudio)[path] && jaAudioPath!==path)
-            return notice("Este archivo ya suena en otro reproductor de FreeShow. No tomaré control de esa sesión.")
-        const token=++jaAudioGeneration
-        const targetSnapshot=targets.join("|")
-        const previous=jaAudioPath
-        jaAudioBusy=true
-        try{
-            const active=AudioPlayer.audioExists(path)
-            const started=active || await AudioPlayer.start(path,{name:fileName(path)},{playMultiple:true,startPaused:true})
-            const session=AudioPlayer.getPlaying(path)
-            if(!started || !session?.audio){
-                notice("FreeShow no pudo abrir este audio. Revisa el formato y el archivo.")
-                return
-            }
-            if(token!==jaAudioGeneration || prepared!==path || get(outLocked) ||
-                targetSnapshot!==markedGroupTargets().join("|")){
-                if(!active)AudioPlayer.stop(path)
-                notice("Cambió la preparación durante la carga del audio; no se inició.")
-                return
-            }
-            if(previous && previous!==path && AudioPlayer.audioExists(previous))AudioPlayer.stop(previous)
-            jaAudioPath=path
-            showJAOwnedAudio(path)
-            if(AudioPlayer.isPaused(path))AudioPlayer.play(path)
-            notice("Audio reproducido por el motor de FreeShow en la consola. La imagen y los videos de las pantallas no cambiaron.")
-        }catch(error){
-            notice("No fue posible reproducir el audio: "+String(error))
-        }finally{if(token===jaAudioGeneration)jaAudioBusy=false}
+    async function publishPreparedAudio(path:string,_targets:string[]){
+        await playJAOnlySound(path,[],()=>prepared===path && !get(outLocked))
     }
 
-    // A local MP4/hymn can play through a *single* HTMLAudioElement without
-    // sending any visual background. Audio routing remains the Windows default.
-    // YouTube is deliberately excluded: its policies require visible playback.
+    // A single JA-owned native HTMLAudioElement is the only Solo Audio bus.
+    // It NEVER attaches to FreeShow VideoPlayer/AudioPlayer/AudioAnalyser.
+    // New requests replace old ones instead of refusing with a busy flag.
     async function playJAOnlySound(path:string,targets:string[],valid:()=>boolean):Promise<boolean>{
         audioProblem=""
-        if(jaAudioBusy||get(outLocked)){
-            audioProblem=jaAudioBusy?"Hay otra pista de audio iniciándose.":"Las salidas están bloqueadas."
+        const type=getMediaType(getExtension(path))
+        if(get(outLocked) || (type!=="audio"&&type!=="video") ||
+            targets.some(id=>!chooseOutput().includes(id))){
+            audioProblem="Solo audio necesita un archivo local compatible; revisa las salidas bloqueadas."
             notice(audioProblem)
             return false
         }
-        const available=chooseOutput()
-        const primary=localStorage.getItem("ja-main-projector")||(available.length===1?available[0]:"")
-        const kind=getMediaType(getExtension(path))
-        if((kind!=="audio" && kind!=="video") || targets.some(id=>!available.includes(id))){
-            audioProblem="Solo audio requiere un archivo local compatible y pantallas disponibles si se seleccionaron."
-            notice(audioProblem)
-            return false
-        }
-        if(get(playingAudio)[path] && jaAudioPath!==path){
-            audioProblem="Esta pista ya está siendo utilizada por otro reproductor de FreeShow."
-            notice(audioProblem)
-            return false
-        }
-        // The same source could already be on-screen; otherwise we risk two
-        // audible copies of its soundtrack. Keep the active video untouched.
+        const primary=localStorage.getItem("ja-main-projector")||""
         const liveVideo=get(playingVideos).find(session=>
             normalizeJAContentPath(session.path)===normalizeJAContentPath(path) &&
             session.linkedOutputIds.includes(primary) && !session.audio.muted)
-        const previous=jaAudioPath
+        restoreSoloProgramSound()
+        const request=++jaAudioGeneration
         jaAudioBusy=true
-        // Request the default audio context's resume synchronously from the
-        // user's click; async file resolution can otherwise lose activation.
-        const initialAudioContext=AudioAnalyser.getAudioContext()
-        if(initialAudioContext.state==="suspended")
-            void initialAudioContext.resume().catch(error=>console.warn("[JA Solo audio] AudioContext:",error))
         try{
-            // The existing video remains visible, but cannot emit a second
-            // soundtrack when its file is played through the JA audio bus.
-            restoreSoloProgramSound()
-            if(liveVideo && VideoPlayer.getPlaying(path,[primary])===liveVideo){
+            // Immediately release prior JA audio and its controls; this has
+            // no effect on the independent projected video session.
+            jaAudioControls?.$destroy()
+            jaAudioControls=null
+            jaAudioPath=""
+            if(jaAudioContainer)jaAudioContainer.hidden=true
+            const started=await JaSoloAudioPlayer.start(path)
+            if(request!==jaAudioGeneration)return false
+            if(!started){
+                audioProblem=JaSoloAudioPlayer.error||"Windows no pudo abrir la pista de audio."
+                notice(audioProblem)
+                return false
+            }
+            if(!valid()||get(outLocked)){
+                JaSoloAudioPlayer.stop()
+                audioProblem="Cambió la selección de la pista; se canceló Solo audio."
+                notice(audioProblem)
+                return false
+            }
+            // Only after successful start, silence the SAME video if it
+            // already has a soundtrack in Programa. Restore it on Stop/End.
+            if(liveVideo && VideoPlayer.getPlaying(path,[primary])===liveVideo && !liveVideo.audio.muted){
                 VideoPlayer.toggleMute(path,primary)
                 AudioAnalyser.setSourceVolume(path,0,primary)
                 soloMutedProgram={path,outputId:primary,audio:liveVideo.audio}
             }
-            if(jaAudioPath===path && AudioPlayer.audioExists(path))AudioPlayer.stop(path)
-            const started=await AudioPlayer.start(path,{name:fileName(path)},{playMultiple:true,startPaused:true})
-            const session=AudioPlayer.getPlaying(path)
-            if(!started || !session?.audio){
-                restoreSoloProgramSound()
-                audioProblem="El motor de audio no pudo abrir "+fileName(path)+". Verifica que el MP4 contenga una pista de audio compatible."
-                notice(audioProblem)
-                return false
-            }
-            if(!valid()||get(outLocked)||targets.some(id=>!chooseOutput().includes(id))){
-                AudioPlayer.stop(path)
-                restoreSoloProgramSound()
-                audioProblem="Se canceló Solo audio: cambió la pista o la selección durante la carga."
-                notice(audioProblem)
-                return false
-            }
-            if(previous && previous!==path && AudioPlayer.audioExists(previous))AudioPlayer.stop(previous)
-            // AudioPlayer.play() doesn't await the native play promise:
-            // the UI could say playing while HTMLMediaElement was still paused.
-            session.audio.muted=false
-            if(session.audio.volume<=0){
-                audioProblem="Volumen del archivo en 0. Revisa el mezclador JA y el dispositivo de sonido de Windows."
-                notice(audioProblem)
-            }
-            const context=AudioAnalyser.getAudioContext()
-            if(context.state==="suspended")await context.resume()
-            AudioPlayer.play(path)
-            await session.audio.play()
-            if(session.audio.paused)throw Error("El reproductor no confirmó Play. Estado multimedia: "+String(session.audio.error?.code||"sin código"))
-            if(context.state!=="running"){
-                audioProblem="La pista avanza, pero el motor Web Audio está "+context.state+". Revisa la salida en Configuración de audio."
-                notice(audioProblem)
-            }
             jaAudioPath=path
             showJAOwnedAudio(path)
-            notice("Solo audio: "+fileName(path)+". La imagen proyectada permanece intacta.")
+            notice("♫ Solo audio independiente: "+fileName(path)+". Programa no cambió.")
             return true
         }catch(error){
-            if(AudioPlayer.audioExists(path))AudioPlayer.stop(path)
-            restoreSoloProgramSound()
-            audioProblem="No se pudo reproducir el audio de "+fileName(path)+": "+String(error)
-            notice(audioProblem)
+            if(request===jaAudioGeneration){
+                JaSoloAudioPlayer.stop()
+                restoreSoloProgramSound()
+                audioProblem="No se pudo iniciar Solo audio: "+String(error)
+                notice(audioProblem)
+            }
             return false
-        }finally{jaAudioBusy=false}
+        }finally{
+            if(request===jaAudioGeneration)jaAudioBusy=false
+        }
     }
     function jaOnlyAudioSend(targets:string[]):boolean{
         const path=prepared
@@ -768,8 +711,8 @@
         }
         playlistLocalVideoPath=""
         playlistNotice=""
-        if(stopSound && jaAudioPath && AudioPlayer.audioExists(jaAudioPath)){
-            AudioPlayer.stop(jaAudioPath)
+        if(stopSound && jaAudioPath){
+            JaSoloAudioPlayer.stop()
             restoreSoloProgramSound()
             jaAudioPath=""
             jaAudioControls?.$destroy()
@@ -819,8 +762,8 @@
             previewMedia.muted=true
         }
         // Every new entry owns only the audio started by this JA playlist.
-        if(jaAudioPath && jaAudioPath!==item.path && AudioPlayer.audioExists(jaAudioPath)){
-            AudioPlayer.stop(jaAudioPath)
+        if(jaAudioPath && jaAudioPath!==item.path){
+            JaSoloAudioPlayer.stop()
             restoreSoloProgramSound()
             jaAudioPath=""
             jaAudioControls?.$destroy()
@@ -902,8 +845,9 @@
         let audio:HTMLAudioElement|{currentTime:number;duration:number;paused:boolean}|null=null
         let found=false
         if(item.kind==="audio"||item.audioOnly){
-            const session=AudioPlayer.getPlaying(item.path)
-            if(session?.audio){audio=session.audio;found=true}
+            if(JaSoloAudioPlayer.path===item.path && JaSoloAudioPlayer.audio){
+                audio=JaSoloAudioPlayer.audio;found=true
+            }
         }else if(playlistLocalVideoPath===item.path && previewMedia){
             audio=previewMedia;found=true
         }else{
@@ -1002,9 +946,10 @@
             const main=localStorage.getItem("ja-main-projector")||""
             if(!entry)return
             if(entry.kind==="audio"||entry.audioOnly){
-                if(!AudioPlayer.audioExists(entry.path))return notice("La pista de audio no está activa.")
-                if(AudioPlayer.isPaused(entry.path)){AudioPlayer.play(entry.path);playlistPaused=false}
-                else {AudioPlayer.pause(entry.path);playlistPaused=true}
+                if(JaSoloAudioPlayer.path!==entry.path || !JaSoloAudioPlayer.audio)
+                    return notice("La pista Solo audio no está activa.")
+                playlistPaused=JaSoloAudioPlayer.isPlaying(entry.path)
+                void JaSoloAudioPlayer.toggle()
             }else{
                 if(playlistLocalVideoPath===entry.path && previewMedia){
                     return notice("La pista está preparada en Vista previa. Pulsa Enviar a pantallas para iniciar la reproducción.")
@@ -1143,7 +1088,7 @@
     function stopBackgroundAudioAnywhere(){
         ++quickAudioToken
         audioProblem=""
-        if(jaAudioPath && AudioPlayer.audioExists(jaAudioPath))AudioPlayer.stop(jaAudioPath)
+        JaSoloAudioPlayer.stop()
         restoreSoloProgramSound()
         jaAudioPath=""
         jaAudioControls?.$destroy()
@@ -3393,7 +3338,7 @@
             jaAudioControls=null
             // Do not stop unrelated FreeShow music. Only the session started
             // explicitly from this JA console belongs to us.
-            if(jaAudioPath && AudioPlayer.audioExists(jaAudioPath))AudioPlayer.stop(jaAudioPath)
+            JaSoloAudioPlayer.stop()
             restoreSoloProgramSound()
             jaAudioPath=""
             stopVideoState?.()
