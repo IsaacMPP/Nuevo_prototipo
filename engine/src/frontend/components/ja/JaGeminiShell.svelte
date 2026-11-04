@@ -91,6 +91,28 @@
     let habitualPrimaryId=""
     let restoreCandidateId=""
     let screenNotice=""
+    let hideNoScreenNotice=false
+    let screenNoticeTimer:ReturnType<typeof setTimeout>|null=null
+    let audioProblemTimer:ReturnType<typeof setTimeout>|null=null
+    let playlistNoticeTimer:ReturnType<typeof setTimeout>|null=null
+    // Transient banners expire automatically. A pending "restore primary"
+    // decision remains visible until the user chooses how to proceed.
+    $: {
+        const current=screenNotice
+        if(screenNoticeTimer)clearTimeout(screenNoticeTimer)
+        if(current && !restoreCandidateId)
+            screenNoticeTimer=setTimeout(()=>{if(screenNotice===current && !restoreCandidateId)screenNotice=""},7000)
+    }
+    $: {
+        const current=audioProblem
+        if(audioProblemTimer)clearTimeout(audioProblemTimer)
+        if(current)audioProblemTimer=setTimeout(()=>{if(audioProblem===current)audioProblem=""},8500)
+    }
+    $: {
+        const current=playlistNotice
+        if(playlistNoticeTimer)clearTimeout(playlistNoticeTimer)
+        if(current)playlistNoticeTimer=setTimeout(()=>{if(playlistNotice===current)playlistNotice=""},8500)
+    }
     let screenPoll:ReturnType<typeof setInterval>|null=null
     let displayRefreshBusy=false
     let previousExternalSignature=""
@@ -3316,7 +3338,12 @@
         const uStatuses = hymnSourceStatus.subscribe(() => { if(mode==="himnario")renderToolbar() })
         cleanup.push(uOutputs, uPlayingForGroup, uGroupLock, uSaved, uFolders, uBibles, uScriptureDraft, uBibleTab, uBibleTemplate, uBibleSettings, uBibleMode, uBibleAppearance, uHymn, uCollections, uRoots, uStatuses)
         rebuildOutputs()
+        const noScreenTimeout=setTimeout(()=>hideNoScreenNotice=true,7500)
         return () => {
+            clearTimeout(noScreenTimeout)
+            if(screenNoticeTimer)clearTimeout(screenNoticeTimer)
+            if(audioProblemTimer)clearTimeout(audioProblemTimer)
+            if(playlistNoticeTimer)clearTimeout(playlistNoticeTimer)
             if (timer) clearTimeout(timer)
             playlistDockObserver?.disconnect()
             if(playlistModuleArea)playlistModuleArea.style.paddingRight=playlistModuleAreaPadding
@@ -3357,10 +3384,11 @@
 <svelte:head><link rel="stylesheet" href="ja-gemini.css" /><link rel="stylesheet" href="ja-gemini-layout.css" /></svelte:head>
 <div class={"ja-gemini-host " + geminiBodyClasses + (compactUi ? " ja-compact-ui" : "") + (largeUi ? " ja-large-ui" : "")} bind:this={host}>
     {@html geminiHtml}
-    {#if displaysChecked && knownExternalDisplayIds.size===0}
+    {#if displaysChecked && knownExternalDisplayIds.size===0 && !hideNoScreenNotice}
         <div class="ja-screen-live-notice" role="status">
             <strong>Sin pantalla externa</strong>
             Puedes reproducir video, audio y listas en la consola. La proyección se activará al conectar un monitor.
+            <button type="button" aria-label="Cerrar aviso sin pantalla externa" title="Cerrar aviso" on:click={()=>hideNoScreenNotice=true}>✕</button>
         </div>
     {/if}
     {#if screenNotice}
