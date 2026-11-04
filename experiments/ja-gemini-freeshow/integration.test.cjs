@@ -357,7 +357,7 @@ test("Envío rápido multiselección reemplaza el panel grande sin ocultar tarje
 test("Quick Play y Cortar envían al destino marcado; al marcar varias usan un reloj",()=>{
  const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
  const p=shell.split("function publishPreparedMedia()")[1].split("function toggleFollowProgram()")[0]
- assert.ok(p.includes("const targets=markedPlaylistTargets()"),"El destino de la playlist es independiente del Envío rápido")
+ assert.ok(p.includes("const targets=markedGroupTargets()"),"Quick Play usa el selector de Envío rápido; las listas tienen su selección independiente")
  assert.ok(p.includes("if(!targets.length)"),"No emitir sin destinos")
  assert.ok(p.includes("if(targets.length>1){void sendPreparedToGroup();return}"),"Enviar grupo no está conectado a Quick Play")
  assert.ok(p.includes("const destinationId=targets[0]"),"Envío individual debe seguir funcionando")
@@ -582,7 +582,7 @@ test("Multimedia P3: videos, imágenes y audio se gestionan por rutas reales ais
  assert.ok(shell.includes('import { AudioPlayer } from "../../audio/audioPlayer"'),"Debe usar motor de audio FreeShow")
  assert.ok(onlyAudio.includes("AudioPlayer.start(path,{name:fileName(path)},{playMultiple:true,startPaused:true})"),"No borrar sesiones ajenas al iniciar audio")
  assert.ok(onlyAudio.includes("jaAudioPath")&&onlyAudio.includes("AudioPlayer.stop(previous)"),"Solo reemplazar pista de JA")
- assert.ok(onlyAudio.includes('targets.includes(primary)'),"No habilitar audio fuera de pantalla principal")
+ assert.ok(!onlyAudio.includes('!targets.includes(primary)'),"Audio local no debe bloquearse por falta de monitor; la ruta de Windows es única")
  assert.ok(onlyAudio.includes('targetSnapshot!==markedGroupTargets().join("|")'),"Prevenir reproducción tras cambios de destinos")
  assert.ok(onlyAudio.includes("AudioPlayer.getPlaying(path)"),"Confirmar sesión nativa antes de indicar éxito")
  assert.ok(!onlyAudio.includes("setOutput(")&&!onlyAudio.includes("sendToJAOutputs("),"Audio no debe borrar imágenes ni enviar un fondo no soportado")
@@ -688,12 +688,12 @@ test("P5: Solo audio de MP4 e himnos nunca borra fondo o Biblia",()=>{
  const audio=s.split("async function playJAOnlySound(path:string,targets:string[],valid:()=>boolean)")[1].split("function jaOnlyAudioSend(")[0]
  assert.ok(audio.includes('kind!=="audio" && kind!=="video"'),"Aceptar pista de vídeo local")
  assert.ok(audio.includes('AudioPlayer.start(path,{name:fileName(path)},{playMultiple:true,startPaused:true})'),"Motor nativo de sonido")
- assert.ok(audio.includes('targets.includes(primary)'),"Una sola ruta de sonido Primario")
+ assert.ok(audio.includes('targets.some(id=>!available.includes(id))'),"Validar destinos sin impedir reproducir Solo audio localmente")
  assert.ok(audio.includes("liveVideo"),"Prevenir duplicar sonido de un video activo")
  assert.ok(audio.includes("jaAudioPath!==path"),"No interrumpir otro reproductor")
  assert.ok(audio.includes("showJAOwnedAudio(path)"),"Controles de audio reales")
  assert.ok(!audio.includes("setOutput(")&&!audio.includes("sendToJAOutputs(")&&!audio.includes("clearSlide(")&&!audio.includes("clearBackground("),"Solo audio no altera imagen o texto")
- assert.ok(s.includes('audioToggle.className="ja-target ja-only-audio-toggle'),"Modo rápido visible")
+ assert.ok(s.includes('onlyAudio.className="ja-target ja-only-audio-toggle'),"Botón único Solo audio disponible incluso sin pantallas")
  assert.ok(s.includes("if(jaOnlyAudioSend(selected))return"),"Envío rápido respeta el modo")
 });
 test("P5: avanzar mixto usa el motor existente y YouTube visible",()=>{
@@ -705,12 +705,12 @@ test("P5: avanzar mixto usa el motor existente y YouTube visible",()=>{
  assert.ok(run.includes('playerVideos.update(data=>({...data,[youtubeId]'),"Registro nativo YouTube")
  assert.ok(run.includes('id:youtubeId,type:"player",loop:false'),"No reproducción oculta en YouTube")
  assert.ok(native.includes('<Player {outputId} {id} on:loaded />'),"YouTube usa el iframe de FreeShow")
- assert.ok(run.includes('type:"video",loop:item.loopVideo===true,muted:false,startAt:0'),"Video local con bucle por elemento")
+ assert.ok(run.includes('type:"video",loop:item.loopVideo===true,muted:!targets.includes(primary),startAt:0'),"Video en bucle con sonido únicamente en principal")
  assert.ok(run.includes('sendToJAOutputs("background"'),"Proyección por destinos marcados")
  assert.ok(!run.includes('type:"youtube-audio"'),"No separar audio de YouTube")
  assert.ok(s.includes('playlistMonitor=setInterval(watchJAPlaylist,350)'),"Vigilar fin de sesión")
  assert.ok(s.includes('if(!manual && !list.autoNext)')&&s.includes('jaNextIndex(jaPlaybackMode(list.playMode,list.repeat)'),"Manual y modos repetición")
- assert.ok(s.includes('AudioPlayer.getPlaying(item.path)')&&s.includes('VideoPlayer.getPlaying(key,[primary])'),"Reconocer audio y video real")
+ assert.ok(s.includes('AudioPlayer.getPlaying(item.path)')&&s.includes('VideoPlayer.getPlaying(key,[target])')&&s.includes('playlistLocalVideoPath===item.path'),"Observar audio, video remoto y reproducción local")
 });
 
 test("P5: Play nuevo inicia en cero sin perjudicar recuperación de reloj ni atajos bíblicos",()=>{
@@ -866,4 +866,13 @@ test("P7b: principal intercambiable sin duplicar sonido ni emitir contenido anti
  assert.ok(s.includes("localVideo && outputId===currentMain"),"Evitar mostrar cuadros viejos al reconectar")
  assert.ok(transfers.includes("clearBackground(from)"),"Vaciar anterior principal tras transferencia")
  assert.ok(transfers.includes('setOutput("effects",[],false,from)'),"No reactivar logos anteriores")
+});
+
+test("P8: Quick Play y playlist tienen selecciones independientes",()=>{
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const quick=shell.split("function publishPreparedMedia()")[1].split("function toggleFollowProgram()")[0]
+ const playlist=shell.split("async function playJAPlaylistIndex(id:string,index:number,fromQueue=false)")[1].split("function advanceJAPlaylist(")[0]
+ assert.ok(quick.includes("const targets=markedGroupTargets()"))
+ assert.ok(playlist.includes("const targets=markedPlaylistTargets()"))
+ assert.ok(playlist.includes("if(!targets.length)"),"Reproducir local si el operador no asignó monitores")
 });
