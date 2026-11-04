@@ -113,3 +113,15 @@ Continuar JA Proyecciones con diseño Gemini y FreeShow 1.6.7 en `IsaacMPP/Nuevo
 - La biblioteca de listas incorpora cuadrícula/lista y miniaturas locales progresivas; audio conserva carátula neutra.
 - Modos normal, aleatorio, repetir canción/lista y bucles por pantalla permanecen.
 - Requiere pruebas físicas de Windows para garantizar códecs, audio y transferencia sin cortes.
+
+
+## P7 — Gestión de pantallas físicas y ventanas (4 noviembre 2026)
+- Se incorpora detección periódica de Windows (3 s), usando únicamente pantallas externas devueltas por Electron.
+- Un primer proyector disponible se asigna como principal. Si la principal habitual falta, otra conectada asume provisionalmente esa función.
+- Al reconectar la principal habitual, JA solicita confirmación y transfiere el contenido que está en vivo a ella; la provisional vuelve a secundaria vacía (no revive imágenes antiguas).
+- Mostrar/Ocultar actúan sobre las ventanas nativas de salida, independientemente del audio y la reproducción. La pantalla de Windows queda libre al ocultar; cada salida tiene control individual y hay Mostrar todas/Ocultar todas.
+- Las asignaciones de ID/etiqueta de pantalla, principal habitual y el ocultamiento manual se recuerdan localmente; se ofrece Olvidar configuración para una pantalla desconectada.
+- Se muestra un aviso persistente ante nuevas pantallas/reconexiones y cuando no hay pantallas externas.
+- Cuando queda sin pantalla externa, un MP4 local puede continuar en la Vista previa de la laptop y al reconectar se envía con startAt tomado del reloj actual.
+- Riesgos que requieren prueba en Windows real: estabilidad de los IDs de Electron, reconexión de HDMI y spacedesk, compatibilidad de códecs, reproducción y audio sin saltos, posición inicial de cada ventana, transferencia de escenas superpuestas y presentaciones externas.
+- Nunca fusionar la rama experimental hasta completar esas pruebas y corregir los errores que aparezcan.

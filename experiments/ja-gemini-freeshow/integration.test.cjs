@@ -837,3 +837,21 @@ test("P6: audio y videos locales no requieren monitor externo; biblioteca con mi
  assert.ok(thumb.includes("queuedHymnThumbnail(path)"),"Miniaturas reales progresivas")
  assert.ok(!s.includes('music.textContent="♫ Música de fondo"'),"No existe el botón duplicado")
 });
+
+test("P7: ventanas de proyección son independientes del reloj y tienen reconexión inteligente",()=>{
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const settings=read("engine/src/frontend/components/ja/JaGeminiSettings.svelte")
+ const native=read("engine/src/electron/output/helpers/OutputVisibility.ts")
+ assert.ok(shell.includes('screenPoll=setInterval(()=>{void refreshDisplaySafety()},3000)'),"Windows se consulta periódicamente")
+ assert.ok(shell.includes("async function reconcileWindowsDisplays("),"Asignar pantallas reales, sin inventar monitores")
+ assert.ok(shell.includes('toggleOutputs([id],{state:visible})'),"Mostrar/ocultar ventana con API nativa")
+ assert.ok(shell.includes('manuallyHiddenOutputs.add(id)'),"Oculto voluntariamente no se reabre al reconectar")
+ assert.ok(shell.includes("function restoreHabitualPrimary()"),"Ofrecer principal habitual al reconectar")
+ assert.ok(shell.includes("transferProjectedContent(from,to)"),"Traspasar la proyección activa")
+ assert.ok(shell.includes('if(source.slide)setOutput("slide",source.slide,false,to)'),"Conservar versículos en transferencia")
+ assert.ok(shell.includes("if(background)clearBackground(from)"),"El principal provisional queda sin video viejo")
+ assert.ok(shell.includes("screenNotice"),"Notificación persistente y visible")
+ assert.ok(settings.includes('on:click={()=>dispatch("makePrimary",{id})}'),"Elegir principal en Configuración")
+ assert.ok(settings.includes('Ocultar proyección'),"Cerrar ventana para mostrar escritorio externo")
+ assert.ok(native.includes("window.hide()"),"No se reemplaza imagen por negro")
+});

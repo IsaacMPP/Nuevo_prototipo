@@ -7,6 +7,8 @@
     import { outputs, mediaFolders, scriptureMode, scriptures, saved } from "../../stores"
 
     export let selectedOutputId: string = ""
+    export let mainOutputId: string = ""
+    export let hiddenOutputIds: string[] = []
     export let previewAutoplay = true
     export let compactUi = false
     export let largeUi = false
@@ -133,13 +135,35 @@
                     <h3>Pantallas y salidas</h3>
                     <p class="intro">La laptop se reserva para controlar JA. Las salidas de proyección se activan únicamente en pantallas externas.</p>
                     <div class="status-counter">Salidas configuradas en JA: <strong>{configuredOutputs.length}</strong></div>
+                    <p class="info">Principal: {configuredOutputs.find(([id])=>id===mainOutputId)?.[1]?.name||"Sin pantalla principal"} · Mostrar u ocultar proyección no detiene video ni audio.</p>
                     {#if configuredOutputs.length}
                         <div class="ja-settings-outputs">
                             {#each configuredOutputs as [id, output] (id)}
-                                <button type="button" aria-pressed={selectedOutputId===id} disabled={!output.active || !output.screen || String(output.screen)===operatorDisplayId} on:click={() => dispatch("selectOutput",{id})}>
-                                    <span>{output.name || "Salida " + id}</span>
-                                    <small>{!output.screen ? "Sin monitor asignado" : String(output.screen)===operatorDisplayId ? "Bloqueada: monitor del operador" : output.active ? (selectedOutputId===id ? "Inspeccionada" : "Configurada") : "Inactiva"} · {id}</small>
-                                </button>
+                                <div class="ja-screen-setup-card">
+                                    <button type="button" aria-pressed={selectedOutputId===id}
+                                        disabled={!output.active || !output.screen || String(output.screen)===operatorDisplayId}
+                                        on:click={() => dispatch("selectOutput",{id})}>
+                                        <span>{output.name || "Salida " + id}{id===mainOutputId?" · PRINCIPAL":""}</span>
+                                        <small>{!output.screen?"Sin monitor asignado":String(output.screen)===operatorDisplayId?
+                                            "Bloqueada: monitor del operador":physicalDisplays.some(d=>String(d.id)===String(output.screen))?
+                                            hiddenOutputIds.includes(id)?"Ventana oculta":"Conectada":"Desconectada"} · {id}</small>
+                                    </button>
+                                    <div class="ja-screen-setup-actions">
+                                        {#if output.screen && physicalDisplays.some(d=>String(d.id)===String(output.screen)) && String(output.screen)!==operatorDisplayId}
+                                            {#if id!==mainOutputId}
+                                                <button type="button" on:click={()=>dispatch("makePrimary",{id})}>Hacer principal</button>
+                                            {/if}
+                                            <button type="button" on:click={()=>dispatch("toggleProjection",{id,visible:hiddenOutputIds.includes(id)})}>
+                                                {hiddenOutputIds.includes(id)?"Mostrar proyección":"Ocultar proyección"}
+                                            </button>
+                                        {:else}
+                                            <button type="button" on:click={()=>{
+                                                if(window.confirm("¿Olvidar esta pantalla desconectada en JA? No se modificará Windows."))
+                                                    dispatch("forgetOutput",{id})
+                                            }}>Olvidar configuración</button>
+                                        {/if}
+                                    </div>
+                                </div>
                             {/each}
                         </div>
                     {:else}
@@ -174,7 +198,7 @@
                         </div>
                         <p class="info">Un solo botón: reutiliza una salida sin monitor, reactiva una existente o crea otra si es necesario. No cambia el contenido actual hasta que el operador lo envíe.</p>
                     </div>
-                    <p class="info">La pantalla de la laptop está reservada. HDMI y spacedesk pueden activarse por separado. Verifica cada ventana física y su audio antes de usarla en un servicio; no se emite automáticamente a todas.</p>
+                    <p class="info">La laptop queda reservada como consola. Windows detecta y JA asigna pantallas nuevas; puedes cambiar la principal y ocultar ventanas sin detener el contenido. Al restaurar una principal, la antigua queda vacía, sin recuperar proyecciones viejas.</p>
                 {:else if section === "libraries"}
                     <h3>Archivos y bibliotecas</h3>
                     <p class="intro">Vincula carpetas reales sin mover ni borrar archivos de origen.</p>
@@ -280,6 +304,10 @@
     .setting-group select{max-width:240px}
     .ja-settings-actions{display:flex;align-items:center;flex-wrap:wrap;gap:9px;margin-top:9px}
     .ja-settings-outputs{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:9px;margin-top:14px}
+    .ja-screen-setup-card{border:1px solid #3b5879;border-radius:8px;background:#102747;padding:6px;min-width:0}
+    .ja-screen-setup-card>button{width:100%}
+    .ja-screen-setup-actions{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px}
+    .ja-screen-setup-actions button{font-size:10px;padding:5px;border:1px solid #47789e;border-radius:5px;background:#1b4d74;color:white;cursor:pointer}
     .ja-settings-outputs button{display:flex;flex-direction:column;align-items:start;gap:5px;min-width:0}
     .ja-settings-outputs small{font-size:11px;color:#9edfc2;overflow:hidden;text-overflow:ellipsis}
     .info{font-size:12px!important;line-height:1.65!important;color:#a6bdd9;margin:15px 0 0}

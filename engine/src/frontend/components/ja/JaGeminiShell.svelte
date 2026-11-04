@@ -80,23 +80,53 @@
     let operatorDisplayId = ""
     let knownExternalDisplayIds = new Set<string>()
     let displaysChecked = false
+    // Native windows are distinct from projection content. Hidden windows must
+    // not stop the audio or change the recorded FreeShow output content.
+    const JA_SCREEN_PROFILES="ja-gemini-monitor-profiles-v1"
+    const JA_HIDDEN_OUTPUTS="ja-gemini-manually-hidden-outputs-v1"
+    const JA_HABITUAL_PRIMARY="ja-gemini-habitual-main-output-v1"
+    let screenProfiles:Record<string,string>={}
+    let manuallyHiddenOutputs=new Set<string>()
+    let habitualPrimaryId=""
+    let restoreCandidateId=""
+    let screenNotice=""
+    let screenPoll:ReturnType<typeof setInterval>|null=null
+    let displayRefreshBusy=false
+    let previousExternalSignature=""
+    type JAExternalDisplay={id:number;label?:string;bounds:{x:number;y:number;width:number;height:number}}
+    const fingerprint=(d:JAExternalDisplay)=>String(d.id)+"|"+(d.label||"").trim().toLowerCase()
+    function saveScreenMemory(){
+        try{
+            localStorage.setItem(JA_SCREEN_PROFILES,JSON.stringify(screenProfiles))
+            localStorage.setItem(JA_HIDDEN_OUTPUTS,JSON.stringify([...manuallyHiddenOutputs]))
+            if(habitualPrimaryId)localStorage.setItem(JA_HABITUAL_PRIMARY,habitualPrimaryId)
+            else localStorage.removeItem(JA_HABITUAL_PRIMARY)
+        }catch{screenNotice="No se pudo guardar la configuración de pantallas."}
+    }
     async function refreshDisplaySafety(){
+        if(displayRefreshBusy)return
+        displayRefreshBusy=true
         try {
             const displays=await requestMain(Main.GET_DISPLAYS)
             const operator=displays?.find(d=>(d as typeof d & {jaOperatorDisplay?:boolean}).jaOperatorDisplay) ||
                 displays?.find(d=>d.internal)
             operatorDisplayId=operator ? String(operator.id) : ""
-            knownExternalDisplayIds=new Set((displays||[])
-                .filter(d=>operatorDisplayId && String(d.id)!==operatorDisplayId)
-                .map(d=>String(d.id)))
+            const external=(displays||[]).filter(d=>operatorDisplayId && String(d.id)!==operatorDisplayId)
+            const previouslyConnected=new Set(knownExternalDisplayIds)
+            knownExternalDisplayIds=new Set(external.map(d=>String(d.id)))
             displaysChecked=true
-            screenStructure=""
+            const signature=external.map(d=>fingerprint(d)).sort().join(";")
+            if(signature!==previousExternalSignature){
+                previousExternalSignature=signature
+                screenStructure=""
+                await reconcileWindowsDisplays(external,previouslyConnected)
+            }
             rebuildOutputs()
         } catch(error){
             displaysChecked=true
             knownExternalDisplayIds=new Set()
-            notice("No fue posible identificar la pantalla de control; se bloquearon nuevos envíos por seguridad.")
-        }
+            screenNotice="No se pudo consultar Windows. Revisa la conexión de monitores antes de proyectar."
+        }finally{displayRefreshBusy=false}
     }
     async function validateExternalDisplay(displayId:number){
         const displays=await requestMain(Main.GET_DISPLAYS)
@@ -379,8 +409,9 @@
         const available=chooseOutput()
         for(const id of [...playlistTargetIds])if(!available.includes(id))playlistTargetIds.delete(id)
         const primary=localStorage.getItem("ja-main-projector")||""
-        if(available.length&&!playlistTargetIds.size&&!playlistTargetsChosenByOperator)
-            playlistTargetIds.add(available.includes(primary)?primary:available[0])
+        if(!playlistTargetsChosenByOperator){
+            playlistTargetIds=new Set(available.includes(primary)?[primary]:available.slice(0,1))
+        }
         playlistOutputChoices=available.map(id=>({id,name:get(outputs)[id]?.name||"Salida "+id,primary:id===primary}))
         playlistSelectedTargets=[...playlistTargetIds]
     }
@@ -1420,6 +1451,214 @@
         void refreshDisplaySafety()
         notice("Solicitada activación de "+(output.name||outputId)+". Comprueba el monitor externo.")
     }
+    async function reconcileWindowsDisplays(external:JAExternalDisplay[],previous:Set<string>){
+        const current=get(outputs)
+        // Record the primary's content BEFORE Windows removes a physical display.
+        const oldMain=localStorage.getItem("ja-main-projector")||""
+        const oldMainScreen=String(current[oldMain]?.screen||"")
+        const mainWasRemoved=!!oldMainScreen && previous.has(oldMainScreen) &&
+            !knownExternalDisplayIds.has(oldMainScreen)
+        if(!external.length){
+            if(mainWasRemoved)resumeVideoLocallyFromOutput(oldMain)
+            return
+        }
+        let newDisplays=0
+        // Assign physical screens first; only then elect the principal. Never
+        // confuse the operator's internal screen with a projection window.
+        for(const display of external){
+            const id=String(display.id),key=fingerprint(display)
+            let outputId=screenProfiles[key]||""
+            const outs=get(outputs)
+            if(!outputId||!outs[outputId]){
+                outputId=Object.entries(outs).find(([candidate,output])=>output?.enabled &&
+                    !output?.stageOutput && String(output.screen)===id &&
+                    (!Object.entries(screenProfiles).some(([oldKey,owned])=>owned===candidate&&oldKey!==key)))?.[0]||""
+            }
+            const newlyConnected=!previous.has(id)
+            if(!outputId){
+                const reuse=Object.entries(get(outputs)).find(([,out])=>out?.enabled&&!out.stageOutput&&!out.screen)
+                outputId=reuse?.[0]||addOutput(false,"",false,display.label||"Pantalla externa")||""
+                if(!outputId)continue
+                newDisplays++
+            }
+            screenProfiles[key]=outputId
+            const output=get(outputs)[outputId]
+            if(!output)continue
+            if(String(output.screen)!==id || !output.enabled || !output.active){
+                outputs.update(a=>({...a,[outputId]:{...a[outputId],enabled:true,active:true,
+                    screen:id,bounds:{...display.bounds},boundsLocked:true,alwaysOnTop:true}}))
+            }
+            if(newlyConnected){
+                // A returning principal must not flash its old pre-disconnect
+                // image while the provisional principal is still in charge.
+                const currentMain=localStorage.getItem("ja-main-projector")||""
+                const localVideo=previewMedia && !previewMedia.paused && !previewMedia.muted
+                if((outputId===habitualPrimaryId && currentMain && currentMain!==outputId) ||
+                    (localVideo && outputId===currentMain)){
+                    clearBackground(outputId)
+                    clearSlide(true,outputId)
+                }
+                const wasExplicitlyHidden=manuallyHiddenOutputs.has(outputId)
+                toggleOutputs([outputId],{state:!wasExplicitlyHidden})
+            }
+        }
+        saveScreenMemory()
+        const available=Object.entries(get(outputs))
+            .filter(([,out])=>out?.enabled&&out.active&&!out.stageOutput&&
+                !!out.screen&&knownExternalDisplayIds.has(String(out.screen))).map(([id])=>id)
+        const liveMain=localStorage.getItem("ja-main-projector")||""
+        if(!habitualPrimaryId && liveMain)habitualPrimaryId=liveMain
+        if(!available.includes(liveMain)){
+            const replacement=(habitualPrimaryId && available.includes(habitualPrimaryId)
+                ? habitualPrimaryId:available[0])||""
+            if(replacement){
+                // Primary loss: the replacement is provisional. Its former
+                // secondary content is intentionally NOT restored later.
+                if(liveMain&&liveMain!==replacement&&mainWasRemoved)
+                    transferProjectedContent(liveMain,replacement)
+                localStorage.setItem("ja-main-projector",replacement)
+                if(!habitualPrimaryId)habitualPrimaryId=replacement
+                saveScreenMemory()
+                screenNotice=(newDisplays?"Nueva pantalla detectada. ":"")+
+                    (replacement===habitualPrimaryId?"Pantalla principal asignada automáticamente.":
+                    "Principal provisional activada porque la principal habitual no está conectada.")
+                if(previewMedia && !previewMedia.muted && !previewMedia.paused)
+                    bridgeLocalVideoToOutput(replacement)
+            }
+        }else if(newDisplays){
+            screenNotice="Nueva pantalla detectada y asignada como secundaria. La principal continúa sin cambios."
+        }
+        const currentMain=localStorage.getItem("ja-main-projector")||""
+        // A projector returned after a local-only interval: rejoin the native
+        // output at the current local video clock, never at the old saved 0:00.
+        if(available.includes(currentMain) && previewMedia && !previewMedia.muted && !previewMedia.paused)
+            bridgeLocalVideoToOutput(currentMain)
+        if(habitualPrimaryId && habitualPrimaryId!==currentMain &&
+            available.includes(habitualPrimaryId)){
+            restoreCandidateId=habitualPrimaryId
+            screenNotice="La pantalla principal habitual se ha reconectado. ¿Quieres restaurarla como principal? La proyección actual se transferirá y la anterior quedará vacía."
+        }else restoreCandidateId=""
+    }
+    function setProjectionVisible(id:string,visible:boolean){
+        const out=get(outputs)[id]
+        if(!out?.enabled||!out.screen||!knownExternalDisplayIds.has(String(out.screen)))
+            return notice("Esta pantalla no está conectada; no se modificó su ventana.")
+        if(String(out.screen)===operatorDisplayId)return notice("La laptop es solo la consola de control.")
+        if(visible)manuallyHiddenOutputs.delete(id)
+        else manuallyHiddenOutputs.add(id)
+        saveScreenMemory()
+        toggleOutputs([id],{state:visible})
+        screenStructure=""
+        rebuildOutputs()
+        screenNotice=(out.name||"Pantalla")+" "+(visible?
+            "mostrada. El contenido continúa desde su sesión actual.":
+            "oculta. El escritorio de Windows queda libre y el audio continúa.")
+    }
+    function setAllProjectionVisible(visible:boolean){
+        for(const id of chooseOutput())setProjectionVisible(id,visible)
+    }
+    function transferProjectedContent(from:string,to:string){
+        if(!from||!to||from===to)return
+        const source=get(outputs)[from]?.out
+        if(!source)return
+        // The current playing clock wins; no saved/stale secondary content is
+        // restored. Copy into the new principal before clearing the old one.
+        const background=source.background
+        if(background){
+            const path=background.path||""
+            const current=path?VideoPlayer.getPlaying(path,[from])?.audio.currentTime:undefined
+            setOutput("background",{...background,muted:false,
+                startAt:Number.isFinite(current)?current:background.startAt||0},false,to)
+        }
+        if(source.slide)setOutput("slide",source.slide,false,to)
+        if(source.overlays?.length)setOutput("overlays",[...source.overlays],false,to)
+        if(source.effects?.length)setOutput("effects",[...source.effects],false,to)
+        if(background)clearBackground(from)
+        if(source.slide)clearSlide(true,from)
+        setOutput("overlays",[],false,from)
+        setOutput("effects",[],false,from)
+        // No former secondary buffer survives the role exchange.
+    }
+    function bridgeLocalVideoToOutput(outputId:string){
+        if(!previewMedia || previewMedia.paused || previewMedia.muted ||
+            getMediaType(getExtension(prepared))!=="video")return
+        const path=prepared,position=Number(previewMedia.currentTime)||0
+        const received=sendToJAOutputs("background",{
+            path,type:"video",startAt:position,loop:previewMedia.loop,muted:false
+        },[outputId],{replaceScripture:true,requireAll:true})
+        if(received.length!==1){
+            screenNotice="La pantalla está conectada, pero no se pudo transferir el vídeo. Continúa reproduciéndose localmente."
+            return
+        }
+        previewMedia.muted=true
+        playlistLocalVideoPath=""
+        playlistSawProgress=false
+        followProgram=true
+        screenNotice="Video enviado a la pantalla principal desde "+time(position)+" sin volver a 0:00."
+    }
+    function resumeVideoLocallyFromOutput(id:string){
+        const source=get(outputs)[id]?.out?.background
+        if(!source?.path || getMediaType(getExtension(source.path))!=="video")return
+        const playing=VideoPlayer.getPlaying(source.path,[id])
+        const position=Number(playing?.audio.currentTime)||0
+        if(playing)VideoPlayer.pause(source.path,id)
+        selectedId=""
+        prepare(source.path)
+        const local=previewMedia
+        if(!local)return
+        const resume=()=>{
+            if(previewMedia!==local)return
+            try{local.currentTime=position}catch{}
+            local.muted=false
+            void local.play().catch(()=>notice("El video no pudo continuar localmente después de desconectar el proyector."))
+        }
+        if(local.readyState>=1)resume()
+        else local.addEventListener("loadedmetadata",resume,{once:true})
+        if(playlistRunning){
+            playlistLocalVideoPath=source.path
+            playlistSawProgress=false
+        }
+        screenNotice="Proyector desconectado. La reproducción continúa en la consola sin pantalla externa."
+    }
+    function restoreHabitualPrimary(){
+        const to=restoreCandidateId
+        const from=localStorage.getItem("ja-main-projector")||""
+        if(!to || !chooseOutput().includes(to))return
+        transferProjectedContent(from,to)
+        localStorage.setItem("ja-main-projector",to)
+        habitualPrimaryId=to
+        restoreCandidateId=""
+        screenStructure=""
+        saveScreenMemory()
+        rebuildOutputs()
+        screenNotice="Principal habitual restaurada. La salida anterior quedó vacía como secundaria."
+    }
+    function makeOutputPrimary(id:string){
+        if(!chooseOutput().includes(id))return notice("Selecciona una pantalla externa conectada.")
+        const previous=localStorage.getItem("ja-main-projector")||""
+        if(previous!==id)transferProjectedContent(previous,id)
+        localStorage.setItem("ja-main-projector",id)
+        habitualPrimaryId=id
+        restoreCandidateId=""
+        screenStructure=""
+        saveScreenMemory()
+        rebuildOutputs()
+        screenNotice="Nueva pantalla principal guardada. La anterior quedó libre como secundaria."
+    }
+    function forgetDisconnectedOutput(id:string){
+        const output=get(outputs)[id]
+        if(!output || (output.screen && knownExternalDisplayIds.has(String(output.screen))))
+            return notice("Solo se puede olvidar una pantalla desconectada.")
+        for(const [key,owner] of Object.entries(screenProfiles))if(owner===id)delete screenProfiles[key]
+        manuallyHiddenOutputs.delete(id)
+        if(habitualPrimaryId===id)habitualPrimaryId=""
+        if(localStorage.getItem("ja-main-projector")===id)localStorage.removeItem("ja-main-projector")
+        outputs.update(a=>({...a,[id]:{...a[id],enabled:false,active:false,screen:""}}))
+        saveScreenMemory()
+        screenStructure=""
+        rebuildOutputs()
+        screenNotice="Configuración anterior eliminada de JA. No se modificó Windows."
+    }
     function chooseOutput() {
         const available = Object.entries(get(outputs))
             .filter(([, value]) => value && value.enabled && value.active && !value.stageOutput &&
@@ -1532,7 +1771,7 @@
         // Never retain a disconnected destination inside a marked group.
         for(const id of [...syncedTargetIds])if(!available.includes(id))syncedTargetIds.delete(id)
         // Reconstruct only when monitors/active flags change, not every playback tick.
-        const structure = available.map(id=>id+":"+!!outputMap[id]?.active+":"+(outputMap[id]?.screen||"")+":"+(outputMap[id]?.name||"")).join("|")
+        const structure = available.map(id=>id+":"+!!outputMap[id]?.active+":"+(outputMap[id]?.screen||"")+":"+(outputMap[id]?.name||"")+":"+manuallyHiddenOutputs.has(id)).join("|")
         if (structure !== screenStructure) {
             screenStructure = structure
             for (const component of screenRenderers) component.$destroy()
@@ -1610,6 +1849,13 @@
                     else refreshGroupChoices()
                 }
                 targets?.append(target)
+                const visibility=document.createElement("button")
+                visibility.type="button"
+                visibility.className="ja-target ja-output-visibility rounded-lg border px-2 py-1 text-xs"
+                visibility.textContent=manuallyHiddenOutputs.has(id)?"◉ Mostrar "+(value.name||id):"◌ Ocultar "+(value.name||id)
+                visibility.title="Mostrar u ocultar la ventana física sin detener la reproducción"
+                visibility.onclick=()=>setProjectionVisible(id,manuallyHiddenOutputs.has(id))
+                targets?.append(visibility)
             }
             if(targets && available.length){
                 const send=document.createElement("button")
@@ -1622,6 +1868,13 @@
                 state.setAttribute("role","status")
                 state.setAttribute("aria-live","polite")
                 targets.append(state)
+                const showAll=document.createElement("button")
+                showAll.type="button";showAll.className="ja-target rounded-lg border px-2 py-1 text-xs"
+                showAll.textContent="Mostrar todas";showAll.onclick=()=>setAllProjectionVisible(true)
+                const hideAll=document.createElement("button")
+                hideAll.type="button";hideAll.className=showAll.className
+                hideAll.textContent="Ocultar todas";hideAll.onclick=()=>setAllProjectionVisible(false)
+                targets.append(showAll,hideAll)
             }
         }
         // Exactly one Solo audio control, including when no projector exists.
@@ -1644,7 +1897,7 @@
             const label = state?.querySelector(".ja-screen-state")
             if (label) label.textContent = file ? fileName(file) : "Salida libre"
             const badge = state?.querySelector(".ja-screen-badge")
-            if (badge) badge.textContent = output.active ? "Activa" : "Inactiva"
+            if (badge) badge.textContent = manuallyHiddenOutputs.has(id) ? "Oculta" : output.active ? "Visible" : "Inactiva"
             const target = targets?.querySelector<HTMLElement>('[data-output="' + CSS.escape(id) + '"]')
             target?.classList.toggle("ja-checked",syncedTargetIds.has(id))
         }
@@ -2701,6 +2954,17 @@
     onMount(() => {
         jaPlaylists.set(jaReadPlaylists())
         selectedPlaylistId=get(jaPlaylists)[0]?.id||""
+        try{
+            const savedProfiles=JSON.parse(localStorage.getItem(JA_SCREEN_PROFILES)||"{}")
+            if(savedProfiles && typeof savedProfiles==="object"&&!Array.isArray(savedProfiles))
+                screenProfiles=Object.fromEntries(Object.entries(savedProfiles).filter(([key,id])=>
+                    key.length<180 && typeof id==="string" && id.length<150).slice(0,60)) as Record<string,string>
+            const hidden=JSON.parse(localStorage.getItem(JA_HIDDEN_OUTPUTS)||"[]")
+            manuallyHiddenOutputs=new Set(Array.isArray(hidden)?hidden.filter((id):id is string=>
+                typeof id==="string" && id.length<150).slice(0,60):[])
+            habitualPrimaryId=localStorage.getItem(JA_HABITUAL_PRIMARY)||localStorage.getItem("ja-main-projector")||""
+        }catch{}
+        screenPoll=setInterval(()=>{void refreshDisplaySafety()},3000)
         playlistMonitor=setInterval(watchJAPlaylist,350)
         loadJABibleAppearances()
         try{
@@ -2903,6 +3167,7 @@
         return () => {
             if (timer) clearTimeout(timer)
             if(playlistMonitor)clearInterval(playlistMonitor)
+            if(screenPoll)clearInterval(screenPoll)
             stopJAPlaylist()
             closeLocalExpanded()
             closeAddMediaMenu()
@@ -2937,6 +3202,25 @@
 <svelte:head><link rel="stylesheet" href="ja-gemini.css" /><link rel="stylesheet" href="ja-gemini-layout.css" /></svelte:head>
 <div class={"ja-gemini-host " + geminiBodyClasses + (compactUi ? " ja-compact-ui" : "") + (largeUi ? " ja-large-ui" : "")} bind:this={host}>
     {@html geminiHtml}
+    {#if displaysChecked && knownExternalDisplayIds.size===0}
+        <div class="ja-screen-live-notice" role="status">
+            <strong>Sin pantalla externa</strong>
+            Puedes reproducir video, audio y listas en la consola. La proyección se activará al conectar un monitor.
+        </div>
+    {/if}
+    {#if screenNotice}
+        <div class="ja-screen-alert" role="alert" aria-live="assertive">
+            <strong>Estado de pantallas</strong>
+            <span>{screenNotice}</span>
+            {#if restoreCandidateId}
+                <button type="button" on:click={restoreHabitualPrimary}>Restaurar principal</button>
+                <button type="button" on:click={()=>{restoreCandidateId="";screenNotice="Se conserva la principal provisional."}}>Mantener actual</button>
+            {:else}
+                <button type="button" on:click={()=>{settingsStartSection="screens";settingsOpen=true}}>Configurar</button>
+                <button type="button" on:click={()=>screenNotice=""} aria-label="Cerrar aviso de pantallas">✕</button>
+            {/if}
+        </div>
+    {/if}
     {#if quickAudioOpen}
         <JaGeminiQuickAudioPanel files={playlistLibraryFiles} currentPath={jaAudioPath}
             busy={jaAudioBusy} preparedVideo={prepared && getMediaType(getExtension(prepared))==="video" ? fileName(prepared) : ""}
@@ -3015,4 +3299,8 @@
     .ja-gemini-host { width: 100%; height: 100%; overflow: hidden; position: relative; }
     .ja-gemini-host :global(#programCanvasContent .previewOutput) { width: 100%; height: 100%; }
     .ja-gemini-host :global(#programCanvasContent .center) { width: 100%; height: 100%; }
+.ja-screen-alert,.ja-screen-live-notice{position:absolute;right:14px;z-index:120;padding:10px 12px;border-radius:9px;border:2px solid #f6ce55;background:#14284a;color:white;box-shadow:0 8px 28px #000b;font-size:12px;max-width:min(410px,75vw);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.ja-screen-alert{top:70px}.ja-screen-live-notice{bottom:12px;right:12px;max-width:340px}
+.ja-screen-alert strong,.ja-screen-live-notice strong{color:#ffe39b}
+.ja-screen-alert button{padding:5px 8px;background:#205785;border:1px solid #8ab6de;border-radius:5px;color:white;cursor:pointer}
 </style>
