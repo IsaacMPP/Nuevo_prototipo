@@ -168,7 +168,11 @@
                     <button type="button" class="delete" title="Eliminar lista" on:click={()=>{if(confirm("¿Eliminar esta lista?"))action("delete",{id:playlist.id})}}>Eliminar</button>
                 </div>
                 {#if playbackNotice}
-                    <div class="dock-error" role="alert">{playbackNotice}</div>
+                    <div class="dock-error" role="alert">
+                        <span>{playbackNotice}</span>
+                        <button type="button" title="Cerrar advertencia" aria-label="Cerrar advertencia de playlist"
+                            on:click={()=>action("dismissNotice")}>✕</button>
+                    </div>
                 {/if}
                 <div class="dock-playlist-targets" role="group" aria-label="Elegir pantallas de la lista">
                     <strong>Proyectar en</strong>
@@ -312,6 +316,9 @@
     .dock-playlist-targets{display:flex;gap:8px;align-items:center;flex-wrap:wrap;border:1px solid #345579;background:#0d2344;padding:7px;border-radius:7px}
     .dock-playlist-targets strong{font-size:11px;color:#cfeaff}.dock-playlist-targets label{display:flex;gap:4px;align-items:center;font-size:10px}
     .dock-playlist-targets span{color:#ffdf9b;font-size:11px}
+    .dock-error{display:flex;justify-content:space-between;align-items:center;gap:10px}
+    .dock-error span{min-width:0;overflow-wrap:anywhere}
+    .dock-error button{flex:0 0 auto;background:transparent;border-color:#f8bea9}
     .dock-error{background:#602c2a;border:2px solid #ffae8c;color:#fff1e3;padding:8px;border-radius:8px;font-weight:600;font-size:11px}
     .dock-file{display:flex;align-items:center;gap:7px;border:1px solid #2c456b;background:#101f40;border-radius:6px;padding:6px;min-width:0}
     .file-name{flex:1;min-width:0}
