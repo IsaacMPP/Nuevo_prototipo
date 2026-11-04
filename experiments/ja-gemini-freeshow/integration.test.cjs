@@ -379,7 +379,7 @@ test("Multimedia sincronizada realiza una única emisión atómica y audio de pr
  assert.ok(helpers.includes("options.requireAll && valid.length!==requested.length"),"El router puede enviar parcialmente a un grupo inválido")
  const video=read("engine/src/frontend/components/media/video/videoPlayer.ts")
  assert.ok(video.includes("linkedOutputIds: linkedOutputIds || []"),"La sesión de VideoPlayer debe ser compartida")
- assert.ok(video.includes("if (jaPrimary && outputId !== jaPrimary) return true"),"Las salidas secundarias deben seguir silenciadas")
+ assert.ok(video.includes("if (jaPrimary) return outputId !== jaPrimary"),"La salida principal permanece audible y únicamente las secundarias están silenciadas")
 });
 test("El mismo grupo puede recibir Biblia sin alterar destinos no marcados",()=>{
  const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
