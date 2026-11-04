@@ -720,6 +720,7 @@
             playlistShufflePosition=0
         }
         const previousEntry=get(jaPlaylists).find(p=>p.id===playlistCurrentId)?.entries[playlistIndex]
+        const previousLocalVideoPath=playlistLocalVideoPath
         const token=++playlistToken
         playlistRunning=true
         playlistBusy=true
@@ -732,6 +733,13 @@
         playlistPaused=false
         playlistLocalVideoPath=""
         selectedPlaylistId=id
+        // Release the previous local video's audible session BEFORE starting
+        // the next entry. Otherwise MP4->MP3 (or MP4 Solo audio) plays twice.
+        if(previousLocalVideoPath && previewMedia &&
+            normalizeJAContentPath(prepared)===normalizeJAContentPath(previousLocalVideoPath)){
+            previewMedia.pause()
+            previewMedia.muted=true
+        }
         // Every new entry owns only the audio started by this JA playlist.
         if(jaAudioPath && jaAudioPath!==item.path && AudioPlayer.audioExists(jaAudioPath)){
             AudioPlayer.stop(jaAudioPath)
@@ -786,6 +794,7 @@
                     const local=previewMedia
                     if(!local)throw Error("No existe un reproductor local para este video.")
                     local.muted=false
+                    local.loop=item.loopVideo===true
                     try{local.currentTime=0}catch{}
                     await local.play()
                     if(token!==playlistToken){local.pause();local.muted=true;return}

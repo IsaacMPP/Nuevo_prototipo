@@ -876,3 +876,12 @@ test("P8: Quick Play y playlist tienen selecciones independientes",()=>{
  assert.ok(playlist.includes("const targets=markedPlaylistTargets()"))
  assert.ok(playlist.includes("if(!targets.length)"),"Reproducir local si el operador no asignó monitores")
 });
+
+test("P8b: cambiar de video local a pista de audio no duplica sonido",()=>{
+ const s=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const run=s.split("async function playJAPlaylistIndex(id:string,index:number,fromQueue=false)")[1].split("function advanceJAPlaylist(")[0]
+ assert.ok(run.includes("const previousLocalVideoPath=playlistLocalVideoPath"),"Recordar video local anterior")
+ assert.ok(run.includes("if(previousLocalVideoPath && previewMedia"),"Pausar video local anterior")
+ assert.ok(run.includes("previewMedia.muted=true"),"Desactivar sonido de video al reproducir siguiente pista")
+ assert.ok(run.includes("local.loop=item.loopVideo===true"),"Loop de videos también funciona en consola sin monitor")
+});

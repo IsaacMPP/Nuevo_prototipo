@@ -131,3 +131,6 @@ Continuar JA Proyecciones con diseño Gemini y FreeShow 1.6.7 en `IsaacMPP/Nuevo
 - Se conserva una única asignación por pantalla física, aun cuando Windows cambie su etiqueta.
 - Las asignaciones manuales también se recuerdan y el audio nativo recalcula la salida autorizada tras intercambiar la principal.
 - No se transfiere una composición antigua si la desconexión no se observó durante esta sesión; se evita mostrar contenido obsoleto en la pantalla reconectada.
+
+## P8b — Audio local sin duplicación (4 noviembre 2026)
+- Al pasar de un vídeo local de la playlist a un MP3 o al Solo audio de otro MP4, el reproductor Preview anterior se pausa y silencia antes de iniciar la pista nueva. Bucle de vídeo también funciona en modo laptop.
