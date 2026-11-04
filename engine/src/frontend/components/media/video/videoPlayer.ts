@@ -289,7 +289,10 @@ export class VideoPlayer {
         // Only the user-selected JA primary can feed the main speaker bus.
         // Auxiliary screens remain silent, including shared group playback.
         const jaPrimary = typeof localStorage === "undefined" ? "" : localStorage.getItem("ja-main-projector") || ""
-        if (jaPrimary && outputId !== jaPrimary) return true
+        // JA explicitly designates one physical output as the ONLY audible
+        // output. Its sound must not depend on an unrelated scene layer style:
+        // a slide/image-only style could otherwise mute the primary video.
+        if (jaPrimary) return outputId !== jaPrimary
         const output = get(outputs)[outputId]
         const scene = output?.out?.scene
         const styleId = scene ? scene.style : output?.style
