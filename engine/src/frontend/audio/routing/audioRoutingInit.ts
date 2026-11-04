@@ -97,6 +97,10 @@ export function setJAPrimaryAudioRouting(outputId: string): boolean {
     const from = `output_win_sub_${outputId}`
     const existing = get(audioRouting)
     if (!existing) return false
+    // Idempotent: also safe to invoke when routing config is loaded or
+    // when the Windows display enumeration refreshes.
+    const routed = existing.connections.filter(c => c.from.startsWith("output_win_sub_") && c.to === "main")
+    if (routed.length === 1 && routed[0].from === from) return true
     audioRouting.update((config) => {
         if (!config) return config
         const connections = config.connections.filter((c) => !(c.from.startsWith("output_win_sub_") && c.to === "main"))
