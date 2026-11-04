@@ -185,6 +185,18 @@
     let playlistDockObserver:ResizeObserver|null=null
     let quickAudioOpen=false
     let audioProblem=""
+    // When requesting only sound from a video already on air, hand its audio
+    // to the independent JA sound bus without changing the projected image.
+    let soloMutedProgram:{path:string;outputId:string;audio:ReturnType<typeof VideoPlayer.getPlaying>["audio"]}|null=null
+    function restoreSoloProgramSound(){
+        const previous=soloMutedProgram
+        soloMutedProgram=null
+        if(!previous)return
+        const live=VideoPlayer.getPlaying(previous.path,[previous.outputId])
+        if(!live || live.audio!==previous.audio)return
+        if(live.audio.muted)VideoPlayer.toggleMute(previous.path,previous.outputId)
+        AudioAnalyser.setSourceVolume(previous.path,VideoPlayer.getVolume(previous.path,[previous.outputId]),previous.outputId)
+    }
     // Select playlists independently from the Quick Play target group.
     let playlistTargetIds=new Set<string>()
     let playlistOutputChoices:Array<{id:string;name:string;primary:boolean}>=[]
@@ -496,6 +508,7 @@
         jaAudioContainer.hidden=false
         const close=()=>{
             if(jaAudioPath!==path)return
+            restoreSoloProgramSound()
             jaAudioPath=""
             jaAudioControls?.$destroy()
             jaAudioControls=null
@@ -565,14 +578,9 @@
         }
         // The same source could already be on-screen; otherwise we risk two
         // audible copies of its soundtrack. Keep the active video untouched.
-        const liveVideo=get(playingVideos).some(session=>
+        const liveVideo=get(playingVideos).find(session=>
             normalizeJAContentPath(session.path)===normalizeJAContentPath(path) &&
             session.linkedOutputIds.includes(primary) && !session.audio.muted)
-        if(liveVideo){
-            audioProblem="Este mismo video ya está sonando en Programa. Silencia su audio antes de iniciar una segunda copia."
-            notice(audioProblem)
-            return false
-        }
         const previous=jaAudioPath
         jaAudioBusy=true
         // Request the default audio context's resume synchronously from the
@@ -581,16 +589,26 @@
         if(initialAudioContext.state==="suspended")
             void initialAudioContext.resume().catch(error=>console.warn("[JA Solo audio] AudioContext:",error))
         try{
+            // The existing video remains visible, but cannot emit a second
+            // soundtrack when its file is played through the JA audio bus.
+            restoreSoloProgramSound()
+            if(liveVideo && VideoPlayer.getPlaying(path,[primary])===liveVideo){
+                VideoPlayer.toggleMute(path,primary)
+                AudioAnalyser.setSourceVolume(path,0,primary)
+                soloMutedProgram={path,outputId:primary,audio:liveVideo.audio}
+            }
             if(jaAudioPath===path && AudioPlayer.audioExists(path))AudioPlayer.stop(path)
             const started=await AudioPlayer.start(path,{name:fileName(path)},{playMultiple:true,startPaused:true})
             const session=AudioPlayer.getPlaying(path)
             if(!started || !session?.audio){
+                restoreSoloProgramSound()
                 audioProblem="El motor de audio no pudo abrir "+fileName(path)+". Verifica que el MP4 contenga una pista de audio compatible."
                 notice(audioProblem)
                 return false
             }
             if(!valid()||get(outLocked)||targets.some(id=>!chooseOutput().includes(id))){
                 AudioPlayer.stop(path)
+                restoreSoloProgramSound()
                 audioProblem="Se canceló Solo audio: cambió la pista o la selección durante la carga."
                 notice(audioProblem)
                 return false
@@ -618,6 +636,7 @@
             return true
         }catch(error){
             if(AudioPlayer.audioExists(path))AudioPlayer.stop(path)
+            restoreSoloProgramSound()
             audioProblem="No se pudo reproducir el audio de "+fileName(path)+": "+String(error)
             notice(audioProblem)
             return false
@@ -751,6 +770,7 @@
         playlistNotice=""
         if(stopSound && jaAudioPath && AudioPlayer.audioExists(jaAudioPath)){
             AudioPlayer.stop(jaAudioPath)
+            restoreSoloProgramSound()
             jaAudioPath=""
             jaAudioControls?.$destroy()
             jaAudioControls=null
@@ -3372,6 +3392,7 @@
             // Do not stop unrelated FreeShow music. Only the session started
             // explicitly from this JA console belongs to us.
             if(jaAudioPath && AudioPlayer.audioExists(jaAudioPath))AudioPlayer.stop(jaAudioPath)
+            restoreSoloProgramSound()
             jaAudioPath=""
             stopVideoState?.()
             programRenderer?.$destroy()
