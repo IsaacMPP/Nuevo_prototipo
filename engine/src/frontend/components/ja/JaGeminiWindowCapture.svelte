@@ -250,7 +250,7 @@
 .ja-card-bottom input{accent-color:#4cd1fd}
 .ja-capture button.ja-preview-toggle{background:transparent;border:0;color:#9fd3ff;padding:4px}
 .ja-preview-panel{width:100%}
-.ja-preview-panel.ja-preview-closed{position:absolute!important;width:1px!important;height:1px!important;overflow:hidden!important;clip-path:inset(50%)!important;pointer-events:none}
+.ja-preview-panel.ja-preview-closed{display:none}
 .ja-capture-stage{position:relative;max-width:340px;width:100%;aspect-ratio:16/9;background:#030b19;border:1px solid #345a81;border-radius:9px;overflow:hidden;display:flex;align-items:center;justify-content:center}
 .ja-capture-stage video{width:100%;height:100%;object-fit:contain}
 .ja-capture-stage.ja-hide-cursor,.ja-capture-stage.ja-hide-cursor *{cursor:none!important}
