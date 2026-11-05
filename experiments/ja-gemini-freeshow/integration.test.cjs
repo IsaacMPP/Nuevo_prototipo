@@ -1056,3 +1056,9 @@ test("P18: YouTube utiliza pantallas vivas de JA y biblioteca con miniaturas com
  assert.ok(module.includes('dispatch("addPlaylist"')&&shell.includes('youtubePanel.$on("addPlaylist"'),"Añadir video guardado a playlist")
  assert.ok(module.includes('disabled={!videoId||!effectiveTargets.length}'),"Habilitar enviar solo con pantalla seleccionada")
 });
+
+test("P18b: elegir de nuevo el mismo video YouTube conserva controles nativos",()=>{
+ const mod=read("engine/src/frontend/components/ja/JaGeminiYouTube.svelte")
+ assert.ok(mod.includes("if(id===videoId)")&&mod.includes("player.pauseVideo()"),"El mismo video se prepara sin destruir la sesión de control")
+ assert.ok(mod.includes("showPlayer=true"),"La selección permite reabrir el reproductor compacto")
+});
