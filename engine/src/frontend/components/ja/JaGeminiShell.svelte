@@ -461,6 +461,18 @@
         if(!id || !chooseOutput().includes(id))return false
         return setJAPrimaryAudioRouting(id)
     }
+    function jaYouTubeDestinations(){
+        const available=chooseOutput()
+        const primary=localStorage.getItem("ja-main-projector")||""
+        return available.map(id=>({id,name:get(outputs)[id]?.name||"Pantalla "+id,primary:id===primary}))
+    }
+    function jaYouTubeTargets(){
+        const available=chooseOutput()
+        const checked=markedGroupTargets()
+        if(checked.length)return checked
+        const primary=localStorage.getItem("ja-main-projector")||""
+        return [available.includes(primary)?primary:available[0]].filter((id):id is string=>!!id)
+    }
     function markedPlaylistTargets():string[]{
         return chooseOutput().filter(id=>playlistTargetIds.has(id))
     }
@@ -2045,6 +2057,8 @@
         }
         updatePlaylistTargets()
         refreshGroupChoices()
+        if(youtubePanel && mode==="youtube")
+            youtubePanel.$set({destinations:jaYouTubeDestinations(),chosen:jaYouTubeTargets()})
         for (const id of available) {
             const output = outputMap[id]
             const state = list?.querySelector<HTMLElement>('[data-output="' + CSS.escape(id) + '"]')
@@ -2544,18 +2558,25 @@
                 if(target){
                     target.replaceChildren()
                     youtubePanel=new JaGeminiYouTube({target,props:{
-                        initialUrl:youtubePreparedUrl,destinations:playlistOutputChoices,chosen:markedGroupTargets()
+                        initialUrl:youtubePreparedUrl,destinations:jaYouTubeDestinations(),chosen:jaYouTubeTargets()
                     }})
                     youtubePanel.$on("target",(event)=>{
                         const id=event.detail.id as string
                         if(event.detail.enabled)syncedTargetIds.add(id)
                         else syncedTargetIds.delete(id)
                         refreshGroupChoices()
-                        youtubePanel?.$set({destinations:playlistOutputChoices,chosen:markedGroupTargets()})
+                        youtubePanel?.$set({destinations:jaYouTubeDestinations(),chosen:jaYouTubeTargets()})
+                    })
+                    youtubePanel.$on("addPlaylist",(event)=>{
+                        const id=selectedPlaylistId
+                        if(!id)return notice("Crea o selecciona una lista primero.")
+                        void playlistPanelAction({type:"addYoutube",id,url:event.detail.url})
                     })
                     youtubePanel.$on("send",(event)=>{
                         const {id,title,targets}=event.detail
-                        if(!id||!targets?.length||get(outLocked))return notice("Selecciona pantallas activas para YouTube.")
+                        const available=chooseOutput()
+                        if(!id||!targets?.length||get(outLocked)||targets.some((t:string)=>!available.includes(t)))
+                            return notice("Selecciona pantallas externas activas para YouTube.")
                         const primary=localStorage.getItem("ja-main-projector")||""
                         playerVideos.update(data=>({...data,[id]:{id,type:"youtube",name:title||"YouTube"}}))
                         const received=sendToJAOutputs("background",{id,type:"player",loop:false,muted:!targets.includes(primary),startAt:0},targets,{replaceScripture:true,requireAll:true})
@@ -2565,7 +2586,7 @@
                         notice("Video de YouTube enviado a "+targets.length+" pantalla(s).")
                     })
                 }
-            }else youtubePanel.$set({initialUrl:youtubePreparedUrl,destinations:playlistOutputChoices,chosen:markedGroupTargets()})
+            }else youtubePanel.$set({initialUrl:youtubePreparedUrl,destinations:jaYouTubeDestinations(),chosen:jaYouTubeTargets()})
         }
         else {renderLibrary();if(next==="himnario")void refreshJAHymnLibrary()}
         requestAnimationFrame(layoutPersistentPlaylist)
