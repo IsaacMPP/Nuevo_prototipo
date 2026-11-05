@@ -1073,3 +1073,22 @@ test("P19: YouTube se muestra como biblioteca sin reproductor fijo",()=>{
  assert.ok(mod.includes('object-fit:cover')&&mod.includes("aspect-ratio:16/9"),"Miniaturas uniformes 16:9")
  assert.ok(mod.includes('effectiveTargets=chosen.filter'),"No proyectar hacia monitores desconectados")
 });
+
+test("P20: YouTube usa Vista previa antes de modificar Programa",()=>{
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const gallery=read("engine/src/frontend/components/ja/JaGeminiYouTube.svelte")
+ const preview=read("engine/src/frontend/components/ja/JaGeminiYouTubePreview.svelte")
+ assert.ok(gallery.includes('dispatch("prepare"'),"Las miniaturas solo envían preparar")
+ assert.ok(shell.includes('youtubePanel.$on("prepare"')&&shell.includes('stageYouTubePreview(id)'),"Seleccionar YouTube carga la Vista previa superior")
+ const staging=shell.split("function stageYouTubePreview(id:string)")[1].split("function clearYouTubePreview",1)[0]||shell.split("function stageYouTubePreview(id:string)")[1].split("let ")[0]
+ assert.ok(staging.includes('new JaGeminiYouTubePreview('),"Usar reproductor real en Vista previa")
+ assert.ok(!staging.includes('sendToJAOutputs("background"'),"Seleccionar nunca envía a Programa")
+ assert.ok(preview.includes('autoplay:0')&&preview.includes("native.pauseVideo()"),"Vista previa inicia detenida")
+ assert.ok(preview.includes("native.mute()"),"Vista previa inicia silenciada")
+ assert.ok(shell.includes('if(youtubePreview){youtubePreview.toggle();return}'),"Control Play de Vista previa maneja YouTube")
+ assert.ok(shell.includes('if(youtubePreview){youtubePreview.seek(seconds);return}'),"Barra de progreso controla YouTube")
+ assert.ok(shell.includes('if(youtubePreview){youtubePreview.toggleMute();return}'),"Botón de audio de Vista previa controla YouTube")
+ assert.ok(shell.includes('function publishPreparedYouTube(')&&shell.includes('youtubePreviewId!==id'),"Enviar verifica que el mismo video está preparado")
+ assert.ok(shell.includes('publishPreparedYouTube(youtubePreviewId,markedGroupTargets())'),"Quick Play respeta envío manual")
+ assert.ok(shell.includes('stageYouTubePreview(youtubeId)'),"Playlist prepara YouTube antes de proyectar")
+});
