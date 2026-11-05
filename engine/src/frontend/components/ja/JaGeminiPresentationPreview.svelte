@@ -27,8 +27,9 @@
             task=getDocument(encodeFilePath(next))
             const doc=await task.promise
             if(token!==generation)return
+            // Reactive page rendering runs after PDF and canvas exist.
+            // Do not start an overlapping second render for the same page.
             document=doc
-            await paint(page,token)
         }catch(e){if(token===generation)error="No se pudo mostrar la diapositiva: "+String(e)}
     }
     async function paint(index:number,token:number){
