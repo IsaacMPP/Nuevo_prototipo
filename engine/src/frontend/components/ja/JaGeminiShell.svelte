@@ -33,6 +33,7 @@
         type JAPlaylist, type JAPlaylistEntry } from "../../utils/jaGeminiPlaylists"
     import JaGeminiPlaylistPanel from "./JaGeminiPlaylistPanel.svelte"
     import JaGeminiQuickAudioPanel from "./JaGeminiQuickAudioPanel.svelte"
+    import JaGeminiYouTube from "./JaGeminiYouTube.svelte"
     import JaGeminiAudioControls from "./JaGeminiAudioControls.svelte"
     import { JaSoloAudioPlayer } from "./JaSoloAudioPlayer"
     import { videoSync } from "../media/video/videoSync"
@@ -206,6 +207,8 @@
     let playlistModuleAreaPadding=""
     let playlistDockObserver:ResizeObserver|null=null
     let quickAudioOpen=false
+    let youtubePanel:JaGeminiYouTube|null=null
+    let youtubePreparedUrl=""
     let audioProblem=""
     // When requesting only sound from a video already on air, hand its audio
     // to the independent JA sound bus without changing the projected image.
@@ -2506,7 +2509,7 @@
         showCounts()
         renderToolbar()
     }
-    function showModule(next: "multimedia" | "himnario" | "biblia") {
+    function showModule(next: "multimedia" | "himnario" | "biblia" | "youtube") {
         if (mode === "biblia" && next !== "biblia") {
             bibleEditorOpen=false
             bibleFollowEnabled=false
@@ -2516,13 +2519,42 @@
             el("moduleView_biblia")?.replaceChildren()
         }
         mode=next
-        for(const [module,section] of [["multimedia","moduleView_multimedia"],["himnario","moduleView_himnario"],["biblia","moduleView_biblia"],["other","moduleView_other"]]) {
+        for(const [module,section] of [["multimedia","moduleView_multimedia"],["himnario","moduleView_himnario"],["biblia","moduleView_biblia"],["youtube","moduleView_other"]]) {
             const node=el(section)
             if(node) {node.classList.toggle("hidden",module!==next);node.classList.toggle("flex",module===next)}
         }
         setupNavigation()
         refreshOnlyAudioButton()
         if(next==="biblia") {void registerJARV1909().then(()=>{updateBibleUI();if(get(outputs)[selectedId]?.out?.slide?.id==="temp")void restoreBibleControlForOutput(selectedId);else scheduleBiblePreview()});updateBibleUI();scheduleBiblePreview()}
+        else if(next==="youtube"){
+            if(!youtubePanel){
+                const target=el("moduleView_other")
+                if(target){
+                    target.replaceChildren()
+                    youtubePanel=new JaGeminiYouTube({target,props:{
+                        initialUrl:youtubePreparedUrl,destinations:playlistOutputChoices,chosen:markedGroupTargets()
+                    }})
+                    youtubePanel.$on("target",(event)=>{
+                        const id=event.detail.id as string
+                        if(event.detail.enabled)syncedTargetIds.add(id)
+                        else syncedTargetIds.delete(id)
+                        refreshGroupChoices()
+                        youtubePanel?.$set({destinations:playlistOutputChoices,chosen:markedGroupTargets()})
+                    })
+                    youtubePanel.$on("send",(event)=>{
+                        const {id,title,targets}=event.detail
+                        if(!id||!targets?.length||get(outLocked))return notice("Selecciona pantallas activas para YouTube.")
+                        const primary=localStorage.getItem("ja-main-projector")||""
+                        playerVideos.update(data=>({...data,[id]:{id,type:"youtube",name:title||"YouTube"}}))
+                        const received=sendToJAOutputs("background",{id,type:"player",loop:false,muted:!targets.includes(primary),startAt:0},targets,{replaceScripture:true,requireAll:true})
+                        if(received.length!==targets.length)return notice("No se pudo enviar YouTube a todas las pantallas seleccionadas.")
+                        clearBlackBeforePublishing(targets)
+                        rebuildOutputs()
+                        notice("Video de YouTube enviado a "+targets.length+" pantalla(s).")
+                    })
+                }
+            }else youtubePanel.$set({initialUrl:youtubePreparedUrl,destinations:playlistOutputChoices,chosen:markedGroupTargets()})
+        }
         else {renderLibrary();if(next==="himnario")void refreshJAHymnLibrary()}
         requestAnimationFrame(layoutPersistentPlaylist)
     }
@@ -2972,7 +3004,7 @@
             button.className="ja-nav-button w-full px-3 py-3 text-left text-sm text-slate-200 hover:bg-[#142c54] rounded-md"
             button.textContent=label
             button.setAttribute("aria-current",String(id===mode))
-            if(id==="biblia"||id==="multimedia"||id==="himnario")
+            if(id==="biblia"||id==="multimedia"||id==="himnario"||id==="youtube")
                 button.onclick=()=>showModule(id)
             else if(id==="listas")
                 button.onclick=focusPersistentPlaylist
@@ -3365,6 +3397,8 @@
             for (const renderer of screenRenderers) renderer.$destroy()
             screenRenderers=[]
             libraryToolbar?.remove()
+            youtubePanel?.$destroy()
+            youtubePanel=null
             previewMedia?.pause()
             ++jaAudioGeneration
             jaAudioControls?.$destroy()
