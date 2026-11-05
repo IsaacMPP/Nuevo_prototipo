@@ -704,8 +704,8 @@ test("P5: avanzar mixto usa el motor existente y YouTube visible",()=>{
  const run=s.split("async function playJAPlaylistIndex(id:string,index:number,fromQueue=false)")[1].split("function advanceJAPlaylist(")[0]
  assert.ok(run.includes('item.kind==="audio"||item.audioOnly'),"Lista admite pistas locales")
  assert.ok(run.includes("playJAOnlySound(item.path,targets"),"Reproduce audio sin video")
- assert.ok(run.includes('playerVideos.update(data=>({...data,[youtubeId]'),"Registro nativo YouTube")
- assert.ok(run.includes('id:youtubeId,type:"player",loop:false'),"No reproducción oculta en YouTube")
+ assert.ok(run.includes('youtubePreparedUrl=item.path')&&run.includes('showModule("youtube")'),"Preparar YouTube en el reproductor visible antes de proyectar")
+ assert.ok(s.includes('if(entry.kind==="youtube"){')&&s.includes('id,type:"player",loop:false'),"Publicación explícita con el reproductor oficial YouTube")
  assert.ok(native.includes('<Player {outputId} {id} on:loaded />'),"YouTube usa el iframe de FreeShow")
  assert.ok(run.includes("prepare(item.path,false)")&&run.includes("local.loop=item.loopVideo===true"),"Vídeo de lista queda preparado en Vista previa con bucle individual")
  assert.ok(!run.includes('sendToJAOutputs("background",{\n                    path:item.path,type:"video"'),"El video local no se envía automáticamente")
@@ -1025,4 +1025,19 @@ test("P16: avisos transitorios se cierran y no bloquean la consola",()=>{
  assert.ok(s.includes("clearTimeout(screenNoticeTimer)")&&s.includes("clearTimeout(audioProblemTimer)")&&s.includes("clearTimeout(playlistNoticeTimer)"),"No dejar temporizadores huérfanos")
  assert.ok(s.includes("hideNoScreenNotice=true"),"Aviso sin monitor se puede cerrar")
  assert.ok(p.includes('action("dismissNotice")')&&s.includes('if(event.type==="dismissNotice")'),"Alerta de playlist tiene cierre funcional")
+});
+
+test("P17: YouTube integrado en Gemini con escucha visible y publicación explícita",()=>{
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const module=read("engine/src/frontend/components/ja/JaGeminiYouTube.svelte")
+ const player=read("engine/src/frontend/components/drawer/player/YouTubePlayer.svelte")
+ assert.ok(shell.includes('button.onclick=()=>showModule(id)')&&shell.includes('||id==="youtube"'),"La navegación de YouTube está habilitada")
+ assert.ok(shell.includes('new JaGeminiYouTube('),"Usar un solo módulo visible")
+ assert.ok(module.includes('YouTubePlayer')&&module.includes('on:ready={ready}'),"Reproductor de YouTube visible y oficial")
+ assert.ok(module.includes('autoplay:0')&&module.includes('player.pauseVideo()'),"Preparar sin autoplay")
+ assert.ok(module.includes('player.playVideo()')&&module.includes('player.setVolume(volume)'),"Control de reproducción y volumen")
+ assert.ok(module.includes('dispatch("send"')&&shell.includes('sendToJAOutputs("background"'),"Enviar a pantallas solo por acción explícita")
+ assert.ok(module.includes('Sin pantalla externa. Puedes escuchar el video en la consola.'),"Escuchar sin monitores")
+ assert.ok(!module.includes("JaSoloAudioPlayer")&&!module.includes("audio.src"),"YouTube no extrae audio ni usa un reproductor oculto")
+ assert.ok(player.includes("youtube-player"),"Preservar API oficial de FreeShow")
 });
