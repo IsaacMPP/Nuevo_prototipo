@@ -2699,7 +2699,7 @@
         showCounts()
         renderToolbar()
     }
-    function showModule(next: "multimedia" | "himnario" | "biblia" | "youtube") {
+    function showModule(next: "multimedia" | "himnario" | "biblia" | "youtube" | "presentaciones") {
         if (mode === "biblia" && next !== "biblia") {
             bibleEditorOpen=false
             bibleFollowEnabled=false
@@ -2708,14 +2708,52 @@
             scriptureTarget=null
             el("moduleView_biblia")?.replaceChildren()
         }
+        if(next==="presentaciones" && youtubePanel){
+            youtubePanel.$destroy();youtubePanel=null
+        }
+        if(next==="youtube" && presentationsPanel){
+            presentationsPanel.$destroy();presentationsPanel=null
+        }
         mode=next
-        for(const [module,section] of [["multimedia","moduleView_multimedia"],["himnario","moduleView_himnario"],["biblia","moduleView_biblia"],["youtube","moduleView_other"]]) {
+        for(const [module,section] of [["multimedia","moduleView_multimedia"],["himnario","moduleView_himnario"],["biblia","moduleView_biblia"],["youtube","moduleView_other"],["presentaciones","moduleView_other"]]) {
             const node=el(section)
             if(node) {node.classList.toggle("hidden",module!==next);node.classList.toggle("flex",module===next)}
         }
         setupNavigation()
         refreshOnlyAudioButton()
         if(next==="biblia") {void registerJARV1909().then(()=>{updateBibleUI();if(get(outputs)[selectedId]?.out?.slide?.id==="temp")void restoreBibleControlForOutput(selectedId);else scheduleBiblePreview()});updateBibleUI();scheduleBiblePreview()}
+        else if(next==="presentaciones"){
+            if(!presentationsPanel){
+                const target=el("moduleView_other")
+                if(target){
+                    target.replaceChildren()
+                    presentationsPanel=new JaGeminiPresentations({target,props:{
+                        pdfPath:presentationPdfPath,displayName:presentationSourceName,currentPage:presentationPage,
+                        destinations:jaYouTubeDestinations(),selectedTargets:markedGroupTargets()
+                    }})
+                    presentationsPanel.$on("open",openJAPresentationFile)
+                    presentationsPanel.$on("loaded",(event)=>{
+                        const {path,count}=event.detail
+                        if(path!==presentationPdfPath)return
+                        presentationPageCount=count
+                        stagePresentationPage(path,0,count,presentationSourceName)
+                    })
+                    presentationsPanel.$on("prepare",(event)=>{
+                        const {path,page,pages,name}=event.detail
+                        if(path!==presentationPdfPath)return
+                        stagePresentationPage(path,page,pages,name)
+                    })
+                    presentationsPanel.$on("send",()=>publishJAPresentation())
+                    presentationsPanel.$on("target",(event)=>{
+                        const id=event.detail.id as string
+                        if(event.detail.enabled)syncedTargetIds.add(id)
+                        else syncedTargetIds.delete(id)
+                        refreshGroupChoices()
+                        refreshPresentationModule()
+                    })
+                }
+            }else refreshPresentationModule()
+        }
         else if(next==="youtube"){
             if(!youtubePanel){
                 const target=el("moduleView_other")
@@ -3198,7 +3236,7 @@
             button.className="ja-nav-button w-full px-3 py-3 text-left text-sm text-slate-200 hover:bg-[#142c54] rounded-md"
             button.textContent=label
             button.setAttribute("aria-current",String(id===mode))
-            if(id==="biblia"||id==="multimedia"||id==="himnario"||id==="youtube")
+            if(id==="biblia"||id==="multimedia"||id==="himnario"||id==="youtube"||id==="presentaciones")
                 button.onclick=()=>showModule(id)
             else if(id==="listas")
                 button.onclick=focusPersistentPlaylist
