@@ -37,7 +37,9 @@
         <!-- on:ended={videoEnded} -->
         <Media {outputId} path={id} {data} {animationStyle} {mirror} {mediaStyle} {fadingOut} on:loaded />
     {:else if type === "screen"}
-        <Window {id} hidePointer={data.hidePointerInJA!==false} class="media" style="width: 100%;height: 100%;object-fit:contain;" on:loaded />
+        {#key id}
+            <Window {id} hidePointer={data.hidePointerInJA!==false} useJARelay={!!data.jaCaptureRelay} class="media" style="width: 100%;height: 100%;object-fit:contain;" on:loaded />
+        {/key}
     {:else if type === "ndi"}
         {#key id}
             <NdiStream screen={{ id, name: "" }} background {mirror} {outputId} />
