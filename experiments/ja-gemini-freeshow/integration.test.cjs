@@ -1199,4 +1199,5 @@ test("P25: capturas nativas persisten por modulo y proyectan a salidas elegidas 
  assert.ok(shell.includes('captureGlobalStatus')&&shell.includes('▣ Capturas proyectadas:'),"Estado de fuentes persistente fuera del módulo")
  assert.ok(capture.includes('selectedTargets.includes(dest.id)')&&capture.includes('disabled={!stream || !selectedTargets.length}'),"Respetar selección explícita y no inventar salida")
  assert.ok(shell.includes('capturePanel?.$destroy()')&&shell.includes('captureParking?.remove()'),"Al cerrar la consola liberar recursos y componentes")
+ assert.ok(shell.includes('if(mode==="captura"){publishActiveCaptureFromQuickPlay();return}'),"Quick Play y Corte de JA comparten publicación explícita")
 });
