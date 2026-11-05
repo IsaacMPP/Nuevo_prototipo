@@ -212,6 +212,30 @@
     let playlistDockObserver:ResizeObserver|null=null
     let quickAudioOpen=false
     let capturePanel:JaGeminiWindowCapture|null=null
+    let captureHidePointer=true
+    function setCapturePointerHidden(hidden:boolean){
+        captureHidePointer=hidden
+        if(capturePreviewVideo)capturePreviewVideo.style.cursor=hidden?"none":"auto"
+        outputs.update(all=>{
+            let changed=false
+            const updated={...all}
+            for(const [id,out] of Object.entries(all)){
+                if(out.out?.background?.type!=="screen")continue
+                if(out.out.background.hidePointerInJA===hidden)continue
+                updated[id]={...out,out:{...out.out,background:{...out.out.background,hidePointerInJA:hidden}}}
+                changed=true
+            }
+            return changed?updated:all
+        })
+        refreshCaptureModule()
+    }
+    function focusQuickCaptureTargets(){
+        const area=el("quickTargetButtons")
+        if(!area)return notice("Envío rápido no está disponible. Revisa las pantallas.")
+        area.scrollIntoView({behavior:"smooth",block:"center"})
+        area.style.outline="2px solid #4cd1fd"
+        setTimeout(()=>{if(area.isConnected)area.style.outline=""},1800)
+    }
     // Keep the Svelte capture receiver mounted when the operator visits
     // another module. Output windows capture their own independent stream.
     let captureParking:HTMLDivElement|null=null
@@ -235,10 +259,10 @@
         const destinations=jaYouTubeDestinations()
         const selectedTargets=markedGroupTargets()
         const assigned=captureAssignments()
-        const signature=JSON.stringify({destinations,selectedTargets,assigned})
+        const signature=JSON.stringify({destinations,selectedTargets,assigned,captureHidePointer})
         if(signature===capturePanelSignature)return
         capturePanelSignature=signature
-        capturePanel.$set({destinations,selectedTargets,assigned})
+        capturePanel.$set({destinations,selectedTargets,assigned,hidePointerInJA:captureHidePointer})
     }
     function removeJACaptureFromScreens(sourceId:string){
         if(!sourceId)return
@@ -260,7 +284,7 @@
         if(get(outLocked)||!targets.length||targets.some(id=>!live.includes(id)))
             return notice("Selecciona una o varias pantallas externas activas.")
         captureKnownNames.set(sourceId,name)
-        const sent=sendToJAOutputs("background",{id:sourceId,type:"screen"},targets,{replaceScripture:true,requireAll:true})
+        const sent=sendToJAOutputs("background",{id:sourceId,type:"screen",hidePointerInJA:captureHidePointer},targets,{replaceScripture:true,requireAll:true})
         if(sent.length!==targets.length)return notice("No se pudo enviar la captura a todos los destinos.")
         clearBlackBeforePublishing(targets)
         rebuildOutputs()
@@ -334,7 +358,7 @@
         player.autoplay=true
         player.muted=true
         player.playsInline=true
-        player.style.cssText="display:block;width:100%;height:100%;object-fit:contain;background:#020817;"
+        player.style.cssText="display:block;width:100%;height:100%;object-fit:contain;background:#020817;cursor:"+(captureHidePointer?"none;":"auto;")
         player.setAttribute("aria-label","Vista previa de captura: "+name)
         player.srcObject=stream
         target.append(player)
@@ -3018,7 +3042,7 @@
                     target.replaceChildren()
                     capturePanelSignature=""
                     capturePanel=new JaGeminiWindowCapture({target,props:{
-                        destinations:jaYouTubeDestinations(),selectedTargets:markedGroupTargets(),assigned:captureAssignments()
+                        destinations:jaYouTubeDestinations(),selectedTargets:markedGroupTargets(),assigned:captureAssignments(),hidePointerInJA:captureHidePointer
                     }})
                     capturePanel.$on("stream",(event)=>{
                         const {stream,name}=event.detail
@@ -3029,6 +3053,8 @@
                     capturePanel.$on("stopped",()=>{
                         if(mode==="captura")stopJAWindowCapturePreview()
                     })
+                    capturePanel.$on("focusTargets",focusQuickCaptureTargets)
+                    capturePanel.$on("cursor",(event)=>setCapturePointerHidden(!!event.detail.hidden))
                     capturePanel.$on("target",(event)=>{
                         const id=event.detail.id as string
                         if(event.detail.enabled)syncedTargetIds.add(id)
