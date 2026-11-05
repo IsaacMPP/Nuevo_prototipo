@@ -20,7 +20,8 @@
     let volume=100
     let label=""
     let saved:Array<{id:string;title:string}>=[]
-    let showPlayer=true
+    let listening=false
+    let thumbnailFallback=new Set<string>()
     const STORAGE="ja-youtube-library-v1"
     $: effectiveTargets=chosen.filter(id=>destinations.some(d=>d.id===id))
     onMount(()=>{
@@ -56,14 +57,12 @@
     function load(){
         const id=jaYoutubeId(url)
         if(!id){error="Pega un enlace válido de YouTube.";return}
-        // The keyed iframe is not recreated when choosing the same item.
-        // Keep its native player handle instead of leaving controls disabled.
+        // Selecting a card prepares it only; the official player opens on request.
         if(id===videoId){
             if(player){try{player.pauseVideo();player.mute();player.seekTo(0,true)}catch{}}
             muted=true
             paused=true
             position=0
-            showPlayer=true
             error=""
             return
         }
@@ -71,7 +70,7 @@
         videoId=id
         label="YouTube · "+id
         remember(id)
-        showPlayer=true
+        closeListening()
         player=null
         paused=true
         muted=true
@@ -95,6 +94,20 @@
                 if(Number.isFinite(end))duration=end
             }catch{}
         },500)
+    }
+    function openListening(){
+        if(!videoId){error="Selecciona primero un video.";return}
+        listening=true
+        // IFrame is mounted visibly in the floating console panel.
+        // Playback starts only with the user's explicit Play action.
+    }
+    function closeListening(){
+        listening=false
+        if(clock){clearInterval(clock);clock=null}
+        try{player?.pauseVideo();player?.mute()}catch{}
+        player=null
+        paused=true
+        muted=true
     }
     function play(){
         if(!player)return
@@ -141,10 +154,8 @@
     function send(){
         if(!videoId){error="Carga primero un enlace válido.";return}
         if(!effectiveTargets.length){error="Selecciona una pantalla externa activa.";return}
-        // Playback of the local console iframe stops to avoid double audio.
-        try{player?.pauseVideo();player?.mute()}catch{}
-        paused=true
-        muted=true
+        // Sending replaces local listening, never allowing two soundtracks.
+        closeListening()
         dispatch("send",{id:videoId,title:label,targets:[...effectiveTargets]})
     }
     onDestroy(()=>{
@@ -162,54 +173,59 @@
     </form>
     <div class="yt-library-bar">
         <strong>Mis videos ({saved.length})</strong>
-        <div class="yt-bar-actions">
-            <button type="button" disabled={!videoId} on:click={()=>dispatch("addPlaylist",{url:"https://www.youtube.com/watch?v="+videoId})}>＋ Playlist</button>
-            <button type="button" disabled={!videoId} on:click={()=>showPlayer=!showPlayer} aria-expanded={showPlayer}>
-                {showPlayer?"▴ Ocultar reproductor":"▾ Mostrar reproductor"}
-            </button>
-        </div>
+        <span>Selecciona una miniatura y utiliza las acciones de abajo.</span>
     </div>
     {#if saved.length}
         <div class="yt-library" aria-label="Videos guardados">
             {#each saved as item (item.id)}
-                <div class="yt-card" class:active={item.id===videoId}>
-                    <button class="yt-thumb" type="button" on:click={()=>chooseVideo(item.id)} title={"Preparar "+item.title}>
-                        <img loading="lazy" src={"https://i.ytimg.com/vi/"+item.id+"/mqdefault.jpg"} alt={item.title}/>
-                        <span>▶</span>
+                <article class="yt-card" class:active={item.id===videoId}>
+                    <button class="yt-thumb" type="button" on:click={()=>chooseVideo(item.id)} title={"Preparar "+item.title} aria-pressed={item.id===videoId}>
+                        <img loading="lazy" src={"https://i.ytimg.com/vi/"+item.id+(thumbnailFallback.has(item.id)?"/mqdefault.jpg":"/hqdefault.jpg")}
+                            alt={item.title} on:error={()=>{if(!thumbnailFallback.has(item.id)){thumbnailFallback=new Set([...thumbnailFallback,item.id])}}}/>
+                        {#if item.id===videoId}<span class="yt-selected">✓ Seleccionado</span>{/if}
                     </button>
                     <div class="yt-card-footer">
                         <button type="button" title={item.title} on:click={()=>chooseVideo(item.id)}>{item.title}</button>
-                        <button type="button" class="yt-remove" title="Quitar de biblioteca" on:click={()=>removeVideo(item.id)}>✕</button>
+                        <button type="button" class="yt-remove" aria-label={"Quitar "+item.title+" de biblioteca"} title="Quitar de biblioteca" on:click={()=>removeVideo(item.id)}>✕</button>
                     </div>
-                </div>
+                </article>
             {/each}
         </div>
     {:else}
-        <div class="yt-library-empty">Pega un enlace para guardar videos con miniaturas, como en FreeShow.</div>
+        <div class="yt-library-empty">Pega un enlace para agregar videos a tu biblioteca, como en FreeShow.</div>
     {/if}
-    {#if showPlayer && videoId}
-        <div class="yt-compact-player">
+    {#if videoId}
+        <div class="yt-selected-line" role="status">✓ Preparado: {saved.find(item=>item.id===videoId)?.title||label}</div>
+    {/if}
+    {#if listening && videoId}
+        <aside class="yt-listen-float" role="region" aria-label="Escuchar YouTube en consola">
+            <div class="yt-float-head">
+                <strong>♫ Escuchar en consola</strong>
+                <button type="button" aria-label="Cerrar reproductor de escucha" title="Cerrar" on:click={closeListening}>✕</button>
+            </div>
             <div class="yt-video">
                 {#key videoId}
                     <YouTubePlayer class="ja-yt-iframe" {videoId} options={{playerVars:{autoplay:0,controls:1,rel:0}}}
                         on:ready={ready} on:play={()=>paused=false} on:pause={()=>paused=true} on:end={()=>paused=true}
-                        on:error={e=>error="YouTube rechazó la reproducción (código "+String(e.detail?.data||"desconocido")+")."}/>
+                        on:error={e=>error="YouTube no pudo reproducir el video (código "+String(e.detail?.data||"desconocido")+")."}/>
                 {/key}
             </div>
-            <div class="yt-console">
-                <strong>Escuchar en consola</strong>
-                <div class="yt-controls">
-                    <button type="button" disabled={!player} on:click={toggle}>{paused?"▶ Play":"Ⅱ Pausa"}</button>
-                    <button type="button" disabled={!player} on:click={stop}>■</button>
-                    <button type="button" disabled={!player} on:click={setMuted}>{muted?"🔇":"🔊"}</button>
-                </div>
-                <span class="yt-time">{time(position)} / {time(duration)}</span>
-                <input aria-label="Posición en YouTube" type="range" min="0" max={duration||1} step="1" value={position} disabled={!player||!duration} on:change={seek}/>
-                <label class="yt-volume">Volumen <input aria-label="Volumen de YouTube" type="range" min="0" max="100" value={volume} disabled={!player} on:input={setVolume}/></label>
+            <div class="yt-controls">
+                <button type="button" disabled={!player} on:click={toggle}>{paused?"▶ Reproducir":"Ⅱ Pausar"}</button>
+                <button type="button" disabled={!player} on:click={stop}>■ Detener</button>
+                <button type="button" disabled={!player} on:click={setMuted}>{muted?"🔇":"🔊"}</button>
             </div>
-        </div>
+            <div class="yt-time">{time(position)} / {time(duration)}</div>
+            <input aria-label="Posición en YouTube" type="range" min="0" max={duration||1} step="1" value={position} disabled={!player||!duration} on:change={seek}/>
+            <label class="yt-volume">Volumen <input aria-label="Volumen de YouTube" type="range" min="0" max="100" value={volume} disabled={!player} on:input={setVolume}/></label>
+            <small>Reproductor oficial visible. No modifica Programa.</small>
+        </aside>
     {/if}
     <div class="yt-send">
+        <div class="yt-action-group">
+            <button type="button" disabled={!videoId} on:click={()=>dispatch("addPlaylist",{url:"https://www.youtube.com/watch?v="+videoId})}>＋ Playlist</button>
+            <button type="button" disabled={!videoId} aria-expanded={listening} on:click={()=>listening?closeListening():openListening()}>♫ {listening?"Cerrar escucha":"Escuchar en consola"}</button>
+        </div>
         <div class="yt-targets-wrap">
             <strong>Proyectar en</strong>
             {#if destinations.length}
@@ -229,7 +245,7 @@
     <small class="yt-disclaimer">El reproductor de YouTube controla disponibilidad, anuncios y restricciones.</small>
 </section>
 <style>
-.ja-youtube-module{display:flex;flex-direction:column;gap:8px;width:100%;height:100%;min-height:0;overflow:auto;padding:10px;color:#e5f2ff;background:#0a1935;font-size:11px}
+.ja-youtube-module{position:relative;display:flex;flex-direction:column;gap:8px;width:100%;height:100%;min-height:0;overflow:auto;padding:10px;color:#e5f2ff;background:#0a1935;font-size:11px}
 .yt-header{display:flex;align-items:center;flex-wrap:wrap;gap:10px}
 .yt-header strong{font-size:15px;color:#fff}
 .yt-header span{font-size:10px;color:#a9c3e0}
@@ -273,4 +289,20 @@ button:focus-visible{outline:2px solid #4cd1fd}
 .yt-error{display:flex;justify-content:space-between;gap:8px;padding:8px;border:1px solid #c46f60;border-radius:7px;background:#542d32}
 .yt-disclaimer{font-size:9px;color:#9aafca}
 @media(max-width:690px){.yt-compact-player{grid-template-columns:1fr}.yt-video{max-width:390px}.yt-library{max-height:145px}}
+
+.yt-library{max-height:none;overflow-y:auto;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));align-content:start}
+.yt-thumb{width:100%;aspect-ratio:16/9}
+.yt-thumb img{width:100%;height:100%;object-fit:cover}
+.yt-selected{position:absolute;left:6px;top:6px;padding:3px 7px;border-radius:5px;background:#0e6749dd;font-size:10px}
+.yt-selected-line{font-size:11px;color:#e8c766;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.yt-library-bar>span{font-size:10px;color:#a7c0dc}
+.yt-action-group{display:flex;gap:6px;flex-wrap:wrap}
+.yt-listen-float{position:absolute;right:10px;top:85px;z-index:55;width:min(330px,calc(100% - 20px));padding:10px;background:#102746;border:1px solid #73a4cb;border-radius:10px;box-shadow:0 12px 36px #0009;display:flex;flex-direction:column;gap:7px}
+.yt-float-head{display:flex;align-items:center;justify-content:space-between}
+.yt-float-head button{padding:3px 8px}
+.yt-listen-float .yt-video{width:100%;aspect-ratio:16/9;max-width:none}
+.yt-listen-float input[type=range]{width:100%;accent-color:#e93642}
+.yt-listen-float small{font-size:10px;color:#adc4e0}
+.yt-send{gap:8px}
+@media(max-width:700px){.yt-library{grid-template-columns:repeat(auto-fill,minmax(125px,1fr))}.yt-listen-float{top:65px}}
 </style>
