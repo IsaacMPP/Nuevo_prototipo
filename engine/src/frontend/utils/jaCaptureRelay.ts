@@ -19,12 +19,14 @@ const peerConfig:RTCConfiguration={iceServers:[]}
 export function shareJACapture(sourceId:string,stream:MediaStream):()=>void{
     if(!sourceId||!stream.getVideoTracks().length)return ()=>{}
     const peers=new Map<string,RTCPeerConnection>()
+    const incomingICE=new Map<string,RTCIceCandidateInit[]>()
     let destroyed=false
     const listener=receiveToMain(ToMain.JA_CAPTURE_SIGNAL,(msg:Signal)=>{
         if(destroyed||msg.sourceId!==sourceId)return
         if(msg.action==="request"){
             const existing=peers.get(msg.peerId)
             existing?.close()
+            incomingICE.delete(msg.peerId)
             const pc=new RTCPeerConnection(peerConfig)
             peers.set(msg.peerId,pc)
             for(const track of stream.getVideoTracks())pc.addTrack(track,stream)
@@ -47,14 +49,27 @@ export function shareJACapture(sourceId:string,stream:MediaStream):()=>void{
         }else if(msg.action==="answer"){
             const pc=peers.get(msg.peerId)
             if(pc && msg.description?.sdp && pc.signalingState==="have-local-offer")
-                void pc.setRemoteDescription({type:"answer",sdp:msg.description.sdp}).catch(e=>console.warn("JA capture relay answer:",e))
+                void (async()=>{
+                    try{
+                        await pc.setRemoteDescription({type:"answer",sdp:msg.description!.sdp})
+                        for(const candidate of incomingICE.get(msg.peerId)||[])await pc.addIceCandidate(candidate).catch(()=>{})
+                        incomingICE.delete(msg.peerId)
+                    }catch(e){console.warn("JA capture relay answer:",e)}
+                })()
         }else if(msg.action==="ice" && msg.to==="publisher"){
             const pc=peers.get(msg.peerId)
-            if(pc && msg.candidate)void pc.addIceCandidate(msg.candidate).catch(()=>{})
+            if(pc && msg.candidate){
+                if(!pc.remoteDescription){
+                    const pending=incomingICE.get(msg.peerId)||[]
+                    pending.push(msg.candidate)
+                    incomingICE.set(msg.peerId,pending)
+                }else void pc.addIceCandidate(msg.candidate).catch(()=>{})
+            }
         }else if(msg.action==="close"){
             const pc=peers.get(msg.peerId)
             pc?.close()
             peers.delete(msg.peerId)
+            incomingICE.delete(msg.peerId)
         }
     })
     return ()=>{
