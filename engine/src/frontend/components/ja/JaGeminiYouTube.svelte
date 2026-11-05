@@ -64,6 +64,7 @@
             paused=true
             position=0
             error=""
+            dispatch("prepare",{id,title:saved.find(x=>x.id===id)?.title||label})
             return
         }
         if(player){try{player.stopVideo()}catch{}}
@@ -77,6 +78,7 @@
         position=0
         duration=0
         error=""
+        dispatch("prepare",{id,title:saved.find(x=>x.id===id)?.title||label})
     }
     function ready(event:CustomEvent){
         player=event.detail?.target||null
@@ -173,7 +175,7 @@
     </form>
     <div class="yt-library-bar">
         <strong>Mis videos ({saved.length})</strong>
-        <span>Selecciona una miniatura y utiliza las acciones de abajo.</span>
+        <span>Selecciona para preparar en Vista previa; Programa no cambia.</span>
     </div>
     {#if saved.length}
         <div class="yt-library" aria-label="Videos guardados">
@@ -195,7 +197,7 @@
         <div class="yt-library-empty">Pega un enlace para agregar videos a tu biblioteca, como en FreeShow.</div>
     {/if}
     {#if videoId}
-        <div class="yt-selected-line" role="status">✓ Preparado: {saved.find(item=>item.id===videoId)?.title||label}</div>
+        <div class="yt-selected-line" role="status">✓ Vista previa: {saved.find(item=>item.id===videoId)?.title||label} · Enviar a pantallas cuando esté listo</div>
     {/if}
     {#if listening && videoId}
         <aside class="yt-listen-float" role="region" aria-label="Escuchar YouTube en consola">
