@@ -8,6 +8,10 @@
     export let currentPage=0
     export let destinations:Array<{id:string;name:string;primary:boolean}>=[]
     export let selectedTargets:string[]=[]
+    export let remoteEnabled=false
+    export let remoteMode:"preview"|"program"="program"
+    export let remoteError=""
+    export let remoteTargets:string[]=[]
     const dispatch=createEventDispatcher()
     GlobalWorkerOptions.workerSrc="./assets/pdf.worker.min.mjs"
     let loadedPath=""
@@ -136,6 +140,30 @@
                 ▶ Enviar a {selectedTargets.length} pantalla(s)
             </button>
         </div>
+        <section class="ja-presenter-remote" aria-label="Control remoto de presentador">
+            <div class="ja-presenter-head">
+                <strong>🎛 Control remoto del pastor</strong>
+                <label class="ja-presenter-switch"><input type="checkbox" checked={remoteEnabled}
+                    on:change={e=>dispatch("remoteToggle",{enabled:e.currentTarget.checked})}/>
+                    {remoteEnabled?"Activado":"Desactivado"}
+                </label>
+            </div>
+            <div class="ja-presenter-modes">
+                <label><input type="radio" name="ja-presentation-remote-mode" value="preview"
+                    checked={remoteMode==="preview"} on:change={()=>dispatch("remoteMode",{mode:"preview"})}/> Solo Vista previa</label>
+                <label><input type="radio" name="ja-presentation-remote-mode" value="program"
+                    checked={remoteMode==="program"} on:change={()=>dispatch("remoteMode",{mode:"program"})}/> Programa · pantallas proyectadas</label>
+            </div>
+            <p>{remoteMode==="program"
+                ? "Controlará únicamente las pantallas donde enviaste esta presentación: "+(remoteTargets.length ? remoteTargets.map(id=>destinations.find(d=>d.id===id)?.name||id).join(", ") : "ninguna todavía")
+                : "Las flechas preparan diapositivas sin cambiar Programa."}</p>
+            <div class="ja-presenter-steps">
+                <button type="button" disabled={!remoteEnabled} on:click={()=>dispatch("remoteStep",{action:"previous"})}>◀ Diapositiva anterior</button>
+                <button type="button" disabled={!remoteEnabled} on:click={()=>dispatch("remoteStep",{action:"next"})}>Siguiente diapositiva ▶</button>
+            </div>
+            {#if remoteError}<p role="alert" class="ja-presenter-error">{remoteError}</p>{/if}
+            <small>Con el control activado, Page Up/Page Down del presentador USB funcionan aunque JA no tenga el foco. Desactívalo al terminar: esas teclas quedan reservadas mientras esté activo.</small>
+        </section>
         <div class="ja-deck-targets">Pantallas:
             {#if destinations.length}
                 {#each destinations as destination (destination.id)}
@@ -174,4 +202,13 @@ button:disabled{opacity:.42;cursor:not-allowed}button:focus-visible{outline:2px 
 .ja-deck-targets input{accent-color:#4cd1fd}
 .ja-presentation-empty{padding:28px 16px;text-align:center;border:1px dashed #507399;border-radius:7px;color:#b6cce2}
 .ja-presentation-error{padding:10px;border:1px solid #c86c6c;background:#542d38;border-radius:7px}
+.ja-presenter-remote{display:flex;flex-direction:column;gap:8px;padding:11px;background:#132b4c;border:1px solid #45668d;border-radius:8px}
+.ja-presenter-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.ja-presenter-switch{display:flex;align-items:center;gap:6px;font-size:11px}
+.ja-presenter-modes{display:flex;align-items:center;flex-wrap:wrap;gap:12px}
+.ja-presenter-modes label{display:flex;align-items:center;gap:6px;font-size:11px}
+.ja-presenter-modes input,.ja-presenter-switch input{accent-color:#4cd1fd}
+.ja-presenter-remote p{font-size:11px;color:#c2d9f0;margin:0}
+.ja-presenter-steps{display:flex;gap:7px;flex-wrap:wrap}
+.ja-presenter-error{color:#ffaaaa!important}
 </style>
