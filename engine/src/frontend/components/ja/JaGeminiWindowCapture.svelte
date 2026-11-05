@@ -7,6 +7,7 @@
     export let destinations:Array<{id:string;name:string;primary:boolean}>=[]
     export let selectedTargets:string[]=[]
     export let assigned:Record<string,string[]>={}
+    export let hidePointerInJA=true
     const dispatch=createEventDispatcher()
     let sources:CaptureSource[]=[]
     let sourceId=""
@@ -44,6 +45,11 @@
     function detach(){
         if(!sourceId)return
         dispatch("detach",{sourceId})
+    }
+    function locateTargets(){dispatch("focusTargets")}
+    function togglePointer(){
+        hidePointerInJA=!hidePointerInJA
+        dispatch("cursor",{hidden:hidePointerInJA})
     }
     async function refresh(){
         loading=true
@@ -125,78 +131,109 @@
     onDestroy(()=>{isAlive=false;stop("Cerrado")})
 </script>
 <section class="ja-capture" aria-label="Captura de ventanas y pantallas">
-    <header>
-        <div>
+    <header class="ja-capture-header">
+        <div class="ja-capture-heading">
             <h2>▣ Captura de ventanas</h2>
-            <p>Prueba de compatibilidad · PowerPoint, UxPlay y aplicaciones de Windows</p>
+            <p>Recibe PowerPoint, UxPlay o cualquier ventana real de Windows</p>
         </div>
-        <button type="button" on:click={refresh} disabled={loading||busy}>↻ Actualizar ventanas</button>
-    </header>
-    <div class="ja-capture-toolbar">
-        <label for="ja-capture-source">Fuente real de Windows</label>
-        <select id="ja-capture-source" bind:value={sourceId} disabled={busy||!!stream}>
-            <option value="">Selecciona una ventana o pantalla…</option>
-            {#each sources as source (source.id)}
-                <option value={source.id}>{source.kind==="window"?"▣ Ventana":"▤ Pantalla"} · {source.name}</option>
-            {/each}
-        </select>
-        <button class="ja-capture-start" type="button" on:click={start} disabled={!sourceId||busy||!!stream}>
-            ▶ Iniciar captura
+        <button class="ja-refresh" type="button" on:click={refresh} disabled={loading||busy}>
+            ↻ {loading?"Buscando…":"Actualizar fuentes"}
         </button>
-        <button type="button" on:click={()=>stop()} disabled={!stream}>■ Detener</button>
-    </div>
-    <div class="ja-capture-targets">
-        <strong>Enviar fuente a las pantallas seleccionadas</strong>
-        {#if destinations.length}
-            <div class="ja-capture-target-list">
-                {#each destinations as dest (dest.id)}
-                    <label><input type="checkbox" checked={selectedTargets.includes(dest.id)}
-                        on:change={e=>dispatch("target",{id:dest.id,enabled:e.currentTarget.checked})}/>
-                        {dest.name}{dest.primary?" · Principal":""}</label>
+    </header>
+    <div class="ja-source-section">
+        <div class="ja-source-heading">
+            <strong>Fuente de captura</strong>
+            <span class:ja-live={!!stream}>{stream?"● En directo":"○ Sin captura"}</span>
+        </div>
+        <div class="ja-source-controls">
+            <select aria-label="Ventana o pantalla para capturar" bind:value={sourceId} disabled={busy||!!stream}>
+                <option value="">Seleccionar ventana o pantalla…</option>
+                {#each sources as source (source.id)}
+                    <option value={source.id}>{source.kind==="window"?"▣":"▤"} {source.name}</option>
                 {/each}
-            </div>
-        {:else}
-            <span>No se detectaron salidas externas activas. Revisa Configuración de pantallas.</span>
-        {/if}
-        <div class="ja-capture-actions">
-            <button class="ja-capture-start" type="button" on:click={project}
-                disabled={!stream || !selectedTargets.length}>▶ Enviar captura a {selectedTargets.length} pantalla(s)</button>
-            <button type="button" on:click={detach} disabled={!sourceId || !assigned[sourceId]?.length}>
-                Retirar esta captura de sus pantallas
+            </select>
+            <button class="ja-capture-start" type="button" on:click={start} disabled={!sourceId||busy||!!stream}>
+                ▶ Iniciar
             </button>
+            <button class="ja-stop" type="button" on:click={()=>stop()} disabled={!stream}>■ Detener</button>
+        </div>
+        <div class="ja-source-options">
+            <label title="Oculta el puntero sobre la vista de JA y las ventanas de salida. No puede eliminar el cursor incrustado por Windows dentro de la fuente.">
+                <input type="checkbox" checked={hidePointerInJA} on:change={togglePointer}/>
+                Ocultar puntero en JA y salidas
+            </label>
+            <span class="ja-source-hint">No oculta el puntero dentro de una captura que Windows ya generó con cursor.</span>
+        </div>
+    </div>
+    <div class="ja-capture-stage" class:ja-hide-cursor={hidePointerInJA}>
+        <video bind:this={video} autoplay muted playsinline aria-label="Monitor local de captura de Windows"></video>
+        {#if !stream}
+            <div class="ja-capture-placeholder">
+                <span class="ja-capture-placeholder-icon">▣</span>
+                <strong>Monitor de captura</strong>
+                <span>Elige una ventana e inicia la recepción para verla aquí y en Vista previa.</span>
+            </div>
+        {/if}
+        {#if stream}<span class="ja-capture-stage-label">● EN DIRECTO</span>{/if}
+    </div>
+    <div class="ja-capture-footer">
+        <div class="ja-capture-status" role="status">{status}{width&&height?" · "+width+" × "+height:""}</div>
+        <div class="ja-capture-send">
+            <div class="ja-capture-destination">
+                <strong>Proyección</strong>
+                <span>{selectedTargets.length
+                    ?selectedTargets.map(id=>destinations.find(d=>d.id===id)?.name||id).join(", ")
+                    :"Sin pantallas seleccionadas"}</span>
+            </div>
+            <button type="button" class="ja-target-link" on:click={locateTargets}>Elegir destinos arriba</button>
+            <button class="ja-capture-publish" type="button" on:click={project}
+                disabled={!stream||!selectedTargets.length}>▶ Enviar con Envío rápido</button>
         </div>
         {#if sourceId && assigned[sourceId]?.length}
-            <span class="ja-capture-projected">En Programa: {assigned[sourceId].map(id=>destinations.find(d=>d.id===id)?.name||id).join(", ")}</span>
+            <div class="ja-capture-onair">
+                <span>● Proyectando en {assigned[sourceId].map(id=>destinations.find(d=>d.id===id)?.name||id).join(", ")}</span>
+                <button type="button" on:click={detach}>Retirar de esas pantallas</button>
+            </div>
         {/if}
-        <small>La captura proyectada continúa al cambiar de módulo. Puedes enviar otra ventana a otra pantalla sin reemplazarla.</small>
     </div>
-    <div class="ja-capture-stage">
-        <video bind:this={video} autoplay muted playsinline aria-label="Monitor local de captura de Windows"></video>
-        {#if !stream}<div class="ja-capture-placeholder">Selecciona una ventana e inicia la captura para ver la señal real.</div>{/if}
-    </div>
-    <div class="ja-capture-status" role="status">{status}{width&&height?" · "+width+" × "+height:""}</div>
     {#if error}<div class="ja-capture-error" role="alert">{error}</div>{/if}
-    <p class="ja-capture-help">La selección solo modifica Vista previa; <strong>Programa cambia únicamente al pulsar Enviar captura</strong>. Al detener la captura local, la proyección externa continúa hasta retirarla o reemplazarla. No minimices la ventana capturada. Audio pendiente de pruebas.</p>
+    <p class="ja-capture-help">Seleccionar una ventana no cambia Programa. Puedes cambiar de módulo y mantener su proyección activa. Audio de ventanas externas pendiente de pruebas.</p>
 </section>
 <style>
-.ja-capture{display:flex;flex-direction:column;gap:12px;height:100%;overflow:auto;padding:15px;color:#ecf5ff;background:#0b1a37;font-size:12px}
-header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
-h2{font-size:17px;font-weight:700}header p,.ja-capture-help{font-size:11px;color:#b3c9e3}
-button,select{background:#17365f;color:#f4f9ff;border:1px solid #587fa5;border-radius:7px;padding:8px;max-width:100%}
-button{cursor:pointer}button:disabled{opacity:.5;cursor:not-allowed}
-.ja-capture-start{background:#2576a9;border-color:#72c3ef}
-.ja-capture-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:9px}
-.ja-capture-toolbar select{flex:1;min-width:200px}
-.ja-capture-stage{position:relative;aspect-ratio:16/9;max-height:370px;min-height:180px;display:flex;align-items:center;justify-content:center;background:#020b1c;border:1px solid #375a7d;border-radius:9px;overflow:hidden}
+.ja-capture{display:flex;flex-direction:column;gap:10px;height:100%;overflow:auto;padding:14px 16px;color:#eaf4ff;background:#0b1a37;font-size:12px}
+.ja-capture-header,.ja-source-heading,.ja-source-controls,.ja-source-options,.ja-capture-send,.ja-capture-onair{display:flex;align-items:center;gap:9px}
+.ja-capture-header{justify-content:space-between;gap:14px;flex-wrap:wrap}
+.ja-capture-heading{min-width:160px}
+.ja-capture-heading h2{font-size:17px;font-weight:750;color:#ffe000;margin:0 0 3px}
+.ja-capture-heading p,.ja-capture-help,.ja-source-hint{font-size:10px;color:#a8bfda;line-height:1.4;margin:0}
+.ja-capture button,.ja-capture select{background:#1b3d69;color:#f2f8ff;border:1px solid #587fa5;border-radius:7px;padding:7px 10px;max-width:100%;font:inherit}
+.ja-capture button{cursor:pointer;white-space:nowrap}
+.ja-capture button:disabled{opacity:.45;cursor:not-allowed}
+.ja-capture button:focus-visible,.ja-capture select:focus-visible{outline:2px solid #4cd1fd;outline-offset:2px}
+.ja-source-section,.ja-capture-footer{display:flex;flex-direction:column;gap:8px;padding:10px 11px;background:#122849;border:1px solid #35557c;border-radius:9px}
+.ja-source-heading{justify-content:space-between}
+.ja-source-heading span{font-size:10px;color:#a3b7cd}
+.ja-source-heading span.ja-live,.ja-capture-onair{color:#8ce4b4}
+.ja-source-controls{flex-wrap:wrap}
+.ja-source-controls select{flex:1;min-width:185px}
+.ja-capture button.ja-capture-start,.ja-capture button.ja-capture-publish{background:#2d75ae;border-color:#72b6ed;font-weight:700}
+.ja-source-options{flex-wrap:wrap;align-items:baseline}
+.ja-source-options label{display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer}
+.ja-source-options input{accent-color:#4cd1fd}
+.ja-capture-stage{position:relative;width:100%;min-height:170px;max-height:285px;aspect-ratio:16/9;background:#030b19;border:1px solid #345a81;border-radius:9px;overflow:hidden;display:flex;align-items:center;justify-content:center}
 .ja-capture-stage video{width:100%;height:100%;object-fit:contain}
-.ja-capture-placeholder{position:absolute;text-align:center;color:#9eb8d5;padding:14px}
-.ja-capture-status{padding:7px 10px;background:#112c4e;border-radius:6px}
-.ja-capture-error{padding:8px;background:#622c39;border:1px solid #af6171;border-radius:6px}
-.ja-capture-help{line-height:1.5}
-.ja-capture-targets{display:flex;flex-direction:column;gap:8px;padding:10px;background:#112849;border:1px solid #3e668d;border-radius:8px}
-.ja-capture-target-list,.ja-capture-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
-.ja-capture-target-list label{display:flex;gap:5px;align-items:center;font-size:11px}
-.ja-capture-target-list input{accent-color:#4cd1fd}
-.ja-capture-projected{color:#9fe6bd;font-size:11px}
-.ja-capture-targets small{color:#a8c1dd;font-size:10px}
+.ja-capture-stage.ja-hide-cursor,.ja-capture-stage.ja-hide-cursor *{cursor:none!important}
+.ja-capture-placeholder{position:absolute;display:flex;align-items:center;flex-direction:column;gap:8px;padding:16px;text-align:center;color:#a8c6e2;max-width:320px}
+.ja-capture-placeholder-icon{font-size:30px;color:#557fab}
+.ja-capture-placeholder span:last-child{font-size:11px}
+.ja-capture-stage-label{position:absolute;left:8px;top:8px;background:#063c30ee;border:1px solid #3b986e;color:#c8f8dd;border-radius:5px;padding:4px 7px;font-size:9px;pointer-events:none}
+.ja-capture-status{font-size:10px;color:#b5d0ed;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ja-capture-send{flex-wrap:wrap;border-top:1px solid #385777;padding-top:8px}
+.ja-capture-destination{display:flex;flex:1;flex-direction:column;gap:3px;min-width:120px}
+.ja-capture-destination span{font-size:10px;color:#c4d8ef;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ja-capture button.ja-target-link{border-color:transparent;background:transparent;text-decoration:underline;color:#91c8ff;padding:5px 2px}
+.ja-capture-onair{justify-content:space-between;flex-wrap:wrap;border-top:1px solid #385777;padding-top:8px;font-size:10px}
+.ja-capture-onair button{font-size:10px}
+.ja-capture-error{padding:8px 10px;background:#582b39;border:1px solid #bd6976;border-radius:6px;font-size:11px}
+@media(max-width:650px){.ja-source-controls select{width:100%;flex-basis:100%}.ja-capture-stage{min-height:140px}.ja-capture-send{align-items:stretch}.ja-capture-publish{width:100%}}
 </style>
