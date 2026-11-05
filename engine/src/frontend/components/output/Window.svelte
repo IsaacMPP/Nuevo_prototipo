@@ -67,12 +67,13 @@
         console.log("window loaded")
         if (!videoElem) return
 
-        videoElem.play()
-        dispatch("loaded", true)
+        void videoElem.play().then(()=>dispatch("loaded", true)).catch(err=>{
+            relayError="No fue posible reproducir video de ventana: "+String(err)
+        })
     }
 </script>
 
-<video bind:this={videoElem} autoplay muted playsinline class={$props.class} style={($props.style || "") + ";cursor:" + (hidePointer ? "none" : "auto") + ";"}>
+<video bind:this={videoElem} autoplay muted playsinline class={$$props.class} style={($$props.style || "") + ";cursor:" + (hidePointer ? "none" : "auto") + ";"}>
     <track kind="captions" />
 </video>
 {#if relayError}<div class="ja-capture-output-error" role="alert">{relayError}</div>{/if}
