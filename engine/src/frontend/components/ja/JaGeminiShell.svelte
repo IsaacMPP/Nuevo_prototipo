@@ -1327,6 +1327,7 @@
         notice("Añadido a "+list.name+": "+entry.title)
     }
     function sendToQuickTargets() {
+        if(mode==="presentaciones"){publishJAPresentation();return}
         if(mode==="youtube" && youtubePreviewId){
             publishPreparedYouTube(youtubePreviewId,markedGroupTargets())
             return
@@ -1458,6 +1459,7 @@
         notice("YouTube enviado desde Vista previa a "+targets.length+" pantalla(s).")
     }
     function publishPreparedMedia() {
+        if(mode==="presentaciones"){publishJAPresentation();return}
         if(mode==="youtube" && youtubePreviewId){
             publishPreparedYouTube(youtubePreviewId,markedGroupTargets())
             return
@@ -1554,6 +1556,7 @@
             void previewMedia.play().catch(()=>notice("Vista previa no pudo seguir el vídeo de Programa"))
     }
     function resetTargetSelection() {
+        clearPresentationPreview()
         clearYouTubePreview()
         closeLocalExpanded()
         closeAddMediaMenu()
@@ -2221,6 +2224,7 @@
         }
         updatePlaylistTargets()
         refreshGroupChoices()
+        if(presentationsPanel && mode==="presentaciones")refreshPresentationModule()
         if(youtubePanel && mode==="youtube")
             youtubePanel.$set({destinations:jaYouTubeDestinations(),chosen:jaYouTubeTargets()})
         for (const id of available) {
@@ -3141,6 +3145,11 @@
     }
     function installFolderPicker() {
         const fileToken = receiveToMain(ToMain.OPEN_FILE2, ({channel,files}) => {
+            if(channel === "JA_GEMINI_PRESENTATION_FILE"){
+                const path=Array.isArray(files)&&typeof files[0]==="string"?files[0]:""
+                if(path)void loadJAPresentationFile(path)
+                return
+            }
             if(channel === "JA_GEMINI_BIBLE_BACKGROUND") {
                 const destination=bibleBackgroundPickerTarget
                 bibleBackgroundPickerTarget=""
@@ -3297,6 +3306,7 @@
         }
     }
     function prepare(path: string, autoplay=previewAutoplay) {
+        clearPresentationPreview()
         clearYouTubePreview()
         biblePreviewGeneration++
         if (biblePreviewTimer) clearTimeout(biblePreviewTimer)
