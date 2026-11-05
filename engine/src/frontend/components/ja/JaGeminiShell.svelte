@@ -212,6 +212,7 @@
     let quickAudioOpen=false
     let presentationsPanel:JaGeminiPresentations|null=null
     let presentationPreview:JaGeminiPresentationPreview|null=null
+    let presentationPreviewPath=""
     let presentationPdfPath=""
     let presentationSourceName=""
     let presentationPage=0
@@ -221,6 +222,7 @@
     function clearPresentationPreview(){
         presentationPreview?.$destroy()
         presentationPreview=null
+        presentationPreviewPath=""
     }
     function refreshPresentationModule(){
         if(!presentationsPanel)return
@@ -237,7 +239,8 @@
         const target=el("previewCanvasContent")
         if(!target)return
         clearYouTubePreview()
-        clearPresentationPreview()
+        const reuse=!!presentationPreview && presentationPreviewPath===path
+        if(!reuse)clearPresentationPreview()
         previewMedia?.pause();previewMedia=null
         biblePreviewGeneration++
         if(biblePreviewTimer)clearTimeout(biblePreviewTimer)
@@ -245,12 +248,16 @@
         biblePreviewReady=false
         prepared=""
         followProgram=false
-        target.replaceChildren()
+        if(!reuse)target.replaceChildren()
         presentationPdfPath=path
         presentationPage=page
         presentationPageCount=count
         presentationSourceName=name
-        presentationPreview=new JaGeminiPresentationPreview({target,props:{path,page,title:name}})
+        if(reuse) presentationPreview?.$set({page,title:name})
+        else {
+            presentationPreviewPath=path
+            presentationPreview=new JaGeminiPresentationPreview({target,props:{path,page,title:name}})
+        }
         refreshPresentationModule()
         updatePreviewProgress()
     }
