@@ -264,11 +264,11 @@
         capturePanelSignature=signature
         capturePanel.$set({destinations,selectedTargets,assigned,hidePointerInJA:captureHidePointer})
     }
-    function removeJACaptureFromScreens(sourceId:string){
+    function removeJACaptureFromScreens(sourceId:string,sourceStopped=false){
         if(!sourceId)return
         const ids=captureAssignments()[sourceId]||[]
         if(!ids.length)return notice("Esta captura ya no está proyectada.")
-        if(get(outLocked))return notice("Las salidas están bloqueadas.")
+        if(get(outLocked) && !sourceStopped)return notice("Las salidas están bloqueadas.")
         for(const id of ids){
             const bg=get(outputs)[id]?.out?.background
             if(bg?.type==="screen"&&bg.id===sourceId)clearBackground(id)
@@ -3056,7 +3056,7 @@
                         // Never leave a black screen marked as a working capture
                         // when the operator deliberately stops its source.
                         if(stoppedSource && captureAssignments()[stoppedSource]?.length)
-                            removeJACaptureFromScreens(stoppedSource)
+                            removeJACaptureFromScreens(stoppedSource,true)
                         if(mode==="captura")stopJAWindowCapturePreview()
                     })
                     capturePanel.$on("focusTargets",focusQuickCaptureTargets)
