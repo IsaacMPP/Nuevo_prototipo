@@ -880,7 +880,7 @@ test("P8: Quick Play y playlist tienen selecciones independientes",()=>{
  const playlist=shell.split("async function playJAPlaylistIndex(id:string,index:number,fromQueue=false)")[1].split("function advanceJAPlaylist(")[0]
  assert.ok(quick.includes("const targets=markedGroupTargets()"))
  assert.ok(playlist.includes("const targets=markedPlaylistTargets()"))
- assert.ok(playlist.includes("if(!targets.length)"),"Reproducir local si el operador no asignó monitores")
+ assert.ok(playlist.includes('showModule("youtube")')&&playlist.includes("playJAOnlySound(item.path,targets"),"La lista prepara YouTube y permite Solo audio local sin pantallas")
 });
 
 test("P8b: cambiar de video local a pista de audio no duplica sonido",()=>{
