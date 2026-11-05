@@ -319,6 +319,7 @@
     }
     function stageYouTubePreview(id:string){
         if(!jaYoutubeId(id))return
+        clearPresentationPreview()
         const target=el("previewCanvasContent")
         if(!target)return
         previewMedia?.pause()
@@ -2726,7 +2727,7 @@
         }
         setupNavigation()
         refreshOnlyAudioButton()
-        if(next==="biblia") {void registerJARV1909().then(()=>{updateBibleUI();if(get(outputs)[selectedId]?.out?.slide?.id==="temp")void restoreBibleControlForOutput(selectedId);else scheduleBiblePreview()});updateBibleUI();scheduleBiblePreview()}
+        if(next==="biblia") {clearPresentationPreview();void registerJARV1909().then(()=>{updateBibleUI();if(get(outputs)[selectedId]?.out?.slide?.id==="temp")void restoreBibleControlForOutput(selectedId);else scheduleBiblePreview()});updateBibleUI();scheduleBiblePreview()}
         else if(next==="presentaciones"){
             if(!presentationsPanel){
                 const target=el("moduleView_other")
@@ -2758,6 +2759,8 @@
                     })
                 }
             }else refreshPresentationModule()
+            if(presentationPdfPath && presentationPageCount && !presentationPreview)
+                stagePresentationPage(presentationPdfPath,presentationPage,presentationPageCount,presentationSourceName)
         }
         else if(next==="youtube"){
             if(!youtubePanel){
