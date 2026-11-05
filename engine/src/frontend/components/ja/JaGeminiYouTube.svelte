@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { createEventDispatcher, onDestroy } from "svelte"
+    import { createEventDispatcher, onDestroy, onMount } from "svelte"
     import YouTubePlayer from "../drawer/player/YouTubePlayer.svelte"
     import { jaYoutubeId } from "../../utils/jaGeminiPlaylists"
 
@@ -18,6 +18,31 @@
     let clock:ReturnType<typeof setInterval>|null=null
     let volume=100
     let label=""
+    let saved:Array<{id:string;title:string}>=[]
+    let showPlayer=true
+    const STORAGE="ja-youtube-library-v1"
+    $: effectiveTargets=chosen.filter(id=>destinations.some(d=>d.id===id))
+    onMount(()=>{
+        try{
+            const parsed=JSON.parse(localStorage.getItem(STORAGE)||"[]")
+            if(Array.isArray(parsed))
+                saved=parsed.filter(v=>v && typeof v.id==="string" && /^[a-zA-Z0-9_-]{11}$/.test(v.id) && typeof v.title==="string").slice(0,100)
+        }catch{}
+    })
+    function persist(){try{localStorage.setItem(STORAGE,JSON.stringify(saved.slice(0,100)))}catch{}}
+    function remember(id:string){
+        if(saved.some(item=>item.id===id))return
+        saved=[{id,title:"YouTube · "+id},...saved].slice(0,100)
+        persist()
+    }
+    function chooseVideo(id:string){
+        url="https://www.youtube.com/watch?v="+id
+        load()
+    }
+    function removeVideo(id:string){
+        saved=saved.filter(item=>item.id!==id)
+        persist()
+    }
     $: if(initialUrl && initialUrl!==url){url=initialUrl;load()}
     function load(){
         const id=jaYoutubeId(url)
@@ -26,6 +51,8 @@
         if(player){try{player.stopVideo()}catch{}}
         videoId=id
         label="YouTube · "+id
+        remember(id)
+        showPlayer=true
         player=null
         paused=true
         muted=true
@@ -94,12 +121,12 @@
     }
     function send(){
         if(!videoId){error="Carga primero un enlace válido.";return}
-        if(!chosen.length){error="Selecciona una pantalla para proyectar.";return}
+        if(!effectiveTargets.length){error="Selecciona una pantalla externa activa.";return}
         // Playback of the local console iframe stops to avoid double audio.
         try{player?.pauseVideo();player?.mute()}catch{}
         paused=true
         muted=true
-        dispatch("send",{id:videoId,title:label,targets:[...chosen]})
+        dispatch("send",{id:videoId,title:label,targets:[...effectiveTargets]})
     }
     onDestroy(()=>{
         if(clock)clearInterval(clock)
