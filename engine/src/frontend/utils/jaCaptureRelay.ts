@@ -71,6 +71,7 @@ export function receiveJACapture(sourceId:string,onStream:(stream:MediaStream)=>
     const pc=new RTCPeerConnection(peerConfig)
     let destroyed=false
     let received=false
+    let offerReceived=false
     let remoteReady=false
     const iceQueue:RTCIceCandidateInit[]=[]
     pc.ontrack=e=>{
@@ -87,7 +88,8 @@ export function receiveJACapture(sourceId:string,onStream:(stream:MediaStream)=>
     }
     const listener=receiveToMain(ToMain.JA_CAPTURE_SIGNAL,(msg:Signal)=>{
         if(destroyed||msg.sourceId!==sourceId||msg.peerId!==peerId)return
-        if(msg.action==="offer" && msg.description?.sdp){
+        if(msg.action==="offer" && msg.description?.sdp && !offerReceived){
+            offerReceived=true
             void (async()=>{
                 try{
                     await pc.setRemoteDescription({type:"offer",sdp:msg.description!.sdp})
@@ -107,7 +109,7 @@ export function receiveJACapture(sourceId:string,onStream:(stream:MediaStream)=>
     // Outputs can mount before or after the operator starts capture.
     emit({sourceId,peerId,action:"request"})
     const retry=setInterval(()=>{
-        if(destroyed||received){clearInterval(retry);return}
+        if(destroyed||received||offerReceived){clearInterval(retry);return}
         emit({sourceId,peerId,action:"request"})
     },2200)
     return ()=>{
