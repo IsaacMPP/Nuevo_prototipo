@@ -153,6 +153,12 @@
                 {/each}
             </div>
         {/if}
+        {#if !destinations.length}
+            <div class="ja-presentation-screen-warning" role="status">
+                No hay pantallas externas activas detectadas. Puedes revisar el PDF en Vista previa, pero para proyectarlo debes activar una salida real.
+                <button type="button" on:click={()=>dispatch("screenSettings")}>Configurar pantallas</button>
+            </div>
+        {/if}
         <div class="ja-deck-controls">
             <button type="button" disabled={!pages.length || currentPage===0} on:click={()=>move(-1)}>◀ Anterior</button>
             <span>Diapositiva {pages.length?currentPage+1:0} / {pages.length}</span>
@@ -233,4 +239,6 @@ button:disabled{opacity:.42;cursor:not-allowed}button:focus-visible{outline:2px 
 .ja-presenter-remote p{font-size:11px;color:#c2d9f0;margin:0}
 .ja-presenter-steps{display:flex;gap:7px;flex-wrap:wrap}
 .ja-presenter-error{color:#ffaaaa!important}
+.ja-presentation-screen-warning{border:1px solid #c49736;background:#302d26;color:#ffe7b5;border-radius:7px;padding:9px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:11px}
+.ja-presentation-screen-warning button{border-color:#e5bd6c;background:#654c22;white-space:nowrap}
 </style>
