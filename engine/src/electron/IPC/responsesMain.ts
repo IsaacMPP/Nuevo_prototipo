@@ -30,6 +30,7 @@ import { _store, appDataPath, config, createStores, getStore, getStoreValue, set
 import { captureSlide, doesMediaExist, getThumbnail, getThumbnailFolderPath, pdfToImage, saveImage } from "../data/thumbnails"
 import { OutputHelper } from "../output/OutputHelper"
 import { pptToPdf, convertJAPresentationToPDF } from "../output/ppt/pptToPdf"
+import { configureJAPresentationRemote } from "../ja/jaPresentationRemote"
 import { getPresentationApplications, presentationControl, startSlideshow } from "../output/ppt/presentation"
 import { closeServers, startServers, updateServerData } from "../servers"
 import { detectEncoders, setRtmpEncoderSetting } from "../streaming/encoderDetection"
@@ -155,6 +156,7 @@ export const mainResponses: MainResponses = {
     // PPT
     [Main.PPT_TO_PDF]: () => pptToPdf(),
     [Main.JA_PRESENTATION_PDF]: (data) => convertJAPresentationToPDF(data.path),
+    [Main.JA_PRESENTATION_REMOTE_SET]: (data) => configureJAPresentationRemote(data.enabled),
     [Main.SLIDESHOW_GET_APPS]: () => getPresentationApplications(),
     [Main.START_SLIDESHOW]: (data) => startSlideshow(data),
     [Main.PRESENTATION_CONTROL]: (data) => presentationControl(data),
