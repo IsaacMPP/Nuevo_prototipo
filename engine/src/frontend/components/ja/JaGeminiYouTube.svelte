@@ -47,7 +47,17 @@
     function load(){
         const id=jaYoutubeId(url)
         if(!id){error="Pega un enlace válido de YouTube.";return}
-        // Reconstruct the player: no autoplay or soundtrack on selection.
+        // The keyed iframe is not recreated when choosing the same item.
+        // Keep its native player handle instead of leaving controls disabled.
+        if(id===videoId){
+            if(player){try{player.pauseVideo();player.mute();player.seekTo(0,true)}catch{}}
+            muted=true
+            paused=true
+            position=0
+            showPlayer=true
+            error=""
+            return
+        }
         if(player){try{player.stopVideo()}catch{}}
         videoId=id
         label="YouTube · "+id
