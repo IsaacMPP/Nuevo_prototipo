@@ -136,54 +136,78 @@
 </script>
 
 <section class="ja-youtube-module" aria-label="YouTube de JA Proyecciones">
-    <header>
-        <div><h2>YouTube</h2><p>Prepara un enlace antes de enviarlo a Programa. Escuchar en consola no modifica las pantallas.</p></div>
-    </header>
+    <header class="yt-header"><strong>▶ YouTube</strong><span>Biblioteca de videos y reproducción con FreeShow</span></header>
     <form class="yt-entry" on:submit|preventDefault={load}>
-        <input aria-label="Enlace de YouTube" placeholder="Pega la URL de YouTube…" bind:value={url}/>
-        <button type="submit">Preparar video</button>
+        <input aria-label="Enlace de YouTube" placeholder="Pegar enlace de YouTube…" bind:value={url}/>
+        <button type="submit">＋ Agregar</button>
     </form>
-    <div class="yt-main">
-        <div class="yt-video">
-            {#if videoId}
+    <div class="yt-library-bar">
+        <strong>Mis videos ({saved.length})</strong>
+        <div class="yt-bar-actions">
+            <button type="button" disabled={!videoId} on:click={()=>dispatch("addPlaylist",{url:"https://www.youtube.com/watch?v="+videoId})}>＋ Playlist</button>
+            <button type="button" disabled={!videoId} on:click={()=>showPlayer=!showPlayer} aria-expanded={showPlayer}>
+                {showPlayer?"▴ Ocultar reproductor":"▾ Mostrar reproductor"}
+            </button>
+        </div>
+    </div>
+    {#if saved.length}
+        <div class="yt-library" aria-label="Videos guardados">
+            {#each saved as item (item.id)}
+                <div class="yt-card" class:active={item.id===videoId}>
+                    <button class="yt-thumb" type="button" on:click={()=>chooseVideo(item.id)} title={"Preparar "+item.title}>
+                        <img loading="lazy" src={"https://i.ytimg.com/vi/"+item.id+"/mqdefault.jpg"} alt={item.title}/>
+                        <span>▶</span>
+                    </button>
+                    <div class="yt-card-footer">
+                        <button type="button" title={item.title} on:click={()=>chooseVideo(item.id)}>{item.title}</button>
+                        <button type="button" class="yt-remove" title="Quitar de biblioteca" on:click={()=>removeVideo(item.id)}>✕</button>
+                    </div>
+                </div>
+            {/each}
+        </div>
+    {:else}
+        <div class="yt-library-empty">Pega un enlace para guardar videos con miniaturas, como en FreeShow.</div>
+    {/if}
+    {#if showPlayer && videoId}
+        <div class="yt-compact-player">
+            <div class="yt-video">
                 {#key videoId}
                     <YouTubePlayer class="ja-yt-iframe" {videoId} options={{playerVars:{autoplay:0,controls:1,rel:0}}}
                         on:ready={ready} on:play={()=>paused=false} on:pause={()=>paused=true} on:end={()=>paused=true}
-                        on:error={e=>error="YouTube rechazó la reproducción o el enlace (código "+String(e.detail?.data||"desconocido")+")."}/>
+                        on:error={e=>error="YouTube rechazó la reproducción (código "+String(e.detail?.data||"desconocido")+")."}/>
                 {/key}
+            </div>
+            <div class="yt-console">
+                <strong>Escuchar en consola</strong>
+                <div class="yt-controls">
+                    <button type="button" disabled={!player} on:click={toggle}>{paused?"▶ Play":"Ⅱ Pausa"}</button>
+                    <button type="button" disabled={!player} on:click={stop}>■</button>
+                    <button type="button" disabled={!player} on:click={setMuted}>{muted?"🔇":"🔊"}</button>
+                </div>
+                <span class="yt-time">{time(position)} / {time(duration)}</span>
+                <input aria-label="Posición en YouTube" type="range" min="0" max={duration||1} step="1" value={position} disabled={!player||!duration} on:change={seek}/>
+                <label class="yt-volume">Volumen <input aria-label="Volumen de YouTube" type="range" min="0" max="100" value={volume} disabled={!player} on:input={setVolume}/></label>
+            </div>
+        </div>
+    {/if}
+    <div class="yt-send">
+        <div class="yt-targets-wrap">
+            <strong>Proyectar en</strong>
+            {#if destinations.length}
+                <div class="yt-targets">
+                    {#each destinations as target (target.id)}
+                        <label><input type="checkbox" checked={effectiveTargets.includes(target.id)}
+                            on:change={e=>selectOutput(target.id,e.currentTarget.checked)}/>{target.name}{target.primary?" · Principal":""}</label>
+                    {/each}
+                </div>
             {:else}
-                <div class="yt-empty">▶ Pega un enlace para cargar el reproductor oficial de YouTube</div>
+                <span>Sin pantalla externa activa · escucha disponible en consola</span>
             {/if}
         </div>
-        <div class="yt-console">
-            <strong>Escuchar en consola</strong>
-            <p>Reproductor visible de YouTube. No se muestra en Programa hasta que pulses Enviar a pantallas.</p>
-            <div class="yt-controls">
-                <button type="button" disabled={!player} on:click={toggle}>{paused?"▶ Reproducir":"Ⅱ Pausar"}</button>
-                <button type="button" disabled={!player} on:click={stop}>■ Detener</button>
-                <button type="button" disabled={!player} on:click={setMuted}>{muted?"🔇 Activar audio":"🔊 Silenciar"}</button>
-            </div>
-            <span class="yt-time">{time(position)} / {time(duration)}</span>
-            <input aria-label="Posición en YouTube" type="range" min="0" max={duration||1} step="1" value={position} disabled={!player||!duration} on:change={seek}/>
-            <label class="yt-volume">Volumen <input aria-label="Volumen de YouTube" type="range" min="0" max="100" value={volume} disabled={!player} on:input={setVolume}/></label>
-        </div>
-    </div>
-    <div class="yt-send">
-        <strong>Enviar a pantallas</strong>
-        {#if destinations.length}
-            <div class="yt-targets">
-                {#each destinations as target (target.id)}
-                    <label><input type="checkbox" checked={chosen.includes(target.id)}
-                        on:change={e=>selectOutput(target.id,e.currentTarget.checked)}/>{target.name}{target.primary?" · Principal":""}</label>
-                {/each}
-            </div>
-        {:else}
-            <p>Sin pantalla externa. Puedes escuchar el video en la consola.</p>
-        {/if}
-        <button type="button" class="send" disabled={!videoId||!chosen.length} on:click={send}>▶ Enviar a pantallas</button>
+        <button type="button" class="send" disabled={!videoId||!effectiveTargets.length} on:click={send}>▶ Enviar a pantallas</button>
     </div>
     {#if error}<div class="yt-error" role="alert">{error}<button type="button" aria-label="Cerrar error" on:click={()=>error=""}>✕</button></div>{/if}
-    <small>Se utiliza el reproductor oficial de YouTube. La publicidad, disponibilidad y controles están sujetos a YouTube.</small>
+    <small class="yt-disclaimer">El reproductor de YouTube controla disponibilidad, anuncios y restricciones.</small>
 </section>
 <style>
 .ja-youtube-module{display:flex;flex-direction:column;gap:12px;width:100%;height:100%;overflow:auto;padding:13px;color:#e5f2ff;background:#0a1935;font-size:12px}
