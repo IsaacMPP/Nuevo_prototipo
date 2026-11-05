@@ -1080,7 +1080,7 @@ test("P20: YouTube usa Vista previa antes de modificar Programa",()=>{
  const preview=read("engine/src/frontend/components/ja/JaGeminiYouTubePreview.svelte")
  assert.ok(gallery.includes('dispatch("prepare"'),"Las miniaturas solo envían preparar")
  assert.ok(shell.includes('youtubePanel.$on("prepare"')&&shell.includes('stageYouTubePreview(id)'),"Seleccionar YouTube carga la Vista previa superior")
- const staging=shell.split("function stageYouTubePreview(id:string)")[1].split("function clearYouTubePreview",1)[0]||shell.split("function stageYouTubePreview(id:string)")[1].split("let ")[0]
+ const staging=shell.split("function stageYouTubePreview(id:string)")[1].split('let youtubePreparedUrl=""')[0]
  assert.ok(staging.includes('new JaGeminiYouTubePreview('),"Usar reproductor real en Vista previa")
  assert.ok(!staging.includes('sendToJAOutputs("background"'),"Seleccionar nunca envía a Programa")
  assert.ok(preview.includes('autoplay:0')&&preview.includes("native.pauseVideo()"),"Vista previa inicia detenida")
