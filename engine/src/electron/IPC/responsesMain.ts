@@ -1,13 +1,13 @@
 import { readFileSync } from "node:fs"
 import * as Sentry from "@sentry/electron/main"
-import type { BrowserWindow, DesktopCapturerSource } from "electron"
-import { app, desktopCapturer, screen, shell, systemPreferences } from "electron"
+import type { DesktopCapturerSource } from "electron"
+import { app, BrowserWindow, desktopCapturer, screen, shell, systemPreferences } from "electron"
 import { getJAContentFolders } from "../utils/jaContentFolders"
 import os from "os"
 import path from "path"
 import { getMainWindow, isProd, mainWindow, maximizeMain, setGlobalMenu } from ".."
 import type { MainResponses } from "../../types/IPC/Main"
-import { Main } from "../../types/IPC/Main"
+import { MAIN, Main } from "../../types/IPC/Main"
 import { ToMain } from "../../types/IPC/ToMain"
 import type { ErrorLog, LyricSearchResult, OS } from "../../types/Main"
 import { completeLLM, fetchProviderModels } from "../ai/llm/llmProviders"
@@ -157,6 +157,15 @@ export const mainResponses: MainResponses = {
     [Main.PPT_TO_PDF]: () => pptToPdf(),
     [Main.JA_PRESENTATION_PDF]: (data) => convertJAPresentationToPDF(data.path),
     [Main.JA_PRESENTATION_REMOTE_SET]: (data) => configureJAPresentationRemote(data.enabled),
+    [Main.JA_CAPTURE_SIGNAL]: (data) => {
+        if(!data || typeof data.sourceId!=="string" || data.sourceId.length>256 ||
+            typeof data.peerId!=="string" || data.peerId.length>128 ||
+            !["request","offer","answer","ice","close"].includes(data.action))return
+        for(const win of BrowserWindow.getAllWindows()){
+            if(win.isDestroyed() || win.webContents.isDestroyed())continue
+            win.webContents.send(MAIN,{channel:ToMain.JA_CAPTURE_SIGNAL,data})
+        }
+    },
     [Main.SLIDESHOW_GET_APPS]: () => getPresentationApplications(),
     [Main.START_SLIDESHOW]: (data) => startSlideshow(data),
     [Main.PRESENTATION_CONTROL]: (data) => presentationControl(data),
