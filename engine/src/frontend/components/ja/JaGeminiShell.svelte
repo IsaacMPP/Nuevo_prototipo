@@ -266,6 +266,11 @@
         rebuildOutputs()
         notice("Captura de "+name+" enviada a "+targets.length+" pantalla(s); seguirá activa al cambiar de módulo.")
     }
+    function publishActiveCaptureFromQuickPlay(){
+        const active=capturePanel?.getActiveCapture()
+        if(!active)return notice("Inicia primero una captura real en el módulo Captura de ventanas.")
+        publishJAWindowCapture(active.sourceId,active.name,markedGroupTargets())
+    }
     function refreshCaptureGlobalStatus(){
         const groups=captureAssignments()
         const entries=Object.entries(groups).filter(([,ids])=>ids.length)
@@ -1576,6 +1581,7 @@
         notice("Añadido a "+list.name+": "+entry.title)
     }
     function sendToQuickTargets() {
+        if(mode==="captura"){publishActiveCaptureFromQuickPlay();return}
         if(mode==="presentaciones"){publishJAPresentation();return}
         if(mode==="youtube" && youtubePreviewId){
             publishPreparedYouTube(youtubePreviewId,markedGroupTargets())
@@ -1708,6 +1714,7 @@
         notice("YouTube enviado desde Vista previa a "+targets.length+" pantalla(s).")
     }
     function publishPreparedMedia() {
+        if(mode==="captura"){publishActiveCaptureFromQuickPlay();return}
         if(mode==="presentaciones"){publishJAPresentation();return}
         if(mode==="youtube" && youtubePreviewId){
             publishPreparedYouTube(youtubePreviewId,markedGroupTargets())
