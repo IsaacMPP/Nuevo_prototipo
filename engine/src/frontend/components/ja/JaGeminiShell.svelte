@@ -212,6 +212,89 @@
     let playlistDockObserver:ResizeObserver|null=null
     let quickAudioOpen=false
     let capturePanel:JaGeminiWindowCapture|null=null
+    // Keep the Svelte capture receiver mounted when the operator visits
+    // another module. Output windows capture their own independent stream.
+    let captureParking:HTMLDivElement|null=null
+    const captureKnownNames=new Map<string,string>()
+    let captureGlobalStatus:HTMLDivElement|null=null
+    function captureAssignments():Record<string,string[]>{
+        const result:Record<string,string[]>={}
+        for(const id of chooseOutput()){
+            const bg=get(outputs)[id]?.out?.background
+            if(bg?.type!=="screen"||!bg.id)continue
+            const sourceId=String(bg.id)
+            if(!result[sourceId])result[sourceId]=[]
+            result[sourceId].push(id)
+        }
+        return result
+    }
+    function refreshCaptureModule(){
+        capturePanel?.$set({
+            destinations:jaYouTubeDestinations(),
+            selectedTargets:markedGroupTargets(),
+            assigned:captureAssignments()
+        })
+    }
+    function removeJACaptureFromScreens(sourceId:string){
+        if(!sourceId)return
+        const ids=captureAssignments()[sourceId]||[]
+        if(!ids.length)return notice("Esta captura ya no está proyectada.")
+        if(get(outLocked))return notice("Las salidas están bloqueadas.")
+        for(const id of ids){
+            const bg=get(outputs)[id]?.out?.background
+            if(bg?.type==="screen"&&bg.id===sourceId)clearBackground(id)
+        }
+        rebuildOutputs()
+        notice("Captura retirada de "+ids.length+" pantalla(s). Las demás salidas permanecen intactas.")
+    }
+    function publishJAWindowCapture(sourceId:string,name:string,targets:string[]){
+        const selected=capturePanel?.getActiveCapture()
+        if(!sourceId || selected?.sourceId!==sourceId || !selected.stream.active)
+            return notice("Inicia primero la captura real de esa ventana.")
+        const live=chooseOutput()
+        if(get(outLocked)||!targets.length||targets.some(id=>!live.includes(id)))
+            return notice("Selecciona una o varias pantallas externas activas.")
+        captureKnownNames.set(sourceId,name)
+        const sent=sendToJAOutputs("background",{id:sourceId,type:"screen"},targets,{replaceScripture:true,requireAll:true})
+        if(sent.length!==targets.length)return notice("No se pudo enviar la captura a todos los destinos.")
+        clearBlackBeforePublishing(targets)
+        rebuildOutputs()
+        notice("Captura de "+name+" enviada a "+targets.length+" pantalla(s); seguirá activa al cambiar de módulo.")
+    }
+    function refreshCaptureGlobalStatus(){
+        const groups=captureAssignments()
+        const entries=Object.entries(groups).filter(([,ids])=>ids.length)
+        if(!entries.length){
+            captureGlobalStatus?.remove()
+            captureGlobalStatus=null
+            return
+        }
+        if(!captureGlobalStatus){
+            const row=el("quickTargetButtons")
+            if(!row?.parentElement)return
+            captureGlobalStatus=document.createElement("div")
+            captureGlobalStatus.className="ja-capture-live-strip"
+            captureGlobalStatus.style.cssText="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 10px;background:#102b48;border:1px solid #346487;border-radius:7px;font-size:11px;color:#d9edff;margin-top:4px;"
+            row.parentElement.after(captureGlobalStatus)
+        }
+        captureGlobalStatus.replaceChildren()
+        const title=document.createElement("strong")
+        title.textContent="▣ Capturas proyectadas:"
+        captureGlobalStatus.append(title)
+        for(const [sourceId,ids] of entries){
+            const item=document.createElement("span")
+            item.textContent=(captureKnownNames.get(sourceId)||"Ventana Windows")+" · "+ids.map(id=>get(outputs)[id]?.name||id).join(", ")
+            item.style.cssText="padding:3px 6px;border-radius:5px;background:#1a456b;"
+            captureGlobalStatus.append(item)
+            const button=document.createElement("button")
+            button.type="button"
+            button.textContent="✕ Retirar"
+            button.title="Retirar esta captura únicamente de sus pantallas"
+            button.style.cssText="padding:3px 7px;border:1px solid #5d89a9;border-radius:5px;"
+            button.onclick=()=>removeJACaptureFromScreens(sourceId)
+            captureGlobalStatus.append(button)
+        }
+    }
     let capturePreviewVideo:HTMLVideoElement|null=null
     function stopJAWindowCapturePreview(){
         capturePreviewVideo?.pause()
@@ -2382,6 +2465,8 @@
         updatePlaylistTargets()
         refreshGroupChoices()
         if(presentationsPanel && mode==="presentaciones")refreshPresentationModule()
+        if(capturePanel)refreshCaptureModule()
+        refreshCaptureGlobalStatus()
         if(youtubePanel && mode==="youtube")
             youtubePanel.$set({destinations:jaYouTubeDestinations(),chosen:jaYouTubeTargets()})
         for (const id of available) {
@@ -2869,9 +2954,18 @@
             scriptureTarget=null
             el("moduleView_biblia")?.replaceChildren()
         }
-        if(next!=="captura" && capturePanel){
-            stopJAWindowCapture()
-            capturePanel.$destroy();capturePanel=null
+        if(next!=="captura" && capturePanel && mode==="captura"){
+            if(!captureParking){
+                captureParking=document.createElement("div")
+                captureParking.hidden=true
+                captureParking.style.display="none"
+                document.body.append(captureParking)
+            }
+            const area=el("moduleView_other")
+            if(area)captureParking.append(...Array.from(area.childNodes))
+            // Only detach the local monitor. The receiver and every selected
+            // physical output keep their own live capture stream running.
+            stopJAWindowCapturePreview()
         }
         if(next==="captura"){
             youtubePanel?.$destroy();youtubePanel=null
@@ -2893,18 +2987,44 @@
         refreshOnlyAudioButton()
         if(next==="biblia") {clearPresentationPreview();void registerJARV1909().then(()=>{updateBibleUI();if(get(outputs)[selectedId]?.out?.slide?.id==="temp")void restoreBibleControlForOutput(selectedId);else scheduleBiblePreview()});updateBibleUI();scheduleBiblePreview()}
         else if(next==="captura"){
-            if(!capturePanel){
+            if(capturePanel){
+                const target=el("moduleView_other")
+                if(target && captureParking){
+                    target.replaceChildren()
+                    target.append(...Array.from(captureParking.childNodes))
+                }
+                refreshCaptureModule()
+                const active=capturePanel.getActiveCapture()
+                if(active)stageJAWindowCapture(active.stream,active.name)
+            }else{
                 const target=el("moduleView_other")
                 if(target){
                     target.replaceChildren()
-                    capturePanel=new JaGeminiWindowCapture({target})
+                    capturePanel=new JaGeminiWindowCapture({target,props:{
+                        destinations:jaYouTubeDestinations(),selectedTargets:markedGroupTargets(),assigned:captureAssignments()
+                    }})
                     capturePanel.$on("stream",(event)=>{
                         const {stream,name}=event.detail
-                        stageJAWindowCapture(stream,name)
-                        notice("Captura real de "+name+" en Vista previa. Programa permanece sin cambios.")
+                        if(event.detail.sourceId)captureKnownNames.set(event.detail.sourceId,name)
+                        if(mode==="captura")stageJAWindowCapture(stream,name)
+                        notice("Captura real de "+name+" preparada en Vista previa. Enviar a pantallas es una acción independiente.")
                     })
                     capturePanel.$on("stopped",()=>{
-                        stopJAWindowCapturePreview()
+                        if(mode==="captura")stopJAWindowCapturePreview()
+                    })
+                    capturePanel.$on("target",(event)=>{
+                        const id=event.detail.id as string
+                        if(event.detail.enabled)syncedTargetIds.add(id)
+                        else syncedTargetIds.delete(id)
+                        refreshGroupChoices()
+                        refreshCaptureModule()
+                    })
+                    capturePanel.$on("project",(event)=>{
+                        const {sourceId,name,targets}=event.detail
+                        publishJAWindowCapture(sourceId,name,targets)
+                    })
+                    capturePanel.$on("detach",(event)=>{
+                        removeJACaptureFromScreens(event.detail.sourceId)
                     })
                 }
             }
@@ -3897,6 +4017,10 @@
             stopJAWindowCapture()
             capturePanel?.$destroy()
             capturePanel=null
+            captureParking?.remove()
+            captureParking=null
+            captureGlobalStatus?.remove()
+            captureGlobalStatus=null
             presentationsPanel?.$destroy()
             presentationsPanel=null
             clearPresentationPreview()
