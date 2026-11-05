@@ -12,6 +12,7 @@ export enum ToMain {
     BACKUP = "BACKUP",
     RECENTLY_ADDED_FILES = "RECENTLY_ADDED_FILES",
     PRESENTATION_STATE = "PRESENTATION_STATE",
+    JA_PRESENTATION_REMOTE = "JA_PRESENTATION_REMOTE",
     CAPTURE_CANVAS = "CAPTURE_CANVAS",
     REPLACE_MEDIA_PATHS = "REPLACE_MEDIA_PATHS",
     LESSONS_DONE = "LESSONS_DONE",
@@ -50,6 +51,7 @@ export interface ToMainSendPayloads {
     [ToMain.BACKUP]: { finished: boolean; path: string }
     [ToMain.RECENTLY_ADDED_FILES]: { paths: string[] }
     [ToMain.PRESENTATION_STATE]: { id: string; stat: any; info: any }
+    [ToMain.JA_PRESENTATION_REMOTE]: { action: "next" | "previous" }
     [ToMain.CAPTURE_CANVAS]: { input: string; output: string; size: any; extension: string; config: any; id: string }
     [ToMain.REPLACE_MEDIA_PATHS]: any[]
     [ToMain.LESSONS_DONE]: { showId: string; status: { finished: number; failed: number } }
