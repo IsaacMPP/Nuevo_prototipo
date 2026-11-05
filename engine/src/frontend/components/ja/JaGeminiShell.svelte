@@ -34,6 +34,7 @@
     import JaGeminiPlaylistPanel from "./JaGeminiPlaylistPanel.svelte"
     import JaGeminiQuickAudioPanel from "./JaGeminiQuickAudioPanel.svelte"
     import JaGeminiYouTube from "./JaGeminiYouTube.svelte"
+    import JaGeminiYouTubePreview from "./JaGeminiYouTubePreview.svelte"
     import JaGeminiAudioControls from "./JaGeminiAudioControls.svelte"
     import { JaSoloAudioPlayer } from "./JaSoloAudioPlayer"
     import { videoSync } from "../media/video/videoSync"
@@ -208,6 +209,39 @@
     let playlistDockObserver:ResizeObserver|null=null
     let quickAudioOpen=false
     let youtubePanel:JaGeminiYouTube|null=null
+    let youtubePreview:JaGeminiYouTubePreview|null=null
+    let youtubePreviewId=""
+    let youtubePreviewState={paused:true,muted:true,currentTime:0,duration:0,ready:false}
+    function clearYouTubePreview(){
+        youtubePreview?.$destroy()
+        youtubePreview=null
+        youtubePreviewId=""
+        youtubePreviewState={paused:true,muted:true,currentTime:0,duration:0,ready:false}
+    }
+    function stageYouTubePreview(id:string){
+        if(!jaYoutubeId(id))return
+        const target=el("previewCanvasContent")
+        if(!target)return
+        previewMedia?.pause()
+        previewMedia=null
+        biblePreviewGeneration++
+        if(biblePreviewTimer)clearTimeout(biblePreviewTimer)
+        biblePreviewRenderer?.$destroy()
+        biblePreviewRenderer=null
+        biblePreviewReady=false
+        clearYouTubePreview()
+        prepared=""
+        followProgram=false
+        target.replaceChildren()
+        youtubePreviewId=id
+        youtubePreview=new JaGeminiYouTubePreview({target,props:{videoId:id}})
+        youtubePreview.$on("state",(event)=>{
+            if(youtubePreviewId!==id)return
+            youtubePreviewState=event.detail
+            updatePreviewProgress()
+        })
+        updatePreviewProgress()
+    }
     let youtubePreparedUrl=""
     let audioProblem=""
     // When requesting only sound from a video already on air, hand its audio
@@ -1391,6 +1425,7 @@
             void previewMedia.play().catch(()=>notice("Vista previa no pudo seguir el vídeo de Programa"))
     }
     function resetTargetSelection() {
+        clearYouTubePreview()
         closeLocalExpanded()
         closeAddMediaMenu()
         previewMedia?.pause()
@@ -2567,6 +2602,12 @@
                         refreshGroupChoices()
                         youtubePanel?.$set({destinations:jaYouTubeDestinations(),chosen:jaYouTubeTargets()})
                     })
+                    youtubePanel.$on("prepare",(event)=>{
+                        const id=event.detail.id as string
+                        if(!id)return
+                        stageYouTubePreview(id)
+                        notice("YouTube preparado en Vista previa. Programa permanece intacto.")
+                    })
                     youtubePanel.$on("addPlaylist",(event)=>{
                         const id=selectedPlaylistId
                         if(!id)return notice("Crea o selecciona una lista primero.")
@@ -2577,9 +2618,13 @@
                         const available=chooseOutput()
                         if(!id||!targets?.length||get(outLocked)||targets.some((t:string)=>!available.includes(t)))
                             return notice("Selecciona pantallas externas activas para YouTube.")
+                        if(youtubePreviewId!==id || !youtubePreview)
+                            return notice("Prepara primero el video de YouTube en Vista previa.")
                         const primary=localStorage.getItem("ja-main-projector")||""
+                        youtubePreview.pause()
+                        const previewPosition=youtubePreviewState.currentTime
                         playerVideos.update(data=>({...data,[id]:{id,type:"youtube",name:title||"YouTube"}}))
-                        const received=sendToJAOutputs("background",{id,type:"player",loop:false,muted:!targets.includes(primary),startAt:0},targets,{replaceScripture:true,requireAll:true})
+                        const received=sendToJAOutputs("background",{id,type:"player",loop:false,muted:!targets.includes(primary),startAt:previewPosition},targets,{replaceScripture:true,requireAll:true})
                         if(received.length!==targets.length)return notice("No se pudo enviar YouTube a todas las pantallas seleccionadas.")
                         clearBlackBeforePublishing(targets)
                         rebuildOutputs()
@@ -3077,6 +3122,7 @@
         }
     }
     function prepare(path: string, autoplay=previewAutoplay) {
+        clearYouTubePreview()
         biblePreviewGeneration++
         if (biblePreviewTimer) clearTimeout(biblePreviewTimer)
         biblePreviewRenderer?.$destroy()
@@ -3432,6 +3478,7 @@
             libraryToolbar?.remove()
             youtubePanel?.$destroy()
             youtubePanel=null
+            clearYouTubePreview()
             previewMedia?.pause()
             ++jaAudioGeneration
             jaAudioControls?.$destroy()
