@@ -1146,3 +1146,18 @@ test("P22: control remoto del pastor aislado y disponible sin foco para cualquie
  assert.ok(panel.includes('on:change={e=>dispatch("remoteToggle"')&&panel.includes('dispatch("remoteMode"'),"UI explícita para operador")
  assert.ok(panel.includes("remoteTargets.map"),"Mostrar las pantallas controladas al pastor")
 });
+
+test("P23: PDFs muestran miniaturas y Vista previa sin pantallas externas",()=>{
+ const panel=read("engine/src/frontend/components/ja/JaGeminiPresentations.svelte")
+ const preview=read("engine/src/frontend/components/ja/JaGeminiPresentationPreview.svelte")
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ assert.ok(panel.includes("for(let i=0;i<Math.min(12,pages.length);i++)"),"Render inicial de miniaturas sin depender del observer")
+ assert.ok(panel.includes("paintPending.has(index)")&&panel.includes("painted.has(index)"),"No pintar dos veces el mismo canvas simultáneamente")
+ assert.ok(panel.includes("thumbnailProblem=")&&panel.includes("role=\"alert\""),"Errores de render visibles en la galería")
+ assert.ok(panel.includes("grid-auto-rows:minmax(116px,auto)"),"Las miniaturas mantienen altura visible")
+ assert.ok(panel.includes("min-height:88px;aspect-ratio:16/9"),"Canvas se presenta con dimensiones correctas")
+ assert.ok(preview.includes('await tick()')&&preview.includes('requestPage(page)'),"Preparar la primera diapositiva después de montar canvas")
+ assert.ok(preview.includes('No se pudo dibujar la diapositiva'),"Vista previa muestra errores PDF.js")
+ assert.ok(panel.includes('dispatch("screenSettings")')&&shell.includes('presentationsPanel.$on("screenSettings",openScreenSettings)'),"Mostrar acceso a configuración de pantallas reales")
+ assert.ok(shell.includes('!!value.screen && knownExternalDisplayIds.has(String(value.screen))'),"No simular salidas físicas inexistentes")
+});
