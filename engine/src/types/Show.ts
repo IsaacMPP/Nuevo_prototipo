@@ -608,6 +608,7 @@ export interface OutBackground {
     startAt?: number
     jaReuseClockFrom?: string // JA: a new display inherits the source's running native video clock
     hidePointerInJA?: boolean // JA: hide pointer overlay on native capture output (not cursor baked into captured frames)
+    jaCaptureRelay?: boolean // JA: receive already captured Windows stream from the operator, never recapture in the output
     muted?: boolean
     loop?: boolean
     softLoop?: number
