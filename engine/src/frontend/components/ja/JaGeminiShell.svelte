@@ -1225,6 +1225,10 @@
         notice("Añadido a "+list.name+": "+entry.title)
     }
     function sendToQuickTargets() {
+        if(mode==="youtube" && youtubePreviewId){
+            publishPreparedYouTube(youtubePreviewId,markedGroupTargets())
+            return
+        }
         if(publishingGroup)return notice("Ya se está preparando un envío sincronizado.")
         const selected=markedGroupTargets()
         if(!selected.length){
@@ -1332,7 +1336,30 @@
             refreshGroupChoices()
         }
     }
+    function publishPreparedYouTube(id:string,targets:string[],title="YouTube"){
+        if(!id || youtubePreviewId!==id || !youtubePreview)
+            return notice("Prepara primero el video de YouTube en Vista previa.")
+        const available=chooseOutput()
+        if(!targets.length||targets.some(target=>!available.includes(target))||get(outLocked))
+            return notice("Selecciona pantallas externas activas.")
+        const primary=localStorage.getItem("ja-main-projector")||""
+        youtubePreview.pause()
+        const position=youtubePreviewState.currentTime
+        playerVideos.update(data=>({...data,[id]:{id,type:"youtube",name:title}}))
+        const sent=sendToJAOutputs("background",{
+            id,type:"player",loop:false,muted:!targets.includes(primary),startAt:position
+        },targets,{replaceScripture:true,requireAll:true})
+        if(sent.length!==targets.length)
+            return notice("No se confirmó YouTube en todas las pantallas.")
+        clearBlackBeforePublishing(targets)
+        rebuildOutputs()
+        notice("YouTube enviado desde Vista previa a "+targets.length+" pantalla(s).")
+    }
     function publishPreparedMedia() {
+        if(mode==="youtube" && youtubePreviewId){
+            publishPreparedYouTube(youtubePreviewId,markedGroupTargets())
+            return
+        }
         if(publishingGroup)return notice("Ya se está preparando un envío sincronizado.")
         const targets=markedGroupTargets()
         if(!targets.length)return sendToQuickTargets()
@@ -2615,20 +2642,7 @@
                     })
                     youtubePanel.$on("send",(event)=>{
                         const {id,title,targets}=event.detail
-                        const available=chooseOutput()
-                        if(!id||!targets?.length||get(outLocked)||targets.some((t:string)=>!available.includes(t)))
-                            return notice("Selecciona pantallas externas activas para YouTube.")
-                        if(youtubePreviewId!==id || !youtubePreview)
-                            return notice("Prepara primero el video de YouTube en Vista previa.")
-                        const primary=localStorage.getItem("ja-main-projector")||""
-                        youtubePreview.pause()
-                        const previewPosition=youtubePreviewState.currentTime
-                        playerVideos.update(data=>({...data,[id]:{id,type:"youtube",name:title||"YouTube"}}))
-                        const received=sendToJAOutputs("background",{id,type:"player",loop:false,muted:!targets.includes(primary),startAt:previewPosition},targets,{replaceScripture:true,requireAll:true})
-                        if(received.length!==targets.length)return notice("No se pudo enviar YouTube a todas las pantallas seleccionadas.")
-                        clearBlackBeforePublishing(targets)
-                        rebuildOutputs()
-                        notice("Video de YouTube enviado a "+targets.length+" pantalla(s).")
+                        publishPreparedYouTube(id,targets,title||"YouTube")
                     })
                 }
             }else youtubePanel.$set({initialUrl:youtubePreparedUrl,destinations:jaYouTubeDestinations(),chosen:jaYouTubeTargets()})
