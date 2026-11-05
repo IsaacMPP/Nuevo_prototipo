@@ -407,8 +407,14 @@
         if(mode!=="presentaciones" || !presentationsPanel || event.altKey||event.ctrlKey||event.metaKey)return
         const element=event.target as HTMLElement|null
         if(element?.closest("input,textarea,select,[contenteditable='true']"))return
-        if(event.key==="ArrowRight"||event.key==="ArrowDown"){event.preventDefault();movePresentationPage(1)}
-        else if(event.key==="ArrowLeft"||event.key==="ArrowUp"){event.preventDefault();movePresentationPage(-1)}
+        const next=event.key==="ArrowRight"||event.key==="ArrowDown"||event.key==="PageDown"
+        const previous=event.key==="ArrowLeft"||event.key==="ArrowUp"||event.key==="PageUp"
+        if(!next&&!previous)return
+        event.preventDefault()
+        // Only an explicitly armed remote changes Program; otherwise regular
+        // arrows navigate the private Preview as before.
+        if(presentationRemoteEnabled)remotePresentationStep(next?"next":"previous")
+        else movePresentationPage(next?1:-1)
     }
     let youtubePanel:JaGeminiYouTube|null=null
     let youtubePreview:JaGeminiYouTubePreview|null=null
@@ -2838,9 +2844,20 @@
                     target.replaceChildren()
                     presentationsPanel=new JaGeminiPresentations({target,props:{
                         pdfPath:presentationPdfPath,displayName:presentationSourceName,currentPage:presentationPage,
-                        destinations:jaYouTubeDestinations(),selectedTargets:markedGroupTargets()
+                        destinations:jaYouTubeDestinations(),selectedTargets:markedGroupTargets(),
+                        remoteEnabled:presentationRemoteEnabled,remoteMode:presentationRemoteMode,
+                        remoteError:presentationRemoteError,remoteTargets:[...presentationControlledOutputs]
                     }})
                     presentationsPanel.$on("open",openJAPresentationFile)
+                    presentationsPanel.$on("remoteToggle",(event)=>{
+                        void setJAPresentationRemoteEnabled(!!event.detail.enabled)
+                    })
+                    presentationsPanel.$on("remoteMode",(event)=>{
+                        setJAPresentationRemoteMode(event.detail.mode)
+                    })
+                    presentationsPanel.$on("remoteStep",(event)=>{
+                        remotePresentationStep(event.detail.action)
+                    })
                     presentationsPanel.$on("loaded",(event)=>{
                         const {path,count}=event.detail
                         if(path!==presentationPdfPath)return
@@ -3763,6 +3780,10 @@
         cleanup.push(() => window.removeEventListener("keydown", keyboardGeminiBible, true))
         window.addEventListener("keydown", keyboardGeminiPresentations, true)
         cleanup.push(() => window.removeEventListener("keydown", keyboardGeminiPresentations, true))
+        const remoteToken=receiveToMain(ToMain.JA_PRESENTATION_REMOTE,({action})=>{
+            if(action==="next"||action==="previous")remotePresentationStep(action)
+        })
+        cleanup.push(()=>destroyMain(remoteToken))
         const uHymn = hymnVideos.subscribe(() => { if(mode==="himnario")renderLibrary() })
         const uCollections = hymnCollectionPaths.subscribe(() => { if(mode==="himnario")renderLibrary() })
         const uRoots = hymnSourcePaths.subscribe(() => { void scanMediaFolders() })
@@ -3797,6 +3818,8 @@
             libraryToolbar?.remove()
             youtubePanel?.$destroy()
             youtubePanel=null
+            // Never leave PageUp/PageDown captured after the JA console closes.
+            sendMain(Main.JA_PRESENTATION_REMOTE_SET,{enabled:false})
             presentationsPanel?.$destroy()
             presentationsPanel=null
             clearPresentationPreview()
