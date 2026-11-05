@@ -2,6 +2,7 @@
     import { createEventDispatcher, onDestroy } from "svelte"
     import { Main } from "../../../types/IPC/Main"
     import { requestMain, sendMain } from "../../IPC/main"
+    import { shareJACapture } from "../../utils/jaCaptureRelay"
 
     type CaptureSource={id:string;name:string;kind:"window"|"screen"}
     export let destinations:Array<{id:string;name:string;primary:boolean}>=[]
@@ -23,8 +24,12 @@
     let generation=0
     let requested=false
     let isAlive=true
+    let stopPublisher:(()=>void)|null=null
     $: if(!requested){requested=true;void refresh()}
     function stop(reason="Captura detenida"){
+        const stoppingSource=stream?sourceId:""
+        stopPublisher?.()
+        stopPublisher=null
         generation++
         stream?.getTracks().forEach(track=>track.stop())
         stream=null
@@ -32,7 +37,7 @@
         status=reason
         width=0
         height=0
-        dispatch("stopped",{})
+        dispatch("stopped",{sourceId:stoppingSource})
     }
     export function stopCapture(){stop()}
     export function getActiveCapture(){
@@ -106,6 +111,7 @@
                 return
             }
             stream=captured
+            stopPublisher=shareJACapture(selected.id,captured)
             sourceName=selected.name
             for(const track of captured.getVideoTracks())track.addEventListener("ended",ended,{once:true})
             if(video){
