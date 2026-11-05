@@ -228,7 +228,7 @@ export interface MainSendPayloads {
     [Main.PDF_TO_IMAGE]: { filePath: string }
     [Main.JA_PRESENTATION_PDF]: { path: string }
     [Main.JA_PRESENTATION_REMOTE_SET]: { enabled: boolean }
-    [Main.JA_CAPTURE_SIGNAL]: { sourceId: string; peerId: string; action: "request"|"offer"|"answer"|"ice"|"close"; description?: {type: "offer"|"answer"; sdp?: string}; candidate?: any }
+    [Main.JA_CAPTURE_SIGNAL]: { sourceId: string; peerId: string; action: "request"|"offer"|"answer"|"ice"|"close"; description?: {type: "offer"|"answer"; sdp?: string}; candidate?: any; to?: "publisher"|"viewer" }
     [Main.READ_EXIF]: { id: string }
     [Main.MEDIA_CODEC]: { path: string }
     [Main.MEDIA_TRACKS]: { path: string }
