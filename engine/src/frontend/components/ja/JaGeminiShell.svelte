@@ -217,6 +217,8 @@
     let captureParking:HTMLDivElement|null=null
     const captureKnownNames=new Map<string,string>()
     let captureGlobalStatus:HTMLDivElement|null=null
+    let captureStatusSignature=""
+    let capturePanelSignature=""
     function captureAssignments():Record<string,string[]>{
         const result:Record<string,string[]>={}
         for(const id of chooseOutput()){
@@ -229,11 +231,14 @@
         return result
     }
     function refreshCaptureModule(){
-        capturePanel?.$set({
-            destinations:jaYouTubeDestinations(),
-            selectedTargets:markedGroupTargets(),
-            assigned:captureAssignments()
-        })
+        if(!capturePanel)return
+        const destinations=jaYouTubeDestinations()
+        const selectedTargets=markedGroupTargets()
+        const assigned=captureAssignments()
+        const signature=JSON.stringify({destinations,selectedTargets,assigned})
+        if(signature===capturePanelSignature)return
+        capturePanelSignature=signature
+        capturePanel.$set({destinations,selectedTargets,assigned})
     }
     function removeJACaptureFromScreens(sourceId:string){
         if(!sourceId)return
@@ -267,8 +272,12 @@
         if(!entries.length){
             captureGlobalStatus?.remove()
             captureGlobalStatus=null
+            captureStatusSignature=""
             return
         }
+        const signature=JSON.stringify(entries.map(([sourceId,ids])=>[sourceId,captureKnownNames.get(sourceId)||"",ids.map(id=>get(outputs)[id]?.name||id)]))
+        if(signature===captureStatusSignature && captureGlobalStatus?.isConnected)return
+        captureStatusSignature=signature
         if(!captureGlobalStatus){
             const row=el("quickTargetButtons")
             if(!row?.parentElement)return
@@ -3000,6 +3009,7 @@
                 const target=el("moduleView_other")
                 if(target){
                     target.replaceChildren()
+                    capturePanelSignature=""
                     capturePanel=new JaGeminiWindowCapture({target,props:{
                         destinations:jaYouTubeDestinations(),selectedTargets:markedGroupTargets(),assigned:captureAssignments()
                     }})
