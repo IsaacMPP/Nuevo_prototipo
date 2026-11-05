@@ -2,6 +2,7 @@
     import { createEventDispatcher, onDestroy, onMount } from "svelte"
     import YouTubePlayer from "../drawer/player/YouTubePlayer.svelte"
     import { jaYoutubeId } from "../../utils/jaGeminiPlaylists"
+    import { getYouTubeData } from "../drawer/player/playerHelper"
 
     export let initialUrl = ""
     export let destinations: Array<{id:string;name:string;primary:boolean}> = []
@@ -34,6 +35,14 @@
         if(saved.some(item=>item.id===id))return
         saved=[{id,title:"YouTube · "+id},...saved].slice(0,100)
         persist()
+        // FreeShow already resolves public YouTube video titles. Fail softly
+        // when metadata is blocked: the thumbnail remains useful.
+        void getYouTubeData(id).then(data=>{
+            if(!data.name || !saved.some(item=>item.id===id))return
+            saved=saved.map(item=>item.id===id?{...item,title:data.name}:item)
+            if(videoId===id)label=data.name
+            persist()
+        }).catch(()=>{})
     }
     function chooseVideo(id:string){
         url="https://www.youtube.com/watch?v="+id
