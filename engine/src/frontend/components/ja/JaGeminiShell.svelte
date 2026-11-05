@@ -3259,6 +3259,24 @@
         const playButton = el("btnPreviewPlay") as HTMLButtonElement | null
         const muteButton = el("btnPreviewMute") as HTMLButtonElement | null
         const seek = el("previewSeekSlider") as HTMLInputElement | null
+        if(presentationPreview){
+            if(playButton){
+                playButton.disabled=presentationPage>=presentationPageCount-1
+                playButton.title="Preparar la siguiente diapositiva"
+                playButton.textContent="▶"
+            }
+            if(muteButton){muteButton.disabled=true;muteButton.title="La presentación no tiene pista de audio"}
+            if(seek){
+                seek.disabled=presentationPageCount<=1
+                seek.min="1";seek.max=String(presentationPageCount||1);seek.step="1"
+                seek.value=String(presentationPage+1)
+                seek.title="Número de diapositiva"
+            }
+            const counter=el("previewTimeCounter")
+            if(counter)counter.textContent="Diapositiva "+(presentationPage+1)+" / "+presentationPageCount
+            if(previewLinkButton){previewLinkButton.disabled=true;previewLinkButton.textContent="🔗 Vincular"}
+            return
+        }
         if(youtubePreview){
             const yt=youtubePreviewState
             if(playButton){
@@ -3481,6 +3499,11 @@
             slider.disabled = true
             slider.addEventListener("input", () => {
                 const seconds=Number(slider.value) || 0
+                if(presentationPreview){
+                    const next=Math.max(0,Math.min(presentationPageCount-1,Math.round(seconds)-1))
+                    if(next!==presentationPage)stagePresentationPage(presentationPdfPath,next,presentationPageCount,presentationSourceName)
+                    return
+                }
                 if(youtubePreview){youtubePreview.seek(seconds);return}
                 if (!previewMedia) return
                 if(isLinkedVideo())VideoPlayer.seekTo(playingPath,selectedId,seconds)
@@ -3488,6 +3511,7 @@
             })
         }
         bind("btnPreviewPlay", () => {
+            if(presentationPreview){movePresentationPage(1);return}
             if(youtubePreview){youtubePreview.toggle();return}
             if(!previewMedia)return
             if(isLinkedVideo()){
@@ -3496,7 +3520,7 @@
             }else if(previewMedia.paused)void previewMedia.play().catch(()=>notice("No se pudo iniciar Vista previa"))
             else previewMedia.pause()
         })
-        bind("btnPreviewMute",()=>{if(youtubePreview){youtubePreview.toggleMute();return}if(previewMedia){if(isLinkedVideo()){previewMedia.muted=true;notice("Vista previa vinculada permanece silenciada para evitar audio duplicado")}else previewMedia.muted=!previewMedia.muted;updatePreviewProgress()}})
+        bind("btnPreviewMute",()=>{if(presentationPreview)return;if(youtubePreview){youtubePreview.toggleMute();return}if(previewMedia){if(isLinkedVideo()){previewMedia.muted=true;notice("Vista previa vinculada permanece silenciada para evitar audio duplicado")}else previewMedia.muted=!previewMedia.muted;updatePreviewProgress()}})
         const previewControls=el("btnPreviewPlay")?.parentElement
         if(previewControls){
             const link=document.createElement("button")
@@ -3631,6 +3655,8 @@
         const uBibleAppearance = jaBibleAppearances.subscribe(() => { if(mode==="biblia")scheduleBiblePreview() })
         window.addEventListener("keydown", keyboardGeminiBible, true)
         cleanup.push(() => window.removeEventListener("keydown", keyboardGeminiBible, true))
+        window.addEventListener("keydown", keyboardGeminiPresentations, true)
+        cleanup.push(() => window.removeEventListener("keydown", keyboardGeminiPresentations, true))
         const uHymn = hymnVideos.subscribe(() => { if(mode==="himnario")renderLibrary() })
         const uCollections = hymnCollectionPaths.subscribe(() => { if(mode==="himnario")renderLibrary() })
         const uRoots = hymnSourcePaths.subscribe(() => { void scanMediaFolders() })
@@ -3665,6 +3691,9 @@
             libraryToolbar?.remove()
             youtubePanel?.$destroy()
             youtubePanel=null
+            presentationsPanel?.$destroy()
+            presentationsPanel=null
+            clearPresentationPreview()
             clearYouTubePreview()
             previewMedia?.pause()
             ++jaAudioGeneration
