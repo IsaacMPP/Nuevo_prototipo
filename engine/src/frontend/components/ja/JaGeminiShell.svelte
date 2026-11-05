@@ -284,7 +284,7 @@
         if(get(outLocked)||!targets.length||targets.some(id=>!live.includes(id)))
             return notice("Selecciona una o varias pantallas externas activas.")
         captureKnownNames.set(sourceId,name)
-        const sent=sendToJAOutputs("background",{id:sourceId,type:"screen",hidePointerInJA:captureHidePointer},targets,{replaceScripture:true,requireAll:true})
+        const sent=sendToJAOutputs("background",{id:sourceId,type:"screen",jaCaptureRelay:true,hidePointerInJA:captureHidePointer},targets,{replaceScripture:true,requireAll:true})
         if(sent.length!==targets.length)return notice("No se pudo enviar la captura a todos los destinos.")
         clearBlackBeforePublishing(targets)
         rebuildOutputs()
