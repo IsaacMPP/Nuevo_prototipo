@@ -1040,4 +1040,6 @@ test("P17: YouTube integrado en Gemini con escucha visible y publicación explí
  assert.ok(module.includes('Sin pantalla externa. Puedes escuchar el video en la consola.'),"Escuchar sin monitores")
  assert.ok(!module.includes("JaSoloAudioPlayer")&&!module.includes("audio.src"),"YouTube no extrae audio ni usa un reproductor oculto")
  assert.ok(player.includes("youtube-player"),"Preservar API oficial de FreeShow")
+ const youtube=read("engine/src/frontend/components/drawer/player/YouTube.svelte")
+ assert.ok(youtube.includes('outputId !== localStorage.getItem("ja-main-projector")'),"Las pantallas secundarias de JA deben permanecer silenciadas")
 });
