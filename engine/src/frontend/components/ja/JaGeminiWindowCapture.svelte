@@ -203,7 +203,7 @@
         {/if}
     </div>
     {#if error}<div class="ja-capture-error" role="alert">{error}</div>{/if}
-    <p class="ja-capture-help">Seleccionar una ventana no cambia Programa. Puedes cambiar de módulo y mantener su proyección activa. Audio de ventanas externas pendiente de pruebas.</p>
+    <p class="ja-capture-help">Seleccionar una ventana no cambia Programa. Al cambiar de módulo, la captura continúa. Si pulsas Detener, también se retira de las pantallas porque comparten la señal. Audio pendiente.</p>
 </section>
 <style>
 .ja-capture{display:flex;flex-direction:column;gap:10px;height:100%;overflow:auto;padding:14px 16px;color:#eaf4ff;background:#0b1a37;font-size:12px}
