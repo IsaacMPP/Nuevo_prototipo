@@ -122,7 +122,10 @@
         if (!preview && sessionActive && !videoData.paused) reconcileTransport()
     }
 
-    $: shouldBeMuted = shouldMuteYouTube(preview, $currentWindow === "output", sessionActive, !!videoData.muted)
+    $: shouldBeMuted = shouldMuteYouTube(preview, $currentWindow === "output", sessionActive, !!videoData.muted) ||
+        // JA: the selected primary is the only screen allowed to emit audio.
+        (typeof localStorage !== "undefined" && !!localStorage.getItem("ja-main-projector") &&
+            outputId !== localStorage.getItem("ja-main-projector"))
     $: if (loaded && player && shouldBeMuted !== undefined) reconcileAudio()
     function reconcileAudio() {
         if (!loaded || !player || disposed) return
