@@ -2132,6 +2132,14 @@
             restoreCandidateId=habitualPrimaryId
             screenNotice="La pantalla principal habitual se ha reconectado. ¿Quieres restaurarla como principal? La proyección actual se transferirá y la anterior quedará vacía."
         }else restoreCandidateId=""
+        // A newly connected display can cause FreeShow to rebuild its output
+        // audio inputs without changing the remembered primary ID. Reconnect
+        // the actual primary input to the main speaker bus after reconciliation.
+        // Never route an auxiliary output to the main speaker.
+        if(available.includes(currentMain)){
+            syncJAPrimaryAudioRoute()
+            VideoPlayer.updateVolume()
+        }
     }
     function setProjectionVisible(id:string,visible:boolean){
         const out=get(outputs)[id]
