@@ -1191,7 +1191,7 @@ test("P25: capturas nativas persisten por modulo y proyectan a salidas elegidas 
  assert.ok(!shell.includes('if(next!=="captura" && capturePanel){\n            stopJAWindowCapture()'),"No detener captura al cambiar módulo")
  assert.ok(capture.includes('dispatch("project"')&&capture.includes('dispatch("detach"'),"El operador ordena publicar y retirar explícitamente")
  assert.ok(shell.includes('publishJAWindowCapture(sourceId,name,targets)'),"El módulo envía la captura con fuente y destinos comprobados")
- assert.ok(shell.includes('sendToJAOutputs("background",{id:sourceId,type:"screen"},targets,{replaceScripture:true,requireAll:true})'),"FreeShow proyecta la ventana real solo al grupo elegido")
+ assert.ok(shell.includes('sendToJAOutputs("background",{id:sourceId,type:"screen",hidePointerInJA:captureHidePointer},targets,{replaceScripture:true,requireAll:true})'),"FreeShow proyecta la ventana real solo al grupo elegido")
  assert.ok(background.includes('type === "screen"')&&background.includes('<Window {id}'),"El motor de salidas tiene captura independiente real")
  assert.ok(windowCapture.includes('chromeMediaSourceId: id'),"Cada pantalla usa fuente nativa por ID")
  assert.ok(background.includes('object-fit:contain'),"Mantener proporción real de la ventana")
