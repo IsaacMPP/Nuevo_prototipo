@@ -36,6 +36,7 @@
     import JaGeminiYouTube from "./JaGeminiYouTube.svelte"
     import JaGeminiYouTubePreview from "./JaGeminiYouTubePreview.svelte"
     import JaGeminiPresentations from "./JaGeminiPresentations.svelte"
+    import JaGeminiWindowCapture from "./JaGeminiWindowCapture.svelte"
     import JaGeminiPresentationPreview from "./JaGeminiPresentationPreview.svelte"
     import JaGeminiAudioControls from "./JaGeminiAudioControls.svelte"
     import { JaSoloAudioPlayer } from "./JaSoloAudioPlayer"
@@ -68,7 +69,7 @@
     let syncedTargetIds = new Set<string>()
     let quickTargetsInitialized = false
     let publishingGroup = false
-    let mode: "multimedia" | "himnario" | "biblia" | "youtube" | "presentaciones" = "multimedia"
+    let mode: "multimedia" | "himnario" | "biblia" | "youtube" | "presentaciones" | "captura" = "multimedia"
     // Restore the approved card design; only the number of shown cards grows.
     // Never create all 613 thumbnail requests at once on low-end machines.
     const LIBRARY_FIRST_BATCH = 160
@@ -210,6 +211,52 @@
     let playlistModuleAreaPadding=""
     let playlistDockObserver:ResizeObserver|null=null
     let quickAudioOpen=false
+    let capturePanel:JaGeminiWindowCapture|null=null
+    let capturePreviewVideo:HTMLVideoElement|null=null
+    function stopJAWindowCapturePreview(){
+        capturePreviewVideo?.pause()
+        if(capturePreviewVideo)capturePreviewVideo.srcObject=null
+        capturePreviewVideo?.remove()
+        capturePreviewVideo=null
+    }
+    function stageJAWindowCapture(stream:MediaStream,name:string){
+        const target=el("previewCanvasContent")
+        if(!target)return
+        clearYouTubePreview()
+        clearPresentationPreview()
+        previewMedia?.pause();previewMedia=null
+        biblePreviewGeneration++
+        if(biblePreviewTimer)clearTimeout(biblePreviewTimer)
+        biblePreviewRenderer?.$destroy();biblePreviewRenderer=null
+        biblePreviewReady=false
+        prepared=""
+        followProgram=false
+        stopJAWindowCapturePreview()
+        target.replaceChildren()
+        const player=document.createElement("video")
+        player.autoplay=true
+        player.muted=true
+        player.playsInline=true
+        player.style.cssText="display:block;width:100%;height:100%;object-fit:contain;background:#020817;"
+        player.setAttribute("aria-label","Vista previa de captura: "+name)
+        player.srcObject=stream
+        target.append(player)
+        capturePreviewVideo=player
+        void player.play().catch(error=>notice("Windows bloqueó la vista previa de captura: "+String(error)))
+        const counter=el("previewTimeCounter")
+        if(counter)counter.textContent="Captura · "+name
+        const seek=el("previewSeekSlider") as HTMLInputElement|null
+        if(seek){seek.disabled=true;seek.value="0"}
+        const play=el("btnPreviewPlay") as HTMLButtonElement|null
+        if(play){play.disabled=true;play.title="Captura en directo; no es un vídeo reproducible"}
+        const mute=el("btnPreviewMute") as HTMLButtonElement|null
+        if(mute){mute.disabled=true;mute.title="Prueba de captura de imagen sin audio"}
+        if(previewLinkButton)previewLinkButton.disabled=true
+    }
+    function stopJAWindowCapture(){
+        capturePanel?.stopCapture()
+        stopJAWindowCapturePreview()
+    }
     let presentationsPanel:JaGeminiPresentations|null=null
     let presentationPreview:JaGeminiPresentationPreview|null=null
     let presentationPreviewPath=""
@@ -2813,7 +2860,7 @@
         showCounts()
         renderToolbar()
     }
-    function showModule(next: "multimedia" | "himnario" | "biblia" | "youtube" | "presentaciones") {
+    function showModule(next: "multimedia" | "himnario" | "biblia" | "youtube" | "presentaciones" | "captura") {
         if (mode === "biblia" && next !== "biblia") {
             bibleEditorOpen=false
             bibleFollowEnabled=false
@@ -2821,6 +2868,14 @@
             scriptureView?.$destroy();scriptureView=null
             scriptureTarget=null
             el("moduleView_biblia")?.replaceChildren()
+        }
+        if(next!=="captura" && capturePanel){
+            stopJAWindowCapture()
+            capturePanel.$destroy();capturePanel=null
+        }
+        if(next==="captura"){
+            youtubePanel?.$destroy();youtubePanel=null
+            presentationsPanel?.$destroy();presentationsPanel=null
         }
         if(next==="presentaciones" && youtubePanel){
             youtubePanel.$destroy();youtubePanel=null
@@ -2831,12 +2886,29 @@
         mode=next
         for(const [module,section] of [["multimedia","moduleView_multimedia"],["himnario","moduleView_himnario"],["biblia","moduleView_biblia"],["other","moduleView_other"]]) {
             const node=el(section)
-            const visible=module==="other" ? (next==="youtube"||next==="presentaciones") : module===next
+            const visible=module==="other" ? (next==="youtube"||next==="presentaciones"||next==="captura") : module===next
             if(node){node.classList.toggle("hidden",!visible);node.classList.toggle("flex",visible)}
         }
         setupNavigation()
         refreshOnlyAudioButton()
         if(next==="biblia") {clearPresentationPreview();void registerJARV1909().then(()=>{updateBibleUI();if(get(outputs)[selectedId]?.out?.slide?.id==="temp")void restoreBibleControlForOutput(selectedId);else scheduleBiblePreview()});updateBibleUI();scheduleBiblePreview()}
+        else if(next==="captura"){
+            if(!capturePanel){
+                const target=el("moduleView_other")
+                if(target){
+                    target.replaceChildren()
+                    capturePanel=new JaGeminiWindowCapture({target})
+                    capturePanel.$on("stream",(event)=>{
+                        const {stream,name}=event.detail
+                        stageJAWindowCapture(stream,name)
+                        notice("Captura real de "+name+" en Vista previa. Programa permanece sin cambios.")
+                    })
+                    capturePanel.$on("stopped",()=>{
+                        stopJAWindowCapturePreview()
+                    })
+                }
+            }
+        }
         else if(next==="presentaciones"){
             if(!presentationsPanel){
                 const target=el("moduleView_other")
@@ -3362,6 +3434,7 @@
             ["multimedia","▶ Multimedia"],
             ["youtube","▶ YouTube"],
             ["presentaciones","▣ Presentaciones"],
+            ["captura","▣ Captura de ventanas"],
             ["fondos","▧ Fondos"],
             ["listas","☰ Listas"]
         ]) {
@@ -3370,7 +3443,7 @@
             button.className="ja-nav-button w-full px-3 py-3 text-left text-sm text-slate-200 hover:bg-[#142c54] rounded-md"
             button.textContent=label
             button.setAttribute("aria-current",String(id===mode))
-            if(id==="biblia"||id==="multimedia"||id==="himnario"||id==="youtube"||id==="presentaciones")
+            if(id==="biblia"||id==="multimedia"||id==="himnario"||id==="youtube"||id==="presentaciones"||id==="captura")
                 button.onclick=()=>showModule(id)
             else if(id==="listas")
                 button.onclick=focusPersistentPlaylist
@@ -3821,6 +3894,9 @@
             youtubePanel=null
             // Never leave PageUp/PageDown captured after the JA console closes.
             sendMain(Main.JA_PRESENTATION_REMOTE_SET,{enabled:false})
+            stopJAWindowCapture()
+            capturePanel?.$destroy()
+            capturePanel=null
             presentationsPanel?.$destroy()
             presentationsPanel=null
             clearPresentationPreview()
