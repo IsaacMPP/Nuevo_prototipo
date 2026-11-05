@@ -53,7 +53,7 @@ export interface ToMainSendPayloads {
     [ToMain.RECENTLY_ADDED_FILES]: { paths: string[] }
     [ToMain.PRESENTATION_STATE]: { id: string; stat: any; info: any }
     [ToMain.JA_PRESENTATION_REMOTE]: { action: "next" | "previous" }
-    [ToMain.JA_CAPTURE_SIGNAL]: { sourceId: string; peerId: string; action: "request"|"offer"|"answer"|"ice"|"close"; description?: {type: "offer"|"answer"; sdp?: string}; candidate?: any }
+    [ToMain.JA_CAPTURE_SIGNAL]: { sourceId: string; peerId: string; action: "request"|"offer"|"answer"|"ice"|"close"; description?: {type: "offer"|"answer"; sdp?: string}; candidate?: any; to?: "publisher"|"viewer" }
     [ToMain.CAPTURE_CANVAS]: { input: string; output: string; size: any; extension: string; config: any; id: string }
     [ToMain.REPLACE_MEDIA_PATHS]: any[]
     [ToMain.LESSONS_DONE]: { showId: string; status: { finished: number; failed: number } }
