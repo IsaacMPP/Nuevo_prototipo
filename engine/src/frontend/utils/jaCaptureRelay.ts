@@ -86,12 +86,16 @@ export function receiveJACapture(sourceId:string,onStream:(stream:MediaStream)=>
     const pc=new RTCPeerConnection(peerConfig)
     let destroyed=false
     let received=false
+    const noFramesTimeout=setTimeout(()=>{
+        if(!destroyed && !received)onError("No llegó imagen a esta pantalla. Verifica la captura activa y las conexiones de salida.")
+    },12000)
     let offerReceived=false
     let remoteReady=false
     const iceQueue:RTCIceCandidateInit[]=[]
     pc.ontrack=e=>{
         if(destroyed)return
         received=true
+        clearTimeout(noFramesTimeout)
         const stream=e.streams[0] || new MediaStream([e.track])
         onStream(stream)
     }
@@ -129,6 +133,7 @@ export function receiveJACapture(sourceId:string,onStream:(stream:MediaStream)=>
     },2200)
     return ()=>{
         destroyed=true
+        clearTimeout(noFramesTimeout)
         clearInterval(retry)
         emit({sourceId,peerId,action:"close"})
         destroyMain(listener)
