@@ -1050,8 +1050,8 @@ test("P18: YouTube utiliza pantallas vivas de JA y biblioteca con miniaturas com
  assert.ok(shell.includes("function jaYouTubeDestinations()")&&shell.includes("const available=chooseOutput()"),"Leer pantallas reales")
  assert.ok(shell.includes('youtubePanel.$set({destinations:jaYouTubeDestinations(),chosen:jaYouTubeTargets()})'),"Actualizar YouTube cuando cambian las salidas")
  assert.ok(shell.includes('targets.some((t:string)=>!available.includes(t))'),"Validar pantallas al enviar")
- assert.ok(module.includes('class="yt-library"')&&module.includes("mqdefault.jpg"),"Biblioteca de miniaturas")
- assert.ok(module.includes('class="yt-compact-player"')&&module.includes("showPlayer"),"Reproductor compacto desplegable")
+ assert.ok(module.includes('class="yt-library"')&&module.includes("hqdefault.jpg")&&module.includes("mqdefault.jpg"),"Miniaturas HD con respaldo")
+ assert.ok(module.includes('class="yt-listen-float"')&&module.includes("listening && videoId"),"Reproductor solo en panel flotante visible al escuchar")
  assert.ok(module.includes("localStorage.setItem(STORAGE"),"Guardar enlaces de YouTube en biblioteca")
  assert.ok(module.includes('dispatch("addPlaylist"')&&shell.includes('youtubePanel.$on("addPlaylist"'),"Añadir video guardado a playlist")
  assert.ok(module.includes('disabled={!videoId||!effectiveTargets.length}'),"Habilitar enviar solo con pantalla seleccionada")
@@ -1060,5 +1060,16 @@ test("P18: YouTube utiliza pantallas vivas de JA y biblioteca con miniaturas com
 test("P18b: elegir de nuevo el mismo video YouTube conserva controles nativos",()=>{
  const mod=read("engine/src/frontend/components/ja/JaGeminiYouTube.svelte")
  assert.ok(mod.includes("if(id===videoId)")&&mod.includes("player.pauseVideo()"),"El mismo video se prepara sin destruir la sesión de control")
- assert.ok(mod.includes("showPlayer=true"),"La selección permite reabrir el reproductor compacto")
+ assert.ok(mod.includes("closeListening()")&&mod.includes("let listening=false"),"La selección no abre un reproductor grande ni deja el sonido anterior")
+});
+
+test("P19: YouTube se muestra como biblioteca sin reproductor fijo",()=>{
+ const mod=read("engine/src/frontend/components/ja/JaGeminiYouTube.svelte")
+ assert.ok(mod.includes('class="yt-library"'),"El contenido principal debe ser una galería de miniaturas")
+ assert.ok(!mod.includes('class="yt-compact-player"'),"Quitar el reproductor fijo del módulo")
+ assert.ok(mod.includes('class="yt-action-group"')&&mod.includes('on:click={()=>listening?closeListening():openListening()}'),"Escuchar en consola por acción explícita")
+ assert.ok(mod.includes('listening && videoId')&&mod.includes("YouTubePlayer"),"El reproductor oficial es visible solo al escuchar")
+ assert.ok(mod.includes('on:click={closeListening}')&&mod.includes("player?.pauseVideo();player?.mute()"),"Cerrar escucha silencia y detiene la sesión")
+ assert.ok(mod.includes('object-fit:cover')&&mod.includes("aspect-ratio:16/9"),"Miniaturas uniformes 16:9")
+ assert.ok(mod.includes('effectiveTargets=chosen.filter'),"No proyectar hacia monitores desconectados")
 });
