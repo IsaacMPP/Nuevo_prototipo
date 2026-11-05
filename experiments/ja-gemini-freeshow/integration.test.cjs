@@ -1197,7 +1197,22 @@ test("P25: capturas nativas persisten por modulo y proyectan a salidas elegidas 
  assert.ok(background.includes('object-fit:contain'),"Mantener proporción real de la ventana")
  assert.ok(shell.includes('if(bg?.type==="screen"&&bg.id===sourceId)clearBackground(id)'),"Retirar solo las pantallas pertenecientes a la captura exacta")
  assert.ok(shell.includes('captureGlobalStatus')&&shell.includes('▣ Capturas proyectadas:'),"Estado de fuentes persistente fuera del módulo")
- assert.ok(capture.includes('selectedTargets.includes(dest.id)')&&capture.includes('disabled={!stream || !selectedTargets.length}'),"Respetar selección explícita y no inventar salida")
+ assert.ok(capture.includes('selectedTargets.length')&&capture.includes('disabled={!stream||!selectedTargets.length}'),"Usar destinos reales de Envío rápido, sin selección duplicada")
  assert.ok(shell.includes('capturePanel?.$destroy()')&&shell.includes('captureParking?.remove()'),"Al cerrar la consola liberar recursos y componentes")
  assert.ok(shell.includes('if(mode==="captura"){publishActiveCaptureFromQuickPlay();return}'),"Quick Play y Corte de JA comparten publicación explícita")
+});
+
+test("P26: captura UI compacta y puntero independiente del cursor de Windows",()=>{
+ const capture=read("engine/src/frontend/components/ja/JaGeminiWindowCapture.svelte")
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const output=read("engine/src/frontend/components/output/layers/BackgroundMedia.svelte")
+ const win=read("engine/src/frontend/components/output/Window.svelte")
+ const types=read("engine/src/types/Show.ts")
+ assert.ok(capture.includes('class="ja-capture-source"')||capture.includes('class="ja-source-section"'),"Interfaz compacta")
+ assert.ok(!capture.includes('class="ja-capture-target-list"'),"Sin controles de destinos repetidos en el módulo")
+ assert.ok(capture.includes('dispatch("focusTargets")')&&shell.includes('function focusQuickCaptureTargets()'),"Destinos integrados en Envío rápido")
+ assert.ok(capture.includes('dispatch("cursor"')&&shell.includes('setCapturePointerHidden('),"Preferencia de cursor conectada")
+ assert.ok(shell.includes('hidePointerInJA:captureHidePointer')&&types.includes("hidePointerInJA?: boolean"),"Persistir la propiedad en cada salida")
+ assert.ok(output.includes('hidePointer={data.hidePointerInJA!==false}')&&win.includes('export let hidePointer = true'),"Visibilidad de puntero aplicada al reproductor de salida")
+ assert.ok(capture.includes('No oculta el puntero dentro de una captura'),"Explicar que el cursor incrustado por Windows es distinto")
 });
