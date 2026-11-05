@@ -65,7 +65,7 @@
     let syncedTargetIds = new Set<string>()
     let quickTargetsInitialized = false
     let publishingGroup = false
-    let mode: "multimedia" | "himnario" | "biblia" = "multimedia"
+    let mode: "multimedia" | "himnario" | "biblia" | "youtube" = "multimedia"
     // Restore the approved card design; only the number of shown cards grows.
     // Never create all 613 thumbnail requests at once on low-end machines.
     const LIBRARY_FIRST_BATCH = 160
@@ -815,17 +815,13 @@
             }else if(item.kind==="youtube"){
                 const youtubeId=jaYoutubeId(item.path)
                 if(!youtubeId)throw Error("El enlace de YouTube no es válido.")
-                // Native FreeShow Player.svelte -> YouTube.svelte; keep iframe
-                // visible, never extract or hide YouTube audio.
-                playerVideos.update(data=>({...data,[youtubeId]:{id:youtubeId,type:"youtube",name:item.title}}))
-                if(!targets.length)throw Error("YouTube requiere reproducción visible en una salida externa.")
-                const received=sendToJAOutputs("background",{
-                    id:youtubeId,type:"player",loop:false,muted:!targets.includes(primary),startAt:0
-                },targets,{replaceScripture:true,requireAll:true})
-                if(received.length!==targets.length)throw Error("No se pudo asignar YouTube a todas las pantallas.")
-                clearBlackBeforePublishing(targets)
-                rebuildOutputs()
-                notice("YouTube enviado con video visible. Si el reproductor bloquea autoplay, pulsa Play en la pantalla.")
+                // Stage the official visible YouTube iframe instead of sending
+                // automatically to Program. Playlist Send publishes explicitly.
+                youtubePreparedUrl=item.path
+                showModule("youtube")
+                playlistWaiting=true
+                playlistPaused=true
+                notice("YouTube preparado en su módulo. Escucha en consola o pulsa Enviar a pantallas.")
             }else{
                 if(getMediaType(getExtension(item.path))!=="video")throw Error("El archivo ya no es un video válido.")
                 prepare(item.path,false)
@@ -842,7 +838,7 @@
                 notice("Pista preparada y detenida en Vista previa: "+item.title+". Pulsa Enviar a pantallas para reproducir.")
             }
             if(token!==playlistToken)return
-            if(item.kind==="audio"||item.audioOnly||item.kind==="youtube")playlistWaiting=false
+            if(item.kind==="audio"||item.audioOnly)playlistWaiting=false
             notice("Playlist: "+(index+1)+"/"+list!.entries.length+" · "+item.title)
         }catch(error){
             if(token===playlistToken){
@@ -941,6 +937,22 @@
         if(event.type==="send"){
             const entry=get(jaPlaylists).find(p=>p.id===playlistCurrentId)?.entries[playlistIndex]
             if(!entry || !playlistRunning)return notice("Primero prepara una pista de la lista.")
+            if(entry.kind==="youtube"){
+                const id=jaYoutubeId(entry.path)
+                const destinations=markedPlaylistTargets()
+                if(!id || !destinations.length)return notice("Prepara un enlace de YouTube válido y selecciona pantallas.")
+                if(get(outLocked))return notice("Las salidas están bloqueadas.")
+                const main=localStorage.getItem("ja-main-projector")||""
+                playerVideos.update(data=>({...data,[id]:{id,type:"youtube",name:entry.title}}))
+                const sent=sendToJAOutputs("background",{id,type:"player",loop:false,muted:!destinations.includes(main),startAt:0},destinations,{replaceScripture:true,requireAll:true})
+                if(sent.length!==destinations.length)return notice("No se pudo enviar YouTube a todas las pantallas.")
+                clearBlackBeforePublishing(destinations)
+                playlistWaiting=false
+                playlistPaused=false
+                rebuildOutputs()
+                notice("YouTube enviado desde playlist a "+destinations.length+" pantalla(s).")
+                return
+            }
             if(entry.kind!=="video" || entry.audioOnly)return notice("Solo los vídeos visibles se envían desde Vista previa; Solo audio se escucha localmente.")
             if(prepared!==entry.path)return notice("La Vista previa cambió; prepara nuevamente la pista.")
             const destinations=markedPlaylistTargets()
