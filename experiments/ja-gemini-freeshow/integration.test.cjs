@@ -1161,3 +1161,20 @@ test("P23: PDFs muestran miniaturas y Vista previa sin pantallas externas",()=>{
  assert.ok(panel.includes('dispatch("screenSettings")')&&shell.includes('presentationsPanel.$on("screenSettings",openScreenSettings)'),"Mostrar acceso a configuración de pantallas reales")
  assert.ok(shell.includes('!!value.screen && knownExternalDisplayIds.has(String(value.screen))'),"No simular salidas físicas inexistentes")
 });
+
+test("P24: prueba de captura externa por fuentes reales sin alterar Programa ni módulos aprobados",()=>{
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const capture=read("engine/src/frontend/components/ja/JaGeminiWindowCapture.svelte")
+ const native=read("engine/src/electron/IPC/responsesMain.ts")
+ assert.ok(capture.includes("requestMain(Main.GET_WINDOWS)")&&capture.includes("requestMain(Main.GET_SCREENS)"),"Listar fuentes reales de Electron y FreeShow")
+ assert.ok(native.includes("desktopCapturer")&&native.includes("getSources({ types: [type] })"),"Fuentes nativas de desktopCapturer")
+ assert.ok(capture.includes("navigator.mediaDevices.getUserMedia(constraints)"),"Capturar fuente real, sin imágenes de demostración")
+ assert.ok(capture.includes('chromeMediaSource:"desktop"')&&capture.includes("chromeMediaSourceId:selected.id"),"Utilizar id seleccionado por usuario")
+ assert.ok(capture.includes("stream?.getTracks().forEach(track=>track.stop())"),"Liberar captura al detener")
+ assert.ok(capture.includes('onDestroy(()=>{isAlive=false;stop("Cerrado")})'),"Liberar captura al salir del módulo")
+ assert.ok(shell.includes('new JaGeminiWindowCapture({target})')&&shell.includes('capturePanel.$on("stream"'),"Módulo independiente conectado a la consola")
+ assert.ok(shell.includes('player.srcObject=stream')&&shell.includes('target.replaceChildren()'),"La señal capturada aparece en Vista previa superior")
+ assert.ok(!capture.includes('sendToJAOutputs(')&&!capture.includes('setOutput('),"La prueba no transmite a Programa sin validación física")
+ assert.ok(shell.includes('if(next!=="captura" && capturePanel)')&&shell.includes("stopJAWindowCapture()"),"Detener transmisión al cambiar de módulo")
+ assert.ok(shell.includes('["captura","▣ Captura de ventanas"]'),"Nuevo acceso sin sustituir Biblia/Multimedia")
+});
