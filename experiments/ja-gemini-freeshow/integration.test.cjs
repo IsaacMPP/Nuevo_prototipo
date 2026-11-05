@@ -1172,10 +1172,10 @@ test("P24: prueba de captura externa por fuentes reales sin alterar Programa ni 
  assert.ok(capture.includes('chromeMediaSource:"desktop"')&&capture.includes("chromeMediaSourceId:selected.id"),"Utilizar id seleccionado por usuario")
  assert.ok(capture.includes("stream?.getTracks().forEach(track=>track.stop())"),"Liberar captura al detener")
  assert.ok(capture.includes('onDestroy(()=>{isAlive=false;stop("Cerrado")})'),"Liberar captura al salir del módulo")
- assert.ok(shell.includes('new JaGeminiWindowCapture({target})')&&shell.includes('capturePanel.$on("stream"'),"Módulo independiente conectado a la consola")
+ assert.ok(shell.includes('new JaGeminiWindowCapture({target,props:')&&shell.includes('capturePanel.$on("stream"'),"Módulo independiente conectado a la consola con destinos reales")
  assert.ok(shell.includes('player.srcObject=stream')&&shell.includes('target.replaceChildren()'),"La señal capturada aparece en Vista previa superior")
  assert.ok(!capture.includes('sendToJAOutputs(')&&!capture.includes('setOutput('),"La prueba no transmite a Programa sin validación física")
- assert.ok(shell.includes('if(next!=="captura" && capturePanel)')&&shell.includes("stopJAWindowCapture()"),"Detener transmisión al cambiar de módulo")
+ assert.ok(shell.includes('if(next!=="captura" && capturePanel && mode==="captura")')&&shell.includes("captureParking.append("),"Conservar el receptor sin interrumpir otras fuentes al cambiar de módulo")
  assert.ok(shell.includes('["captura","▣ Captura de ventanas"]'),"Nuevo acceso sin sustituir Biblia/Multimedia")
 });
 
