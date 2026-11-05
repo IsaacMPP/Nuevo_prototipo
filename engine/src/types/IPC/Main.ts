@@ -111,6 +111,7 @@ export enum Main {
     ACCESS_MICROPHONE_PERMISSION = "ACCESS_MICROPHONE_PERMISSION",
     ACCESS_SCREEN_PERMISSION = "ACCESS_SCREEN_PERMISSION",
     PPT_TO_PDF = "PPT_TO_PDF",
+    JA_PRESENTATION_PDF = "JA_PRESENTATION_PDF",
     SLIDESHOW_GET_APPS = "SLIDESHOW_GET_APPS",
     START_SLIDESHOW = "START_SLIDESHOW",
     PRESENTATION_CONTROL = "PRESENTATION_CONTROL",
@@ -223,6 +224,7 @@ export interface MainSendPayloads {
     [Main.GET_THUMBNAIL]: { input: string; size: number }
     [Main.SAVE_IMAGE]: { id?: string; path?: string; base64?: string; buffer?: ArrayBuffer; filePath?: string[]; format?: "png" | "jpg"; openFolder?: boolean }
     [Main.PDF_TO_IMAGE]: { filePath: string }
+    [Main.JA_PRESENTATION_PDF]: { path: string }
     [Main.READ_EXIF]: { id: string }
     [Main.MEDIA_CODEC]: { path: string }
     [Main.MEDIA_TRACKS]: { path: string }
@@ -359,6 +361,7 @@ export interface MainReturnPayloads {
     [Main.DOES_MEDIA_EXIST]: Promise<{ path: string; exists: boolean; creationTime?: number }>
     [Main.GET_THUMBNAIL]: Promise<{ output: string; input: string; size: number }>
     // [Main.PDF_TO_IMAGE]: Promise<string[]>
+    [Main.JA_PRESENTATION_PDF]: Promise<{ path?: string; error?: string }>
     [Main.READ_EXIF]: Promise<{ id: string; exif: ExifData | undefined }>
     [Main.MEDIA_CODEC]: Promise<MediaCodecInfo>
     [Main.MEDIA_TRACKS]: Promise<{ path: string; tracks: Subtitle[] }>
