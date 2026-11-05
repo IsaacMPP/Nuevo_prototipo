@@ -4,6 +4,9 @@
     import { requestMain, sendMain } from "../../IPC/main"
 
     type CaptureSource={id:string;name:string;kind:"window"|"screen"}
+    export let destinations:Array<{id:string;name:string;primary:boolean}>=[]
+    export let selectedTargets:string[]=[]
+    export let assigned:Record<string,string[]>={}
     const dispatch=createEventDispatcher()
     let sources:CaptureSource[]=[]
     let sourceId=""
@@ -31,6 +34,17 @@
         dispatch("stopped",{})
     }
     export function stopCapture(){stop()}
+    export function getActiveCapture(){
+        return stream && stream.active?{stream,name:sourceName,sourceId}:null
+    }
+    function project(){
+        if(!stream || !stream.active || !sourceId)return
+        dispatch("project",{sourceId,name:sourceName,targets:[...selectedTargets]})
+    }
+    function detach(){
+        if(!sourceId)return
+        dispatch("detach",{sourceId})
+    }
     async function refresh(){
         loading=true
         error=""
@@ -131,13 +145,38 @@
         </button>
         <button type="button" on:click={()=>stop()} disabled={!stream}>■ Detener</button>
     </div>
+    <div class="ja-capture-targets">
+        <strong>Enviar fuente a las pantallas seleccionadas</strong>
+        {#if destinations.length}
+            <div class="ja-capture-target-list">
+                {#each destinations as dest (dest.id)}
+                    <label><input type="checkbox" checked={selectedTargets.includes(dest.id)}
+                        on:change={e=>dispatch("target",{id:dest.id,enabled:e.currentTarget.checked})}/>
+                        {dest.name}{dest.primary?" · Principal":""}</label>
+                {/each}
+            </div>
+        {:else}
+            <span>No se detectaron salidas externas activas. Revisa Configuración de pantallas.</span>
+        {/if}
+        <div class="ja-capture-actions">
+            <button class="ja-capture-start" type="button" on:click={project}
+                disabled={!stream || !selectedTargets.length}>▶ Enviar captura a {selectedTargets.length} pantalla(s)</button>
+            <button type="button" on:click={detach} disabled={!sourceId || !assigned[sourceId]?.length}>
+                Retirar esta captura de sus pantallas
+            </button>
+        </div>
+        {#if sourceId && assigned[sourceId]?.length}
+            <span class="ja-capture-projected">En Programa: {assigned[sourceId].map(id=>destinations.find(d=>d.id===id)?.name||id).join(", ")}</span>
+        {/if}
+        <small>La captura proyectada continúa al cambiar de módulo. Puedes enviar otra ventana a otra pantalla sin reemplazarla.</small>
+    </div>
     <div class="ja-capture-stage">
         <video bind:this={video} autoplay muted playsinline aria-label="Monitor local de captura de Windows"></video>
         {#if !stream}<div class="ja-capture-placeholder">Selecciona una ventana e inicia la captura para ver la señal real.</div>{/if}
     </div>
     <div class="ja-capture-status" role="status">{status}{width&&height?" · "+width+" × "+height:""}</div>
     {#if error}<div class="ja-capture-error" role="alert">{error}</div>{/if}
-    <p class="ja-capture-help">También aparecerá en Vista previa de JA. Programa y las pantallas externas <strong>no cambian</strong> durante esta prueba. La ventana no debe estar minimizada y algunas aplicaciones protegidas pueden mostrar negro. El audio se probará por separado.</p>
+    <p class="ja-capture-help">La selección solo modifica Vista previa; <strong>Programa cambia únicamente al pulsar Enviar captura</strong>. Al detener la captura local, la proyección externa continúa hasta retirarla o reemplazarla. No minimices la ventana capturada. Audio pendiente de pruebas.</p>
 </section>
 <style>
 .ja-capture{display:flex;flex-direction:column;gap:12px;height:100%;overflow:auto;padding:15px;color:#ecf5ff;background:#0b1a37;font-size:12px}
@@ -154,4 +193,10 @@ button{cursor:pointer}button:disabled{opacity:.5;cursor:not-allowed}
 .ja-capture-status{padding:7px 10px;background:#112c4e;border-radius:6px}
 .ja-capture-error{padding:8px;background:#622c39;border:1px solid #af6171;border-radius:6px}
 .ja-capture-help{line-height:1.5}
+.ja-capture-targets{display:flex;flex-direction:column;gap:8px;padding:10px;background:#112849;border:1px solid #3e668d;border-radius:8px}
+.ja-capture-target-list,.ja-capture-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.ja-capture-target-list label{display:flex;gap:5px;align-items:center;font-size:11px}
+.ja-capture-target-list input{accent-color:#4cd1fd}
+.ja-capture-projected{color:#9fe6bd;font-size:11px}
+.ja-capture-targets small{color:#a8c1dd;font-size:10px}
 </style>
