@@ -101,14 +101,18 @@ export async function convertJAPresentationToPDF(inputPath: string): Promise<{ p
             return { error: "El archivo seleccionado ya no existe." }
         const stat = fs.statSync(inputPath)
         const key = createHash("sha256").update(path.resolve(inputPath)).digest("hex").slice(0,16)
-        const name = sanitizeFileName(path.basename(inputPath,path.extname(inputPath))) || "Presentacion"
         const folder = path.join(getDataFolderPath("imports", "JA-Presentaciones"), key)
         fs.mkdirSync(folder,{recursive:true})
-        const target = path.join(folder,name+".pdf")
+        // LibreOffice always names the generated PDF after the input basename.
+        // Use a safe, isolated copy to ensure the expected output path matches.
+        const staged = path.join(folder,"ja-presentation"+path.extname(inputPath).toLowerCase())
+        const target = path.join(folder,"ja-presentation.pdf")
         if (fs.existsSync(target) && fs.statSync(target).mtimeMs >= stat.mtimeMs)
             return { path: target }
-        if (await convertWithLibreOffice(inputPath,target,folder) ||
-            await convertWithPowerPoint(inputPath,target))
+        fs.copyFileSync(inputPath,staged)
+        if (fs.existsSync(target)) fs.rmSync(target)
+        if (await convertWithLibreOffice(staged,target,folder) ||
+            await convertWithPowerPoint(staged,target))
             return { path: target }
         return { error: "No se pudo convertir PowerPoint a PDF. Instala LibreOffice o Microsoft PowerPoint y comprueba el archivo." }
     } catch(error) {
