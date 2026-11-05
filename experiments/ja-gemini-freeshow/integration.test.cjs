@@ -1178,3 +1178,25 @@ test("P24: prueba de captura externa por fuentes reales sin alterar Programa ni 
  assert.ok(shell.includes('if(next!=="captura" && capturePanel)')&&shell.includes("stopJAWindowCapture()"),"Detener transmisión al cambiar de módulo")
  assert.ok(shell.includes('["captura","▣ Captura de ventanas"]'),"Nuevo acceso sin sustituir Biblia/Multimedia")
 });
+
+test("P25: capturas nativas persisten por modulo y proyectan a salidas elegidas sin afectar las demás",()=>{
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const capture=read("engine/src/frontend/components/ja/JaGeminiWindowCapture.svelte")
+ const background=read("engine/src/frontend/components/output/layers/BackgroundMedia.svelte")
+ const windowCapture=read("engine/src/frontend/components/output/Window.svelte")
+ assert.ok(shell.includes('let captureParking:HTMLDivElement|null=null'),"Capturador persistente independiente del panel visible")
+ assert.ok(shell.includes('captureParking.append(...Array.from(area.childNodes))'),"Mover el componente y conservar el MediaStream al salir")
+ assert.ok(shell.includes('target.append(...Array.from(captureParking.childNodes))'),"Recuperar capturador sin reiniciar conexión")
+ assert.ok(shell.includes('if(active)stageJAWindowCapture(active.stream,active.name)'),"Recuperar Vista previa al regresar")
+ assert.ok(!shell.includes('if(next!=="captura" && capturePanel){\n            stopJAWindowCapture()'),"No detener captura al cambiar módulo")
+ assert.ok(capture.includes('dispatch("project"')&&capture.includes('dispatch("detach"'),"El operador ordena publicar y retirar explícitamente")
+ assert.ok(shell.includes('publishJAWindowCapture(sourceId,name,targets)'),"El módulo envía la captura con fuente y destinos comprobados")
+ assert.ok(shell.includes('sendToJAOutputs("background",{id:sourceId,type:"screen"},targets,{replaceScripture:true,requireAll:true})'),"FreeShow proyecta la ventana real solo al grupo elegido")
+ assert.ok(background.includes('type === "screen"')&&background.includes('<Window {id}'),"El motor de salidas tiene captura independiente real")
+ assert.ok(windowCapture.includes('chromeMediaSourceId: id'),"Cada pantalla usa fuente nativa por ID")
+ assert.ok(background.includes('object-fit:contain'),"Mantener proporción real de la ventana")
+ assert.ok(shell.includes('if(bg?.type==="screen"&&bg.id===sourceId)clearBackground(id)'),"Retirar solo las pantallas pertenecientes a la captura exacta")
+ assert.ok(shell.includes('captureGlobalStatus')&&shell.includes('▣ Capturas proyectadas:'),"Estado de fuentes persistente fuera del módulo")
+ assert.ok(capture.includes('selectedTargets.includes(dest.id)')&&capture.includes('disabled={!stream || !selectedTargets.length}'),"Respetar selección explícita y no inventar salida")
+ assert.ok(shell.includes('capturePanel?.$destroy()')&&shell.includes('captureParking?.remove()'),"Al cerrar la consola liberar recursos y componentes")
+});
