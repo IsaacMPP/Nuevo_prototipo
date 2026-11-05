@@ -219,6 +219,97 @@
     let presentationPageCount=0
     let presentationLoadToken=0
     let presentationControlledOutputs:string[]=[]
+    let presentationRemoteEnabled=false
+    let presentationRemoteMode:"preview"|"program"="program"
+    let presentationRemoteError=""
+    let presentationRemotePending=false
+    let presentationRemoteLastAt=0
+    function updateRemotePanel(){
+        presentationsPanel?.$set({remoteEnabled:presentationRemoteEnabled,
+            remoteMode:presentationRemoteMode,remoteError:presentationRemoteError,
+            remoteTargets:[...presentationControlledOutputs]})
+    }
+    async function setJAPresentationRemoteEnabled(enabled:boolean){
+        if(presentationRemotePending)return
+        if(enabled && (!presentationPdfPath || !presentationPageCount)){
+            presentationRemoteError="Abre primero una presentación real."
+            updateRemotePanel()
+            return
+        }
+        if(enabled && presentationRemoteMode==="program" && !presentationControlledOutputs.length){
+            presentationRemoteError="Primero envía una diapositiva a Programa para asignar las pantallas."
+            updateRemotePanel()
+            return
+        }
+        presentationRemotePending=true
+        try{
+            const result=await requestMain(Main.JA_PRESENTATION_REMOTE_SET,{enabled})
+            presentationRemoteEnabled=!!result?.enabled
+            presentationRemoteError=result?.error||""
+            if(enabled&&!presentationRemoteEnabled && !presentationRemoteError)
+                presentationRemoteError="No fue posible registrar las teclas del control."
+            updateRemotePanel()
+        }catch(err){
+            presentationRemoteEnabled=false
+            presentationRemoteError=String(err)
+            updateRemotePanel()
+        }finally{presentationRemotePending=false}
+    }
+    function setJAPresentationRemoteMode(value:"preview"|"program"){
+        presentationRemoteMode=value
+        presentationRemoteError=""
+        updateRemotePanel()
+    }
+    function presentationOnAirTargets():string[]{
+        const available=chooseOutput()
+        const live=get(outputs)
+        return presentationControlledOutputs.filter(id=>
+            available.includes(id)&&live[id]?.out?.slide?.type==="pdf" &&
+            live[id]?.out?.slide?.id===presentationPdfPath)
+    }
+    function remotePresentationStep(direction:"next"|"previous"){
+        if(!presentationRemoteEnabled || !presentationPdfPath || !presentationPageCount)return
+        const now=Date.now()
+        if(now-presentationRemoteLastAt<180)return
+        presentationRemoteLastAt=now
+        const offset=direction==="next"?1:-1
+        if(presentationRemoteMode==="preview"){
+            if(mode!=="presentaciones" || !presentationPreview)return
+            movePresentationPage(offset)
+            return
+        }
+        if(get(outLocked))return
+        const targets=presentationOnAirTargets()
+        if(!targets.length){
+            presentationRemoteError="La presentación ya no está proyectada en las pantallas asignadas."
+            updateRemotePanel()
+            return
+        }
+        // Drive from the actual on-air page, not the independently prepared
+        // Preview page. Do not silently overwrite any unrelated screen.
+        const live=get(outputs)
+        const positions=targets.map(id=>Number(live[id]?.out?.slide?.page))
+        if(positions.some(n=>!Number.isInteger(n)||n<0||n>=presentationPageCount)||
+            positions.some(n=>n!==positions[0])){
+            presentationRemoteError="Las pantallas tienen diapositivas distintas; sincronízalas manualmente."
+            updateRemotePanel()
+            return
+        }
+        const next=Math.max(0,Math.min(presentationPageCount-1,positions[0]+offset))
+        if(next===positions[0])return
+        const sent=sendToJAOutputs("slide",{
+            type:"pdf",id:presentationPdfPath,page:next,pages:presentationPageCount,name:presentationSourceName
+        },targets,{requireAll:true})
+        if(sent.length!==targets.length){
+            presentationRemoteError="Una pantalla dejó de estar disponible. Revisa las salidas."
+            updateRemotePanel()
+            return
+        }
+        presentationRemoteError=""
+        if(mode==="presentaciones")stagePresentationPage(presentationPdfPath,next,presentationPageCount,presentationSourceName)
+        else presentationPage=next
+        updateRemotePanel()
+    }
     function clearPresentationPreview(){
         presentationPreview?.$destroy()
         presentationPreview=null
@@ -231,7 +322,9 @@
             displayName:presentationSourceName,
             currentPage:presentationPage,
             destinations:jaYouTubeDestinations(),
-            selectedTargets:markedGroupTargets()
+            selectedTargets:markedGroupTargets(),
+            remoteEnabled:presentationRemoteEnabled,remoteMode:presentationRemoteMode,
+            remoteError:presentationRemoteError,remoteTargets:[...presentationControlledOutputs]
         })
     }
     function stagePresentationPage(path:string,page:number,count:number,name:string){
@@ -283,6 +376,8 @@
         const converted=/\.pdf$/i.test(path)?{path}:await requestMain(Main.JA_PRESENTATION_PDF,{path},undefined,130000)
         if(token!==presentationLoadToken)return
         if(!converted?.path)return notice(converted?.error||"No fue posible convertir la presentación. Revisa PowerPoint o LibreOffice.")
+        if(presentationRemoteEnabled)void setJAPresentationRemoteEnabled(false)
+        presentationControlledOutputs=[]
         presentationPdfPath=converted.path
         presentationSourceName=fileName(path)
         presentationPage=0
@@ -304,6 +399,7 @@
         for(const id of targets)clearBackground(id)
         clearBlackBeforePublishing(targets)
         presentationControlledOutputs=[...targets]
+        updateRemotePanel()
         rebuildOutputs()
         notice("Diapositiva "+(presentationPage+1)+" enviada a "+targets.length+" pantalla(s).")
     }
