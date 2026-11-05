@@ -35,6 +35,8 @@
     import JaGeminiQuickAudioPanel from "./JaGeminiQuickAudioPanel.svelte"
     import JaGeminiYouTube from "./JaGeminiYouTube.svelte"
     import JaGeminiYouTubePreview from "./JaGeminiYouTubePreview.svelte"
+    import JaGeminiPresentations from "./JaGeminiPresentations.svelte"
+    import JaGeminiPresentationPreview from "./JaGeminiPresentationPreview.svelte"
     import JaGeminiAudioControls from "./JaGeminiAudioControls.svelte"
     import { JaSoloAudioPlayer } from "./JaSoloAudioPlayer"
     import { videoSync } from "../media/video/videoSync"
@@ -66,7 +68,7 @@
     let syncedTargetIds = new Set<string>()
     let quickTargetsInitialized = false
     let publishingGroup = false
-    let mode: "multimedia" | "himnario" | "biblia" | "youtube" = "multimedia"
+    let mode: "multimedia" | "himnario" | "biblia" | "youtube" | "presentaciones" = "multimedia"
     // Restore the approved card design; only the number of shown cards grows.
     // Never create all 613 thumbnail requests at once on low-end machines.
     const LIBRARY_FIRST_BATCH = 160
@@ -208,6 +210,103 @@
     let playlistModuleAreaPadding=""
     let playlistDockObserver:ResizeObserver|null=null
     let quickAudioOpen=false
+    let presentationsPanel:JaGeminiPresentations|null=null
+    let presentationPreview:JaGeminiPresentationPreview|null=null
+    let presentationPdfPath=""
+    let presentationSourceName=""
+    let presentationPage=0
+    let presentationPageCount=0
+    let presentationLoadToken=0
+    let presentationControlledOutputs:string[]=[]
+    function clearPresentationPreview(){
+        presentationPreview?.$destroy()
+        presentationPreview=null
+    }
+    function refreshPresentationModule(){
+        if(!presentationsPanel)return
+        presentationsPanel.$set({
+            pdfPath:presentationPdfPath,
+            displayName:presentationSourceName,
+            currentPage:presentationPage,
+            destinations:jaYouTubeDestinations(),
+            selectedTargets:markedGroupTargets()
+        })
+    }
+    function stagePresentationPage(path:string,page:number,count:number,name:string){
+        if(!path || !/\.pdf$/i.test(path) || !Number.isInteger(page) || page<0 || page>=count)return
+        const target=el("previewCanvasContent")
+        if(!target)return
+        clearYouTubePreview()
+        clearPresentationPreview()
+        previewMedia?.pause();previewMedia=null
+        biblePreviewGeneration++
+        if(biblePreviewTimer)clearTimeout(biblePreviewTimer)
+        biblePreviewRenderer?.$destroy();biblePreviewRenderer=null
+        biblePreviewReady=false
+        prepared=""
+        followProgram=false
+        target.replaceChildren()
+        presentationPdfPath=path
+        presentationPage=page
+        presentationPageCount=count
+        presentationSourceName=name
+        presentationPreview=new JaGeminiPresentationPreview({target,props:{path,page,title:name}})
+        refreshPresentationModule()
+        updatePreviewProgress()
+    }
+    function movePresentationPage(delta:number){
+        if(!presentationPdfPath || !presentationPageCount)return
+        const next=Math.max(0,Math.min(presentationPageCount-1,presentationPage+delta))
+        if(next===presentationPage)return
+        stagePresentationPage(presentationPdfPath,next,presentationPageCount,presentationSourceName)
+    }
+    function openJAPresentationFile(){
+        sendMain(Main.OPEN_FILE,{
+            id:"ja-gemini-presentation",
+            channel:"JA_GEMINI_PRESENTATION_FILE",
+            title:"Abrir presentación PowerPoint o PDF",
+            multiple:false,
+            read:false,
+            filter:{name:"Presentaciones PDF y PowerPoint",extensions:["pdf","ppt","pptx"]}
+        })
+    }
+    async function loadJAPresentationFile(path:string){
+        if(!/\.(pdf|ppt|pptx)$/i.test(path))return notice("Elige un PDF o PowerPoint .ppt/.pptx.")
+        const token=++presentationLoadToken
+        const converted=/\.pdf$/i.test(path)?{path}:await requestMain(Main.JA_PRESENTATION_PDF,{path},undefined,130000)
+        if(token!==presentationLoadToken)return
+        if(!converted?.path)return notice(converted?.error||"No fue posible convertir la presentación. Revisa PowerPoint o LibreOffice.")
+        presentationPdfPath=converted.path
+        presentationSourceName=fileName(path)
+        presentationPage=0
+        presentationPageCount=0
+        if(mode!=="presentaciones")showModule("presentaciones")
+        refreshPresentationModule()
+        notice("Presentación abierta. Cargando diapositivas reales en Vista previa.")
+    }
+    function publishJAPresentation(){
+        if(mode!=="presentaciones"||!presentationPreview||!presentationPdfPath||!presentationPageCount)
+            return notice("Selecciona una diapositiva real en Vista previa.")
+        const targets=markedGroupTargets()
+        const available=chooseOutput()
+        if(get(outLocked)||!targets.length||targets.some(id=>!available.includes(id)))
+            return notice("Marca una pantalla activa para enviar la presentación.")
+        const data={type:"pdf",id:presentationPdfPath,page:presentationPage,pages:presentationPageCount,name:presentationSourceName}
+        const sent=sendToJAOutputs("slide",data,targets,{requireAll:true})
+        if(sent.length!==targets.length)return notice("No se pudo enviar la diapositiva a todas las pantallas.")
+        for(const id of targets)clearBackground(id)
+        clearBlackBeforePublishing(targets)
+        presentationControlledOutputs=[...targets]
+        rebuildOutputs()
+        notice("Diapositiva "+(presentationPage+1)+" enviada a "+targets.length+" pantalla(s).")
+    }
+    function keyboardGeminiPresentations(event:KeyboardEvent){
+        if(mode!=="presentaciones" || !presentationsPanel || event.altKey||event.ctrlKey||event.metaKey)return
+        const element=event.target as HTMLElement|null
+        if(element?.closest("input,textarea,select,[contenteditable='true']"))return
+        if(event.key==="ArrowRight"||event.key==="ArrowDown"){event.preventDefault();movePresentationPage(1)}
+        else if(event.key==="ArrowLeft"||event.key==="ArrowUp"){event.preventDefault();movePresentationPage(-1)}
+    }
     let youtubePanel:JaGeminiYouTube|null=null
     let youtubePreview:JaGeminiYouTubePreview|null=null
     let youtubePreviewId=""
