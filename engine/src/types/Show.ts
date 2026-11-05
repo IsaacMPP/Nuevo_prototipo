@@ -607,6 +607,7 @@ export interface OutBackground {
     // video / player
     startAt?: number
     jaReuseClockFrom?: string // JA: a new display inherits the source's running native video clock
+    hidePointerInJA?: boolean // JA: hide pointer overlay on native capture output (not cursor baked into captured frames)
     muted?: boolean
     loop?: boolean
     softLoop?: number
