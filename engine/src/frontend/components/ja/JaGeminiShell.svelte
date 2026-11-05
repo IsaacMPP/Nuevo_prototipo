@@ -2715,9 +2715,10 @@
             presentationsPanel.$destroy();presentationsPanel=null
         }
         mode=next
-        for(const [module,section] of [["multimedia","moduleView_multimedia"],["himnario","moduleView_himnario"],["biblia","moduleView_biblia"],["youtube","moduleView_other"],["presentaciones","moduleView_other"]]) {
+        for(const [module,section] of [["multimedia","moduleView_multimedia"],["himnario","moduleView_himnario"],["biblia","moduleView_biblia"],["other","moduleView_other"]]) {
             const node=el(section)
-            if(node) {node.classList.toggle("hidden",module!==next);node.classList.toggle("flex",module===next)}
+            const visible=module==="other" ? (next==="youtube"||next==="presentaciones") : module===next
+            if(node){node.classList.toggle("hidden",!visible);node.classList.toggle("flex",visible)}
         }
         setupNavigation()
         refreshOnlyAudioButton()
