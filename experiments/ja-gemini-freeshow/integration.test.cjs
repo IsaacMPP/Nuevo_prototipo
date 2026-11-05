@@ -1037,9 +1037,22 @@ test("P17: YouTube integrado en Gemini con escucha visible y publicación explí
  assert.ok(module.includes('autoplay:0')&&module.includes('player.pauseVideo()'),"Preparar sin autoplay")
  assert.ok(module.includes('player.playVideo()')&&module.includes('player.setVolume(volume)'),"Control de reproducción y volumen")
  assert.ok(module.includes('dispatch("send"')&&shell.includes('sendToJAOutputs("background"'),"Enviar a pantallas solo por acción explícita")
- assert.ok(module.includes('Sin pantalla externa. Puedes escuchar el video en la consola.'),"Escuchar sin monitores")
+ assert.ok(module.includes("Sin pantalla externa activa")&&module.includes("effectiveTargets"),"Escuchar sin monitor y validar salidas conectadas")
  assert.ok(!module.includes("JaSoloAudioPlayer")&&!module.includes("audio.src"),"YouTube no extrae audio ni usa un reproductor oculto")
  assert.ok(player.includes("youtube-player"),"Preservar API oficial de FreeShow")
  const youtube=read("engine/src/frontend/components/drawer/player/YouTube.svelte")
  assert.ok(youtube.includes('outputId !== localStorage.getItem("ja-main-projector")'),"Las pantallas secundarias de JA deben permanecer silenciadas")
+});
+
+test("P18: YouTube utiliza pantallas vivas de JA y biblioteca con miniaturas compactas",()=>{
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const module=read("engine/src/frontend/components/ja/JaGeminiYouTube.svelte")
+ assert.ok(shell.includes("function jaYouTubeDestinations()")&&shell.includes("const available=chooseOutput()"),"Leer pantallas reales")
+ assert.ok(shell.includes('youtubePanel.$set({destinations:jaYouTubeDestinations(),chosen:jaYouTubeTargets()})'),"Actualizar YouTube cuando cambian las salidas")
+ assert.ok(shell.includes('targets.some((t:string)=>!available.includes(t))'),"Validar pantallas al enviar")
+ assert.ok(module.includes('class="yt-library"')&&module.includes("mqdefault.jpg"),"Biblioteca de miniaturas")
+ assert.ok(module.includes('class="yt-compact-player"')&&module.includes("showPlayer"),"Reproductor compacto desplegable")
+ assert.ok(module.includes("localStorage.setItem(STORAGE"),"Guardar enlaces de YouTube en biblioteca")
+ assert.ok(module.includes('dispatch("addPlaylist"')&&shell.includes('youtubePanel.$on("addPlaylist"'),"Añadir video guardado a playlist")
+ assert.ok(module.includes('disabled={!videoId||!effectiveTargets.length}'),"Habilitar enviar solo con pantalla seleccionada")
 });
