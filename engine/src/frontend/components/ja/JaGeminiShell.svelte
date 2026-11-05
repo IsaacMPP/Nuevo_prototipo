@@ -2849,6 +2849,7 @@
                         remoteError:presentationRemoteError,remoteTargets:[...presentationControlledOutputs]
                     }})
                     presentationsPanel.$on("open",openJAPresentationFile)
+                    presentationsPanel.$on("screenSettings",openScreenSettings)
                     presentationsPanel.$on("remoteToggle",(event)=>{
                         void setJAPresentationRemoteEnabled(!!event.detail.enabled)
                     })
