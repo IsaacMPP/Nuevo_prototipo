@@ -1049,7 +1049,7 @@ test("P18: YouTube utiliza pantallas vivas de JA y biblioteca con miniaturas com
  const module=read("engine/src/frontend/components/ja/JaGeminiYouTube.svelte")
  assert.ok(shell.includes("function jaYouTubeDestinations()")&&shell.includes("const available=chooseOutput()"),"Leer pantallas reales")
  assert.ok(shell.includes('youtubePanel.$set({destinations:jaYouTubeDestinations(),chosen:jaYouTubeTargets()})'),"Actualizar YouTube cuando cambian las salidas")
- assert.ok(shell.includes('targets.some((t:string)=>!available.includes(t))'),"Validar pantallas al enviar")
+ assert.ok(shell.includes('targets.some(target=>!available.includes(target))'),"Validar pantallas al enviar")
  assert.ok(module.includes('class="yt-library"')&&module.includes("hqdefault.jpg")&&module.includes("mqdefault.jpg"),"Miniaturas HD con respaldo")
  assert.ok(module.includes('class="yt-listen-float"')&&module.includes("listening && videoId"),"Reproductor solo en panel flotante visible al escuchar")
  assert.ok(module.includes("localStorage.setItem(STORAGE"),"Guardar enlaces de YouTube en biblioteca")
