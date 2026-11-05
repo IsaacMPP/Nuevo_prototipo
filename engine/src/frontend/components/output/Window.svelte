@@ -2,6 +2,7 @@
     import { createEventDispatcher, onDestroy, onMount } from "svelte"
 
     export let id: string
+    export let hidePointer = true
 
     let videoElem: HTMLVideoElement | undefined
 
@@ -54,6 +55,6 @@
     }
 </script>
 
-<video bind:this={videoElem} class={$$props.class} style={$$props.style}>
+<video bind:this={videoElem} class={$props.class} style={($props.style || "") + ";cursor:" + (hidePointer ? "none" : "auto") + ";"}>
     <track kind="captions" />
 </video>
