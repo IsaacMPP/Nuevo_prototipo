@@ -3095,6 +3095,26 @@
         const playButton = el("btnPreviewPlay") as HTMLButtonElement | null
         const muteButton = el("btnPreviewMute") as HTMLButtonElement | null
         const seek = el("previewSeekSlider") as HTMLInputElement | null
+        if(youtubePreview){
+            const yt=youtubePreviewState
+            if(playButton){
+                playButton.disabled=!yt.ready
+                playButton.title="Reproducir o pausar YouTube en Vista previa"
+                playButton.textContent=yt.paused?"▶":"Ⅱ"
+            }
+            const mute=el("btnPreviewMute") as HTMLButtonElement|null
+            if(mute){mute.disabled=!yt.ready;mute.textContent=yt.muted?"🔇":"🔊"}
+            const seek=el("previewSeekSlider") as HTMLInputElement|null
+            if(seek){
+                seek.disabled=!yt.ready || yt.duration<=0
+                seek.max=String(yt.duration||1)
+                if(document.activeElement!==seek)seek.value=String(yt.currentTime)
+            }
+            const counter=el("previewTimeCounter")
+            if(counter)counter.textContent=time(yt.currentTime)+" / "+time(yt.duration)
+            if(previewLinkButton){previewLinkButton.disabled=true;previewLinkButton.textContent="🔗 Vincular"}
+            return
+        }
         if (playButton) {
             playButton.disabled = isScriptureDraft || !previewMedia
             playButton.title = isScriptureDraft ? "Biblia: usa las flechas o selecciona otro versículo" : "Pausar/reproducir Vista previa"
@@ -3296,12 +3316,14 @@
             slider.disabled = true
             slider.addEventListener("input", () => {
                 const seconds=Number(slider.value) || 0
+                if(youtubePreview){youtubePreview.seek(seconds);return}
                 if (!previewMedia) return
                 if(isLinkedVideo())VideoPlayer.seekTo(playingPath,selectedId,seconds)
                 else previewMedia.currentTime=seconds
             })
         }
         bind("btnPreviewPlay", () => {
+            if(youtubePreview){youtubePreview.toggle();return}
             if(!previewMedia)return
             if(isLinkedVideo()){
                 if(videoState.paused)VideoPlayer.play(playingPath,selectedId)
@@ -3309,7 +3331,7 @@
             }else if(previewMedia.paused)void previewMedia.play().catch(()=>notice("No se pudo iniciar Vista previa"))
             else previewMedia.pause()
         })
-        bind("btnPreviewMute",()=>{if(previewMedia){if(isLinkedVideo()){previewMedia.muted=true;notice("Vista previa vinculada permanece silenciada para evitar audio duplicado")}else previewMedia.muted=!previewMedia.muted;updatePreviewProgress()}})
+        bind("btnPreviewMute",()=>{if(youtubePreview){youtubePreview.toggleMute();return}if(previewMedia){if(isLinkedVideo()){previewMedia.muted=true;notice("Vista previa vinculada permanece silenciada para evitar audio duplicado")}else previewMedia.muted=!previewMedia.muted;updatePreviewProgress()}})
         const previewControls=el("btnPreviewPlay")?.parentElement
         if(previewControls){
             const link=document.createElement("button")
