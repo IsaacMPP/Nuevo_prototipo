@@ -1,5 +1,6 @@
 import { execFile } from "child_process"
 import fs from "fs"
+import { createHash } from "crypto"
 import path from "path"
 import { promisify } from "util"
 import { isMac, isWindows } from "../.."
@@ -85,4 +86,32 @@ async function convertWithPowerPoint(inputPath: string, outputPath: string): Pro
         // PowerPoint not available or failed
     }
     return fs.existsSync(outputPath)
+}
+
+/**
+ * JA Gemini's preview-first PowerPoint import. Unlike PPT_TO_PDF, this
+ * accepts an explicitly selected local path and returns the generated PDF
+ * to the caller. No presentation is started or projected during conversion.
+ */
+export async function convertJAPresentationToPDF(inputPath: string): Promise<{ path?: string; error?: string }> {
+    if (typeof inputPath !== "string" || !/\.pptx?$/i.test(inputPath))
+        return { error: "Selecciona un archivo PowerPoint .ppt o .pptx." }
+    try {
+        if (!fs.existsSync(inputPath) || !fs.statSync(inputPath).isFile())
+            return { error: "El archivo seleccionado ya no existe." }
+        const stat = fs.statSync(inputPath)
+        const key = createHash("sha256").update(path.resolve(inputPath)).digest("hex").slice(0,16)
+        const name = sanitizeFileName(path.basename(inputPath,path.extname(inputPath))) || "Presentacion"
+        const folder = path.join(getDataFolderPath("imports", "JA-Presentaciones"), key)
+        fs.mkdirSync(folder,{recursive:true})
+        const target = path.join(folder,name+".pdf")
+        if (fs.existsSync(target) && fs.statSync(target).mtimeMs >= stat.mtimeMs)
+            return { path: target }
+        if (await convertWithLibreOffice(inputPath,target,folder) ||
+            await convertWithPowerPoint(inputPath,target))
+            return { path: target }
+        return { error: "No se pudo convertir PowerPoint a PDF. Instala LibreOffice o Microsoft PowerPoint y comprueba el archivo." }
+    } catch(error) {
+        return { error: "Error de conversión: "+String(error) }
+    }
 }
