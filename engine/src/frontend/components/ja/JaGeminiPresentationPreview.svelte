@@ -1,6 +1,6 @@
 <script lang="ts">
     import { getDocument, GlobalWorkerOptions, type PDFDocumentProxy, type PDFDocumentLoadingTask, type RenderTask } from "pdfjs-dist"
-    import { onDestroy } from "svelte"
+    import { onDestroy, tick } from "svelte"
     import { encodeFilePath } from "../helpers/media"
 
     export let path=""
@@ -13,12 +13,18 @@
     let loadedPath=""
     let generation=0
     let error=""
+    let requestedPage=-1
     GlobalWorkerOptions.workerSrc="./assets/pdf.worker.min.mjs"
     $: if(path && path!==loadedPath)void load(path)
-    $: if(document && canvas && page>=0)void paint(page,generation)
+    $: if(document && canvas && page>=0 && page!==requestedPage)void requestPage(page)
+    function requestPage(index:number){
+        requestedPage=index
+        void paint(index,generation)
+    }
     async function load(next:string){
         const token=++generation
         loadedPath=next
+        requestedPage=-1
         error=""
         try{render?.cancel()}catch{}
         try{task?.destroy()}catch{}
@@ -30,6 +36,9 @@
             // Reactive page rendering runs after PDF and canvas exist.
             // Do not start an overlapping second render for the same page.
             document=doc
+            await tick()
+            if(token===generation && canvas && requestedPage!==page)
+                requestPage(page)
         }catch(e){if(token===generation)error="No se pudo mostrar la diapositiva: "+String(e)}
     }
     async function paint(index:number,token:number){
@@ -50,7 +59,7 @@
             render=source.render({canvas,canvasContext:ctx,viewport:scaled})
             await render.promise
             if(token===generation)error=""
-        }catch(e){if((e as Error)?.name!=="RenderingCancelledException"&&token===generation)error=String(e)}
+        }catch(e){if((e as Error)?.name!=="RenderingCancelledException"&&token===generation)error="No se pudo dibujar la diapositiva: "+String(e)}
     }
     onDestroy(()=>{
         generation++
@@ -65,7 +74,7 @@
 </div>
 <style>
 .ja-presentation-preview{position:relative;height:100%;width:100%;display:flex;justify-content:center;align-items:center;overflow:hidden;background:#050d20}
-canvas{max-width:100%;max-height:100%;object-fit:contain}
+canvas{display:block;width:auto;height:auto;max-width:100%;max-height:100%;object-fit:contain}
 span{position:absolute;left:8px;bottom:8px;background:#07162ec9;color:#e5f2ff;border-radius:5px;padding:4px 7px;font-size:10px;pointer-events:none}
 p{position:absolute;top:12px;left:12px;right:12px;background:#632b37;padding:9px;color:white;font-size:11px}
 </style>
