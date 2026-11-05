@@ -288,7 +288,7 @@
         if(sent.length!==targets.length)return notice("No se pudo enviar la captura a todos los destinos.")
         clearBlackBeforePublishing(targets)
         rebuildOutputs()
-        notice("Captura de "+name+" enviada a "+targets.length+" pantalla(s); seguirá activa al cambiar de módulo.")
+        notice("Captura enviada a "+targets.length+" pantalla(s). Verifica que la imagen se vea en Programa; seguirá activa al cambiar de módulo.")
     }
     function publishActiveCaptureFromQuickPlay(){
         const active=capturePanel?.getActiveCapture()
@@ -3050,7 +3050,13 @@
                         if(mode==="captura")stageJAWindowCapture(stream,name)
                         notice("Captura real de "+name+" preparada en Vista previa. Enviar a pantallas es una acción independiente.")
                     })
-                    capturePanel.$on("stopped",()=>{
+                    capturePanel.$on("stopped",(event)=>{
+                        const stoppedSource=event.detail?.sourceId as string|undefined
+                        // A relayed projector depends on this live source.
+                        // Never leave a black screen marked as a working capture
+                        // when the operator deliberately stops its source.
+                        if(stoppedSource && captureAssignments()[stoppedSource]?.length)
+                            removeJACaptureFromScreens(stoppedSource)
                         if(mode==="captura")stopJAWindowCapturePreview()
                     })
                     capturePanel.$on("focusTargets",focusQuickCaptureTargets)
