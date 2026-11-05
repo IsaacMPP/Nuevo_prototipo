@@ -23,7 +23,10 @@
     let task:PDFDocumentLoadingTask|null=null
     let generation=0
     let rendered=0
+    let thumbnailProblem=""
     let observer:IntersectionObserver|null=null
+    let paintPending=new Set<number>()
+    let painted=new Set<number>()
     let activeTasks:Array<{cancel:()=>void}>=[]
     $: if(pdfPath && pdfPath!==loadedPath)void loadPdf(pdfPath)
     $: if(!pdfPath && loadedPath)reset()
@@ -38,6 +41,9 @@
         pages=[]
         canvases=[]
         rendered=0
+        thumbnailProblem=""
+        paintPending=new Set()
+        painted=new Set()
     }
     function reset(){clear();loadedPath="";problem="";loading=false}
     async function loadPdf(path:string){
@@ -68,6 +74,10 @@
                 }
             },{rootMargin:"260px"})
             for(const canvas of canvases)if(canvas)observer.observe(canvas)
+            // The initial thumbnails must render even when nested scroll
+            // containers on Windows suppress initial intersection callbacks.
+            for(let i=0;i<Math.min(12,pages.length);i++)
+                void paintThumbnail(i,token)
         }catch(err){
             if(token===generation)problem="No se pudo abrir el PDF real: "+String(err)
         }finally{
@@ -75,9 +85,10 @@
         }
     }
     async function paintThumbnail(index:number,token:number){
-        if(!doc || token!==generation)return
+        if(!doc || token!==generation || painted.has(index) || paintPending.has(index))return
         const canvas=canvases[index]
         if(!canvas)return
+        paintPending.add(index)
         try{
             const page=await doc.getPage(index+1)
             if(token!==generation)return
@@ -91,10 +102,18 @@
             const render=page.render({canvas,canvasContext:ctx,viewport:target})
             activeTasks.push(render)
             await render.promise
-            if(token===generation)rendered++
+            if(token===generation){
+                painted.add(index)
+                rendered++
+                thumbnailProblem=""
+            }
         }catch(e){
-            if((e as Error)?.name!=="RenderingCancelledException" && token===generation)
+            if((e as Error)?.name!=="RenderingCancelledException" && token===generation){
+                thumbnailProblem="No se pudieron dibujar las miniaturas: "+String(e)
                 console.warn("JA presentation page thumbnail:",e)
+            }
+        }finally{
+            paintPending.delete(index)
         }
     }
     function choose(index:number){
@@ -121,6 +140,9 @@
         {:else if loading && !pages.length}
             <div class="ja-presentation-empty">Cargando páginas reales…</div>
         {:else}
+            {#if thumbnailProblem && rendered===0}
+                <div class="ja-presentation-error" role="alert">{thumbnailProblem}</div>
+            {/if}
             <div class="ja-page-grid" aria-label="Miniaturas de las diapositivas">
                 {#each pages as page (page)}
                     <button type="button" class="ja-page-card" class:active={currentPage===page}
@@ -188,10 +210,10 @@ button:disabled{opacity:.42;cursor:not-allowed}button:focus-visible{outline:2px 
 .ja-deck-bar{display:flex;align-items:center;gap:10px;padding:7px 10px;background:#102b50;border-radius:7px}
 .ja-deck-bar strong{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ja-deck-bar span{color:#a6c2e4}.ja-deck-bar button{font-size:10px}
-.ja-page-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));align-content:start;gap:9px;overflow:auto;min-height:90px;max-height:370px;padding:5px}
-.ja-page-card{padding:3px;min-width:0;background:#0f2546;border:1px solid #4a719a;border-radius:7px;overflow:hidden}
+.ja-page-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));grid-auto-rows:minmax(116px,auto);align-content:start;gap:9px;overflow:auto;min-height:150px;max-height:370px;padding:7px}
+.ja-page-card{display:flex;flex-direction:column;justify-content:flex-start;align-self:stretch;min-height:116px;padding:4px;min-width:0;background:#0f2546;border:1px solid #4a719a;border-radius:7px;overflow:hidden}
 .ja-page-card.active{outline:2px solid #f5c34a;border-color:#f5c34a}
-.ja-page-image{height:auto;aspect-ratio:16/9;background:#030c1a;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.ja-page-image{flex:none;width:100%;min-height:88px;aspect-ratio:16/9;background:#030c1a;display:flex;align-items:center;justify-content:center;overflow:hidden}
 .ja-page-image canvas{width:100%;height:100%;object-fit:contain}
 .ja-page-card span{display:block;text-align:center;padding:4px;font-size:11px}
 .ja-deck-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px;background:#132b4c;border:1px solid #35587f;border-radius:7px}
