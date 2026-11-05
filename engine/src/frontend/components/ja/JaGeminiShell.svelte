@@ -865,6 +865,7 @@
                 // automatically to Program. Playlist Send publishes explicitly.
                 youtubePreparedUrl=item.path
                 showModule("youtube")
+                stageYouTubePreview(youtubeId)
                 playlistWaiting=true
                 playlistPaused=true
                 notice("YouTube preparado en su módulo. Escucha en consola o pulsa Enviar a pantallas.")
@@ -987,10 +988,12 @@
                 const id=jaYoutubeId(entry.path)
                 const destinations=markedPlaylistTargets()
                 if(!id || !destinations.length)return notice("Prepara un enlace de YouTube válido y selecciona pantallas.")
+                if(youtubePreviewId!==id)return notice("Prepara primero este video de YouTube en Vista previa.")
                 if(get(outLocked))return notice("Las salidas están bloqueadas.")
                 const main=localStorage.getItem("ja-main-projector")||""
+                youtubePreview?.pause()
                 playerVideos.update(data=>({...data,[id]:{id,type:"youtube",name:entry.title}}))
-                const sent=sendToJAOutputs("background",{id,type:"player",loop:false,muted:!destinations.includes(main),startAt:0},destinations,{replaceScripture:true,requireAll:true})
+                const sent=sendToJAOutputs("background",{id,type:"player",loop:false,muted:!destinations.includes(main),startAt:youtubePreviewState.currentTime},destinations,{replaceScripture:true,requireAll:true})
                 if(sent.length!==destinations.length)return notice("No se pudo enviar YouTube a todas las pantallas.")
                 clearBlackBeforePublishing(destinations)
                 playlistWaiting=false
