@@ -49,6 +49,7 @@ export type JAPlaylist = {
     name: string
     entries: JAPlaylistEntry[]
     autoNext: boolean
+    autoPublish: boolean // explicit opt-in: video/youtube can replace authorized Program targets
     repeat: boolean // persisted legacy preference
     playMode: JAPlaybackMode
 }
@@ -78,7 +79,7 @@ export function jaYoutubeId(value:string):string {
     }catch{return ""}
 }
 export function jaNewPlaylist(name:string):JAPlaylist {
-    return {id:newId(),name:shortText(name,80)||"Nueva lista",entries:[],autoNext:true,repeat:false,playMode:"normal"}
+    return {id:newId(),name:shortText(name,80)||"Nueva lista",entries:[],autoNext:true,autoPublish:false,repeat:false,playMode:"normal"}
 }
 export function jaLocalPlaylistEntry(path:string,source:"multimedia"|"himnario"):JAPlaylistEntry|null {
     const kind=geminiFileType(path)
@@ -111,7 +112,7 @@ export function jaReadPlaylists():JAPlaylist[]{
         return raw.slice(0,JA_MAX_PLAYLISTS).filter(v=>v&&typeof v==="object"&&
             typeof v.id==="string"&&v.id.length<101 && typeof v.name==="string").map(v=>({
             id:v.id,name:shortText(v.name,80)||"Lista",
-            autoNext:v.autoNext!==false,repeat:v.repeat===true,
+            autoNext:v.autoNext!==false,autoPublish:v.autoPublish===true,repeat:v.repeat===true,
             playMode:jaPlaybackMode(v.playMode,v.repeat===true),
             entries:Array.isArray(v.entries)
                 ? v.entries.slice(0,JA_MAX_ENTRIES).filter(jaPlaylistEntryValid)
