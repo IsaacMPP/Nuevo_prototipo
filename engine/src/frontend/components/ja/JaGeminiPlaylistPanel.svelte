@@ -209,6 +209,15 @@
                 <div class="dock-options">
                     <label><input type="checkbox" checked={playlist.autoNext}
                         on:change={e=>action("autoNext",{id:playlist.id,value:e.currentTarget.checked})}/> Siguiente automático</label>
+                    <label title="Activación explícita: cada video podrá reemplazar Programa únicamente en las pantallas elegidas. En modo manual solo se prepara Vista previa.">
+                        <input type="checkbox" checked={playlist.autoPublish}
+                            disabled={running&&runningPlaylistId===playlist.id}
+                            on:change={e=>action("autoPublish",{id:playlist.id,value:e.currentTarget.checked})}/>
+                        Emisión automática de videos
+                    </label>
+                    <small class="ja-queue-mode-note">{playlist.autoPublish
+                        ?"Automático: los videos reemplazarán Programa en los destinos autorizados. YouTube puede requerir avance manual."
+                        :"Manual: los videos se preparan en Vista previa; pulsa Enviar para proyectarlos."}</small>
                     <div class="play-modes" role="group" aria-label="Modo de reproducción, modificable durante la música">
                         {#each [{v:"normal",i:"☷",n:"Normal"},{v:"shuffle",i:"⤨",n:"Aleatorio"},
                             {v:"repeat-all",i:"↻",n:"Repetir lista"},{v:"repeat-one",i:"↻1",n:"Repetir canción"}] as mode}
