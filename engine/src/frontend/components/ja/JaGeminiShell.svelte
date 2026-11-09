@@ -1181,6 +1181,66 @@
         // Do not stop a video already projected: it may be controlling several
         // outputs, and the operator explicitly decides when to clear Programa.
     }
+    // An explicit per-list opt-in permits automatic publication ONLY to the
+    // destinations captured for this entry. Preparing Preview never changes
+    // Program unless this function is called after all checks pass.
+    async function publishJAPlaylistAutomatically(
+        item:JAPlaylistEntry,targets:string[],token:number,mainId:string
+    ):Promise<boolean>{
+        if(!targets.length){
+            playlistNotice="El modo automático necesita al menos una pantalla elegida en la lista."
+            notice(playlistNotice)
+            return false
+        }
+        await tick()
+        const unchanged=()=>token===playlistToken && playlistRunning && !get(outLocked) &&
+            get(jaPlaylists).find(p=>p.id===playlistCurrentId)?.autoPublish===true &&
+            get(jaPlaylists).find(p=>p.id===playlistCurrentId)?.entries[playlistIndex]?.id===item.id &&
+            targets.join("|")===markedPlaylistTargets().join("|") &&
+            targets.every(t=>chooseOutput().includes(t)) &&
+            localStorage.getItem("ja-main-projector")===mainId
+        if(!unchanged()){
+            playlistNotice="Cambió la lista, la principal o los destinos: no se modificó Programa."
+            notice(playlistNotice)
+            return false
+        }
+        const youtube=item.kind==="youtube"
+        const key=youtube?jaYoutubeId(item.path):item.path
+        if(!key || (youtube?youtubePreviewId!==key:prepared!==item.path)){
+            playlistNotice="La Vista previa cambió; se canceló la emisión automática."
+            notice(playlistNotice)
+            return false
+        }
+        if(youtube){
+            youtubePreview?.pause()
+            playerVideos.update(data=>({...data,[key]:{id:key,type:"youtube",name:item.title}}))
+        }
+        // Existing FreeShow output router owns audio and replaces only selected
+        // destinations; every secondary remains muted via primary routing.
+        const sent=sendToJAOutputs("background",youtube
+            ? {id:key,type:"player",loop:false,muted:!targets.includes(mainId),
+                startAt:youtubePreviewState.currentTime}
+            : {path:key,type:"video",loop:item.loopVideo===true,
+                muted:!targets.includes(mainId),startAt:0},
+            targets,{replaceScripture:true,requireAll:true})
+        if(sent.length!==targets.length){
+            playlistNotice="No se confirmó el envío automático a todas las pantallas."
+            notice(playlistNotice)
+            return false
+        }
+        clearBlackBeforePublishing(targets)
+        if(!youtube && previewMedia){
+            previewMedia.pause()
+            previewMedia.muted=true
+        }
+        playlistLocalVideoPath=""
+        playlistWaiting=false
+        playlistPaused=false
+        followProgram=targets.includes(selectedId)
+        rebuildOutputs()
+        notice("Lista · Emisión automática: "+item.title+" en "+targets.length+" pantalla(s).")
+        return true
+    }
     async function playJAPlaylistIndex(id:string,index:number,fromQueue=false):Promise<void>{
         const list=get(jaPlaylists).find(p=>p.id===id)
         const item=list?.entries[index]
@@ -1251,7 +1311,10 @@
                 stageYouTubePreview(youtubeId)
                 playlistWaiting=true
                 playlistPaused=true
-                notice("YouTube preparado en su módulo. Escucha en consola o pulsa Enviar a pantallas.")
+                if(list.autoPublish){
+                    const ok=await publishJAPlaylistAutomatically(item,targets,token,primary)
+                    if(!ok)notice("YouTube preparado. Revisa los destinos y envíalo manualmente.")
+                }else notice("YouTube preparado en su módulo. Escucha en consola o pulsa Enviar a pantallas.")
             }else{
                 if(getMediaType(getExtension(item.path))!=="video")throw Error("El archivo ya no es un video válido.")
                 prepare(item.path,false)
@@ -1265,7 +1328,10 @@
                 local.loop=item.loopVideo===true
                 playlistWaiting=true
                 playlistPaused=true
-                notice("Pista preparada y detenida en Vista previa: "+item.title+". Pulsa Enviar a pantallas para reproducir.")
+                if(list.autoPublish){
+                    const ok=await publishJAPlaylistAutomatically(item,targets,token,primary)
+                    if(!ok)notice("Video preparado. Revisa los destinos y pulsa Enviar manualmente.")
+                }else notice("Pista preparada y detenida en Vista previa: "+item.title+". Pulsa Enviar a pantallas para reproducir.")
             }
             if(token!==playlistToken)return
             if(item.kind==="audio"||item.audioOnly)playlistWaiting=false
@@ -1464,6 +1530,14 @@
         if(!list)return
         if(event.type==="autoNext"){
             updateJAPlaylist(id,l=>({...l,autoNext:!!event.value}))
+            return
+        }
+        if(event.type==="autoPublish"){
+            if(playlistRunning&&playlistCurrentId===id)return notice("Detén la lista antes de cambiar la emisión automática.")
+            updateJAPlaylist(id,l=>({...l,autoPublish:!!event.value}))
+            notice(event.value
+                ?"Emisión automática activada para esta lista. Comprueba las pantallas seleccionadas antes de reproducir."
+                :"Modo manual: la selección no modificará Programa.")
             return
         }
         if(event.type==="playMode"){
