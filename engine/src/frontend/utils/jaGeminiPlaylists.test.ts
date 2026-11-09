@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { jaNextIndex, jaPlaybackMode, jaShuffleOrder, jaYoutubeId } from "./jaGeminiPlaylists"
+import { jaNextIndex, jaPlaybackMode, jaShuffleOrder, jaYoutubeId, jaNewPlaylist } from "./jaGeminiPlaylists"
 
 describe("JA playlist queue: no accidental replay or skip", () => {
     it("normal mode advances and stops at the end", () => {
@@ -33,4 +33,10 @@ describe("JA playlist queue: no accidental replay or skip", () => {
         expect(jaYoutubeId("https://youtu.be/123456789ab")).toBe("123456789ab")
         expect(jaYoutubeId("https://youtube.com.evil.example/watch?v=123456789ab")).toBe("")
     })
+    it("new lists require explicit consent before automatic video publication", () => {
+        const list=jaNewPlaylist("Culto")
+        expect(list.autoPublish).toBe(false)
+        expect(list.autoNext).toBe(true)
+    })
+
 })
