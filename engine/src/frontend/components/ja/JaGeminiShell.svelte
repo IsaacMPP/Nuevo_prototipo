@@ -46,6 +46,7 @@
     import JaGeminiBibleEditor from "./JaGeminiBibleEditor.svelte"
     import { jaBibleAppearances, loadJABibleAppearances, setJABibleAppearance } from "../../utils/jaBibleAppearance"
     import JaGeminiSettings from "./JaGeminiSettings.svelte"
+    import { selectJAOutputForDisplay } from "../../utils/jaMonitorAssignment"
 
     let host: HTMLDivElement
     let settingsOpen = false
@@ -120,6 +121,7 @@
     }
     let screenPoll:ReturnType<typeof setInterval>|null=null
     let displayRefreshBusy=false
+    let displayDetectionDegraded=false
     let previousExternalSignature=""
     type JAExternalDisplay={id:number;label?:string;bounds:{x:number;y:number;width:number;height:number}}
     const fingerprint=(d:JAExternalDisplay)=>String(d.id)+"|"+(d.label||"").trim().toLowerCase()
@@ -149,6 +151,7 @@
             const previouslyConnected=new Set(knownExternalDisplayIds)
             knownExternalDisplayIds=new Set(external.map(d=>String(d.id)))
             displaysChecked=true
+            displayDetectionDegraded=false
             const signature=external.map(d=>fingerprint(d)+"@"+displayGeometry(d)).sort().join(";")
             if(signature!==previousExternalSignature){
                 previousExternalSignature=signature
@@ -158,8 +161,11 @@
             rebuildOutputs()
         } catch(error){
             displaysChecked=true
-            knownExternalDisplayIds=new Set()
-            screenNotice="No se pudo consultar Windows. Revisa la conexión de monitores antes de proyectar."
+            // An IPC timeout is not proof that HDMI/Spacedesk disconnected.
+            // Preserve the last confirmed display set; do not evict a working
+            // primary or remove targets on a transient enumeration failure.
+            displayDetectionDegraded=true
+            screenNotice="No se pudo actualizar la detección de pantallas. Se mantiene la última configuración confirmada; verifica Windows antes de cambiar salidas."
         }finally{displayRefreshBusy=false}
     }
     async function validateExternalDisplay(displayId:number){
@@ -2044,28 +2050,20 @@
             return
         }
         let newDisplays=0
-        // Assign physical screens first; only then elect the principal. Never
-        // confuse the operator's internal screen with a projection window.
+        const claimedOutputIds=new Set<string>()
+        // Plan a one-to-one output association for this enumeration. Even if
+        // persisted profiles collide, one output cannot belong to two monitors.
         for(const display of external){
             const id=String(display.id),key=fingerprint(display)
-            let outputId=screenProfiles[key]||""
             const outs=get(outputs)
-            // A saved ID must never steal an output already assigned to some
-            // other *connected* physical monitor.
-            if(outputId && outs[outputId]?.screen &&
-                String(outs[outputId].screen)!==id &&
-                knownExternalDisplayIds.has(String(outs[outputId].screen)))outputId=""
-            if(!outputId||!outs[outputId]){
-                outputId=Object.entries(outs).find(([,output])=>output?.enabled &&
-                    !output?.stageOutput && String(output.screen)===id)?.[0]||""
-            }
+            let outputId=selectJAOutputForDisplay(display,outs,screenProfiles,knownExternalDisplayIds,claimedOutputIds)
             const newlyConnected=!previous.has(id)
             if(!outputId){
-                const reuse=Object.entries(get(outputs)).find(([,out])=>out?.enabled&&!out.stageOutput&&!out.screen)
-                outputId=reuse?.[0]||addOutput(false,"",false,display.label||"Pantalla externa")||""
+                outputId=addOutput(false,"",false,display.label||"Pantalla externa")||""
                 if(!outputId)continue
                 newDisplays++
             }
+            claimedOutputIds.add(outputId)
             for(const [oldKey,owner] of Object.entries(screenProfiles))
                 if(owner===outputId&&oldKey!==key)delete screenProfiles[oldKey]
             screenProfiles[key]=outputId
