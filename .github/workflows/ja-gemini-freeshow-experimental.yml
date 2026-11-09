@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - experiment/gemini-freeshow
+      - development/ja-post-stable-2026-11-09
   workflow_dispatch:
 
 permissions:
@@ -41,7 +42,7 @@ jobs:
         run: npm run prebuild
         working-directory: engine
       - name: Pruebas de clasificación de carpetas e Himnario real
-        run: npx vitest run --config config/testing/vitest.config.ts src/frontend/utils/jaGeminiLibrary.test.ts src/frontend/utils/jaMonitorAssignment.test.ts
+        run: npx vitest run --config config/testing/vitest.config.ts src/frontend/utils/jaGeminiLibrary.test.ts src/frontend/utils/jaMonitorAssignment.test.ts src/frontend/utils/jaGeminiPlaylists.test.ts
         working-directory: engine
       - name: Compilar UI real Svelte contra el motor de FreeShow
         run: npm run build:frontend:prod
