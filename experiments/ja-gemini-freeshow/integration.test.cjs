@@ -1238,3 +1238,17 @@ test("P27: capture screen relay reuses verified Preview stream instead of black 
  assert.ok(relay.includes('incomingICE.get(msg.peerId)'),"Negociar ICE incluso si llegan candidatos antes del SDP")
  assert.ok(ipc.includes('win.webContents.send(MAIN,{channel:ToMain.JA_CAPTURE_SIGNAL,data})'),"Electron reenvía señales a cada ventana de salida")
 });
+
+test("P28: playlists have opt-in automatic Program publication with guarded targets",()=>{
+ const shell=read("engine/src/frontend/components/ja/JaGeminiShell.svelte")
+ const panel=read("engine/src/frontend/components/ja/JaGeminiPlaylistPanel.svelte")
+ const list=read("engine/src/frontend/utils/jaGeminiPlaylists.ts")
+ assert.ok(list.includes('autoPublish:false'),"Manual preview must be default")
+ assert.ok(list.includes("autoPublish:v.autoPublish===true"),"Legacy saved lists must remain manual")
+ assert.ok(panel.includes('checked={playlist.autoPublish}')&&panel.includes('action("autoPublish"'),"Operator must explicitly authorize automatic publication")
+ assert.ok(shell.includes("async function publishJAPlaylistAutomatically("),"Automatic path must be distinct from manual sends")
+ assert.ok(shell.includes("targets.join(\"|\")===markedPlaylistTargets().join(\"|\")"),"Changes to destination selection must cancel an uncommitted automatic send")
+ assert.ok(shell.includes('localStorage.getItem("ja-main-projector")===mainId'),"Primary must remain fixed during automatic send")
+ assert.ok(shell.includes("targets,{replaceScripture:true,requireAll:true}"),"Publish only to previously selected targets")
+ assert.ok(shell.includes("if(list.autoPublish){"),"Normal playlists must not publish just by preparing")
+})
